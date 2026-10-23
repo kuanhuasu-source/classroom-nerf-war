@@ -71,7 +71,7 @@ export function initLobby(game) {
   $('btn-copy').addEventListener('click', () => { const code = $('lobby-code').textContent; try { navigator.clipboard.writeText(code).catch(() => {}); } catch (e) { /* ignore */ } status('房號 ' + code + ' 複製好了。'); });
   $('btn-begin').addEventListener('click', () => game.start());
   $('btn-lobby-back').addEventListener('click', leave);
-  const toMenu = () => { clearTimeout(reconnectTimer); game.toMenu(); leave(); };
+  const toMenu = () => { game.toMenu(); leave(); };
   $('btn-menu-pause').addEventListener('click', toMenu);
   $('btn-menu-over').addEventListener('click', toMenu);
 
