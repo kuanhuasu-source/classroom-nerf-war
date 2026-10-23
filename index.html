@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 </head>
 <body>
 <title>課桌大戰</title>
@@ -125,6 +125,9 @@ body {
 #upgrade.compact .card-up { padding: 8px 10px; gap: 2px; transform: none; }
 #upgrade.compact .card-up b { font-size: 18px; } #upgrade.compact .card-up span { font-size: 13px; }
 /* touch controls (body.touch) */
+html, body { touch-action: none; overscroll-behavior: none; -webkit-touch-callout: none; }
+body.touch .overlay, body.touch .overlay * { touch-action: manipulation; }
+body.touch canvas { touch-action: none; }
 #touch { position: absolute; inset: 0; display: none; pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; }
 body.touch #touch { display: block; }
 body.touch #hud-ammo { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: calc(150px + env(safe-area-inset-right, 0px)); }

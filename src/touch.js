@@ -53,6 +53,14 @@ export class TouchControls {
       if (this.look && e.pointerId === this.look.id) { if (this.look.moved < 12 && performance.now() - this.look.t < 250 && g.state === 'playing') g.player.tryFire(); this.look = null; }
     };
     layer.addEventListener('pointerup', end); layer.addEventListener('pointercancel', end);
+    // keep the browser out of it: no pinch zoom, no double-tap zoom, no pull-to-refresh while playing
+    const block = e => {
+      if (e.touches && e.touches.length > 1) { e.preventDefault(); return; }
+      const t = e.target; if (t === game.renderer.domElement || (t && t.closest && t.closest('#touch'))) e.preventDefault();
+    };
+    for (const n of ['touchstart', 'touchmove', 'touchend']) document.addEventListener(n, block, { passive: false });
+    for (const n of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(n, e => e.preventDefault(), { passive: false });
+    document.addEventListener('dblclick', e => { if (e.target === game.renderer.domElement || (e.target.closest && e.target.closest('#touch'))) e.preventDefault(); });
     $('menu-note').textContent = '手機／平板：左半邊拖曳走路，右半邊拖曳轉視角、點一下射一發，右下的貼紙按鈕射擊、重裝、蹲。兩個人一起打：一個人開房間，另一個輸入房號。';
   }
   // called every frame: the revive button only when a partner needs it, the shout strip only in co-op

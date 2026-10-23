@@ -226,6 +226,7 @@
 - 右半邊：拖曳轉視角（每 px 轉動量是滑鼠的 2.4 倍）；250 ms 內移動不到 12 px 的點擊算一發射擊。
 - 右下貼紙按鈕：射擊（按住連射）、重裝、蹲（切換）；雙人模式隊友罰坐時出現「救！」；上方一排喊話按鈕只在雙人出現；右上暫停。
 - 觸控模式完全不呼叫 pointer lock，所以也不會因為失去鎖定而暫停。彈藥貼紙往左移讓出按鈕的位置。
+- 擋住瀏覽器的手勢：viewport 設 `maximum-scale=1, user-scalable=no`，`html, body { touch-action: none; overscroll-behavior: none }`，再用非 passive 的 touchstart／touchmove／touchend 監聽把「兩指以上」以及落在畫布或控制層上的觸控 preventDefault，iOS 的 gesturestart 系列也擋掉。這樣兩指同時操作（一手搖桿一手視角）不會變成縮放或雙擊放大，選單與卡片的按鈕仍可點（`touch-action: manipulation`）。
 - 測試：Playwright 用 Pixel 5 橫向裝置描述檔加 CDP 觸控事件，驗證搖桿、視角、點擊射擊、連射、重裝、蹲、暫停與繼續。
 
 ### 4.9 計分
