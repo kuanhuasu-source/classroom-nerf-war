@@ -283,7 +283,8 @@ export class Game {
     if (this.bully) this.bully.dispose(); if (this.monitor) this.monitor.dispose(); if (this.ball) this.ball.dispose();
     this.bully = null; this.monitor = null; this.ball = null;
     const f = { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
-    if (!f.bully && !f.ball && !f.monitor) f[pick(['bully', 'ball', 'monitor'])] = true; // at least one surprise per game
+    const enabled = Object.keys(f).filter(k => CFG.features[k] > 0);
+    if (enabled.length && !enabled.some(k => f[k])) f[pick(enabled)] = true; // at least one surprise per game, but never a switched-off one
     this.features = f;
     if (f.bully) this.bully = new Bully(this);
     if (f.monitor) this.monitor = new Monitor(this);
