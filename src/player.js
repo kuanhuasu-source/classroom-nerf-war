@@ -110,9 +110,12 @@ export class Player {
     if (!this.game.hasBuff('infinite') && !(this.up.recycle > 0 && Math.random() < this.up.recycle)) this.ammo--;
     this.fireCd = CFG.gun.fireInterval * this.up.fireMul; this.recoil = 1; this.shots++;
     const view = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
-    const muzzle = this.camera.localToWorld(new THREE.Vector3(0.28, -0.22, -0.7));
-    // aim the dart at the point the crosshair is actually looking at, so it does not fly 28 cm to the right
-    const dist = Math.max(1.5, this.world.rayDistance(this.camera.position, view));
+    // The dart leaves from just in front of the eye, not from the drawn muzzle 28 cm right and 22 cm down: a dart that
+    // starts that far off the line of sight clips the desk you are crouching behind although the crosshair sees past it.
+    let muzzle = this.camera.localToWorld(new THREE.Vector3(0.1, -0.06, -0.3));
+    if (this.world.pointInBox(muzzle)) muzzle = this.camera.position.clone().addScaledVector(view, 0.05);
+    // converge on what the crosshair is actually on: the first kid, teacher or piece of furniture along the line of sight
+    const dist = Math.max(1.0, this.world.rayDistance(this.camera.position, view, 30, (p) => this.game.aimHit(p)));
     const target = this.camera.position.clone().addScaledVector(view, dist);
     const dir = target.sub(muzzle).normalize();
     const speed = CFG.gun.speed * this.up.speedMul;

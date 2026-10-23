@@ -312,11 +312,12 @@ export class World {
     return null;
   }
   // march along a ray until something solid; used to converge the dart on the crosshair
-  rayDistance(origin, dir, maxDist = 30) {
+  // extra(p): optional test for things that are not part of the room (kids, teachers), so the crosshair converges on them
+  rayDistance(origin, dir, maxDist = 30, extra = null) {
     const p = origin.clone(), step = 0.1;
     for (let d = step; d < maxDist; d += step) {
       p.copy(origin).addScaledVector(dir, d);
-      if (p.y < this.heightAt(p.x, p.z) || this.pointInBox(p)) return d;
+      if (p.y < this.heightAt(p.x, p.z) || this.pointInBox(p) || (extra && extra(p))) return d;
     }
     return maxDist;
   }

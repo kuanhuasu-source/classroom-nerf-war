@@ -473,6 +473,12 @@ export class Game {
       const st = this.world.layout.stage; this.spawnWave(new THREE.Vector3(st ? (st.minX + st.maxX) / 2 : 0, 0, st ? (st.minZ + st.maxZ) / 2 : 0), 9, CFG.committee.bellWarn, 0xd8432b);
     }
   }
+  // what the crosshair ray can land on besides the room: a kid's paper body, a teacher's sheet, a teammate
+  aimHit(p) {
+    for (const s of this.students) { if (!s.alive) continue; const sp = s.group.position; if (Math.abs(p.x - sp.x) < 0.36 && Math.abs(p.z - sp.z) < 0.36 && p.y > sp.y && p.y < sp.y + 1.45 * s.group.scale.y) return true; }
+    for (const t of this.teachers) { if (t.defeated) continue; const tp = t.group.position, sc = t.group.scale.y; if (Math.abs(p.x - tp.x) < 0.6 * sc && Math.abs(p.z - tp.z) < 0.6 * sc && p.y > tp.y && p.y < tp.y + 2.3 * sc) return true; }
+    return false;
+  }
   // ---------- upgrades ----------
   // co-op: each kid brings one thing from home — 小明 a big magazine, 小美 magnet gloves
   giveStarter(who) {
