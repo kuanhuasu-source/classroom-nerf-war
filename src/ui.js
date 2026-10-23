@@ -42,5 +42,13 @@ export class UI {
   vignette() { const v = $('vignette'); v.classList.add('hit'); clearTimeout(this._vg); this._vg = setTimeout(() => v.classList.remove('hit'), 80); }
   boss(on) { $('hud-boss').classList.toggle('on', on); }
   buff(b) { const el = $('hud-buff'); if (!b) { el.classList.remove('on'); return; } el.classList.add('on'); $('buff-name').textContent = b.name; $('buff-effect').textContent = b.effect; $('buff-time').textContent = Math.ceil(b.t); }
-  bossWp(entries, max = CFG.teacher.wpHp) { entries.forEach((e, i) => { const el = $('wp-' + (i + 1)), hp = Math.max(0, e.hp); el.querySelector('.label').textContent = e.label; el.querySelector('.pips').textContent = '●'.repeat(Math.min(hp, max)) + '○'.repeat(Math.max(0, max - hp)); el.classList.toggle('gone', e.hp <= 0); }); }
+  // groups: [{ name, entries: [{label, hp}], max, defeated }] — one boss gives three stickers, the committee one sticker per examiner
+  bossWp(groups) {
+    const pips = (hp, max) => '●'.repeat(Math.min(Math.max(0, hp), max)) + '○'.repeat(Math.max(0, max - Math.max(0, hp)));
+    let html;
+    if (groups.length === 1) html = groups[0].entries.map(e => `<div class="sticker${e.hp <= 0 ? ' gone' : ''}"><span class="label">${e.label}</span> <span class="pips">${pips(e.hp, groups[0].max)}</span></div>`).join('');
+    else html = groups.map(gp => `<div class="sticker${gp.defeated ? ' gone' : ''}"><b>${gp.name}</b>${gp.entries.map(e => `<span class="item${e.hp <= 0 ? ' gone' : ''}"><span class="label">${e.label}</span> <span class="pips">${pips(e.hp, gp.max)}</span></span>`).join('<span class="dot">·</span>')}</div>`).join('');
+    const box = $('hud-boss'); box.classList.toggle('many', groups.length > 1);
+    if (box.dataset.html !== html) { box.dataset.html = html; box.innerHTML = html; }
+  }
 }

@@ -61,6 +61,11 @@ body {
 #hud-boss .sticker { font-size: 17px; padding: 4px 12px; }
 #hud-boss .sticker.gone { text-decoration: line-through; opacity: .45; }
 #hud-boss .pips { color: var(--nerf-orange); letter-spacing: 1px; }
+#hud-boss b { font-family: var(--font-hand); font-weight: 400; color: var(--pencil); margin-right: 6px; }
+#hud-boss.many { top: calc(58px + env(safe-area-inset-top, 0px)); left: 0; right: 0; transform: none; flex-wrap: wrap; justify-content: center; row-gap: 6px; padding: 0 16px; }
+#hud-boss.many .sticker { font-size: 14px; padding: 3px 9px; white-space: nowrap; }
+#hud-boss .item.gone { text-decoration: line-through; opacity: .45; }
+#hud-boss .dot { color: var(--pencil); margin: 0 5px; }
 #hud-buff { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%) rotate(1.5deg); display: none; background: var(--nerf-blue); color: var(--paper); border-color: var(--ink); font-size: 18px; white-space: nowrap; }
 #hud-buff.on { display: block; }
 #hud-buff b { font-weight: 400; color: #f4e27a; }
@@ -181,11 +186,7 @@ body.touch.coop #tc-emote { display: flex; }
     <div class="sticker"><b>分數</b><span id="score">0</span></div>
     <div class="sticker"><b>同學</b><span id="left">0</span></div>
   </div>
-  <div id="hud-boss">
-    <div class="sticker" id="wp-1"><span class="label">眼鏡</span> <span class="pips">●●●</span></div>
-    <div class="sticker" id="wp-2"><span class="label">粉筆</span> <span class="pips">●●●</span></div>
-    <div class="sticker" id="wp-3"><span class="label">教案</span> <span class="pips">●●●</span></div>
-  </div>
+  <div id="hud-boss"></div>
   <div class="sticker" id="hud-buff"><b id="buff-name">滿分考卷</b> <span id="buff-effect">分數雙倍</span> <span id="buff-time">12</span></div>
   <div class="sticker" id="hud-up"></div>
   <div class="sticker" id="hud-hp">♥♥♥♥♥</div>

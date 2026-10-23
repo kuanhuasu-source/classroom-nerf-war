@@ -155,6 +155,8 @@ export const Draw = (() => {
     if (flags.ball) { shape(ctx, ellipsePts(44, 290, 40, 40, 20), '#d8432b'); shape(ctx, [[6, 282], [82, 282], [82, 298], [6, 298]], '#fbf6e6', null); line(ctx, [[6, 282], [82, 282]], '#2b2622', 3, 1); line(ctx, [[6, 298], [82, 298]], '#2b2622', 3, 1); }
     if (flags.sheet) { shape(ctx, [[14, 240], [80, 236], [86, 318], [20, 322]], '#ffffff'); [256, 272, 288, 304].forEach(y => line(ctx, [[24, y], [76, y]], '#2b2622', 2, 1)); ctx.fillStyle = '#2b2622'; ctx.font = 'bold 30px "Patrick Hand", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('♪', 50, 300); }
     if (flags.reports) { shape(ctx, [[14, 236], [82, 232], [88, 318], [20, 322]], '#ffffff'); [252, 268, 284, 300].forEach(y => line(ctx, [[26, y], [76, y]], '#2b2622', 2, 1)); ctx.fillStyle = '#d8432b'; ctx.font = 'bold 34px "Patrick Hand", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('59', 50, 296); }
+    if (flags.papers) { shape(ctx, [[12, 240], [80, 232], [88, 318], [20, 326]], '#ffffff'); shape(ctx, [[18, 234], [84, 228], [90, 310], [24, 318]], '#fbf6e6', '#2b2622', 3); [254, 270, 286, 302].forEach(y => line(ctx, [[30, y], [78, y]], '#2b2622', 2, 1)); ctx.fillStyle = '#d8432b'; ctx.font = 'bold 30px "Patrick Hand", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('100', 54, 262); }
+    if (flags.badge) { shape(ctx, [[86, 258], [128, 258], [128, 282], [86, 282]], '#ffffff', '#2b2622', 3); ctx.fillStyle = '#2b2622'; ctx.font = 'bold 16px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('監考', 107, 276); }
     if (flags.trophy) { shape(ctx, [[18, 250], [82, 250], [70, 300], [30, 300]], '#f4e27a'); shape(ctx, [[42, 300], [58, 300], [62, 320], [38, 320]], '#f4e27a'); shape(ctx, [[26, 318], [74, 318], [74, 328], [26, 328]], '#b98556'); line(ctx, ellipsePts(16, 266, 10, 12, 10).concat([ellipsePts(16, 266, 10, 12, 10)[0]]), '#2b2622', 3, 1); line(ctx, ellipsePts(84, 266, 10, 12, 10).concat([ellipsePts(84, 266, 10, 12, 10)[0]]), '#2b2622', 3, 1); }
     if (flags.rack) { shape(ctx, [[10, 250], [86, 250], [86, 316], [10, 316]], '#b7e3a1'); [24, 48, 72].forEach(x => { shape(ctx, [[x - 6, 236], [x + 6, 236], [x + 6, 300], [x - 6, 300]], 'rgba(160,210,255,0.6)', '#2b2622', 2); shape(ctx, [[x - 6, 280], [x + 6, 280], [x + 6, 300], [x - 6, 300]], pick(['#2f7d4f', '#d8432b', '#f28a1a']), null); }); }
     // right arm (canvas right) raised, holding the hand item
@@ -164,7 +166,10 @@ export const Draw = (() => {
     if (flags.baton) { line(ctx, [[236, 150], [250, 70]], '#ffffff', 6, 1); line(ctx, [[236, 150], [250, 70]], '#2b2622', 2, 1); shape(ctx, ellipsePts(250, 68, 5, 5, 8), '#2b2622', null); }
     if (flags.megaphone) { shape(ctx, [[226, 140], [250, 90], [256, 96], [256, 160], [240, 156]], '#d8432b', '#2b2622', 3); shape(ctx, [[224, 142], [240, 142], [240, 160], [224, 160]], '#2b2622', null); }
     if (flags.mic) { line(ctx, [[236, 150], [236, 110]], '#2b2622', 6, 1); shape(ctx, ellipsePts(236, 96, 16, 18, 12), '#5a4e47', '#2b2622', 3); [[-8], [0], [8]].forEach(([dx]) => line(ctx, [[236 + dx, 84], [236 + dx, 108]], 'rgba(255,255,255,0.5)', 2, 1)); }
+    if (flags.stamp) { shape(ctx, [[226, 146], [246, 146], [246, 100], [226, 100]], '#b98556', '#2b2622', 3); shape(ctx, [[216, 100], [256, 100], [256, 84], [216, 84]], '#d8432b', '#2b2622', 3); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 14px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('不及格', 236, 97); }
     if (flags.manual) { shape(ctx, [[214, 96], [254, 92], [256, 150], [218, 154]], '#f4e27a'); ctx.fillStyle = '#2b2622'; ctx.font = '18px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('實', 236, 116); ctx.fillText('驗', 236, 138); }
+    // a stopwatch on a cord at the chest
+    if (flags.stopwatch) { line(ctx, [[100, 200], [128, 262], [156, 200]], '#2b2622', 3, 1); shape(ctx, ellipsePts(128, 282, 22, 22, 18), '#e4e8ec', '#2b2622', 4); shape(ctx, [[122, 254], [134, 254], [134, 262], [122, 262]], '#2b2622', null); line(ctx, [[128, 282], [128, 268]], '#d8432b', 3); line(ctx, [[128, 282], [140, 286]], '#2b2622', 3); }
     // whistle on a cord at the chest
     if (flags.whistle) { line(ctx, [[100, 200], [128, 268], [156, 200]], '#d8432b', 3, 1); shape(ctx, [[112, 262], [146, 262], [150, 282], [120, 290], [108, 278]], '#f4e27a', '#2b2622', 3); }
     // head, hair
@@ -191,7 +196,7 @@ export const Draw = (() => {
       line(ctx, [[cx + 10, ey - 18], [cx + 40, ey - 30]], '#2b2622', 5);
       if (def.id === 'music') shape(ctx, ellipsePts(cx, ey + 36, 10, 14, 10), '#8a2a2a'); // singing
       else line(ctx, [[cx - 20, ey + 36], [cx, ey + 28], [cx + 20, ey + 36]], '#2b2622', 4);
-      if ((def.id === 'math' && !flags.glasses) || (def.id === 'science' && !flags.goggles)) { line(ctx, [[cx - 34, ey - 2], [cx - 14, ey - 2]], '#2b2622', 5); line(ctx, [[cx + 14, ey - 2], [cx + 34, ey - 2]], '#2b2622', 5); }
+      if ((def.id === 'math' && !flags.glasses) || (def.id === 'chief' && !flags.glasses) || (def.id === 'science' && !flags.goggles)) { line(ctx, [[cx - 34, ey - 2], [cx - 14, ey - 2]], '#2b2622', 5); line(ctx, [[cx + 14, ey - 2], [cx + 34, ey - 2]], '#2b2622', 5); }
     }
     if (flags.glasses) { shape(ctx, ellipsePts(cx - 24, ey, 20, 17, 16), 'rgba(160,210,255,0.35)', '#2b2622', 4); shape(ctx, ellipsePts(cx + 24, ey, 20, 17, 16), 'rgba(160,210,255,0.35)', '#2b2622', 4); line(ctx, [[cx - 4, ey], [cx + 4, ey]], '#2b2622', 4); }
     if (flags.goggles) { shape(ctx, [[cx - 50, ey - 18], [cx + 50, ey - 18], [cx + 50, ey + 14], [cx - 50, ey + 14]], 'rgba(160,210,255,0.45)', '#2b2622', 5); line(ctx, [[cx - 50, ey - 4], [cx - 62, ey - 8]], '#2b2622', 5); line(ctx, [[cx + 50, ey - 4], [cx + 62, ey - 8]], '#2b2622', 5); }

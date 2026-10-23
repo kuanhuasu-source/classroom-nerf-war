@@ -11,6 +11,7 @@ export const CFG = {
   enemy: { hp: 3, speed: 2.6, dartSpeed: 19, spread: 0.13 },
   waves: [3, 4, 5, 6],
   teacher: { wpHp: 3, throwInterval: 1.6, chalkSpeed: 17 },
+  committee: { wpHp: 2, bellEvery: 25, bellWarn: 2.2, collectHold: 3, countdown: 5, stampLife: 7, stampRadius: 1.4 },
   score: { hit: 50, out: 300, wave: 500, weakpoint: 1000, win: 5000, leader: 600 },
   leader: { hpBonus: 3, peekMul: 0.9, panicSeconds: 5, panicSpreadMul: 2.2, drop: 10 },
   milk: { heal: 1, interval: 18, max: 2, pickupRadius: 0.75, minDistFromPlayer: 2.5 },
