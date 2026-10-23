@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>課桌大戰</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Iansui&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: one full-screen WebGL canvas, DOM overlays drawn like stickers on notebook paper. */
+:root {
+  --paper: #fbf6e6;
+  --paper-line: #b9cfe6;
+  --ink: #2b2622;
+  --pencil: #5a4e47;
+  --nerf-orange: #f28a1a;
+  --nerf-blue: #2f6fd1;
+  --chalk-green: #335c4b;
+  --red-pen: #d8432b;
+  --font-hand: 'Iansui', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --font-num: 'Patrick Hand', 'Iansui', sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; overflow: hidden; background: var(--paper); color: var(--ink);
+  font-family: var(--font-hand); -webkit-user-select: none; user-select: none;
+}
+#game { position: fixed; inset: 0; }
+#game canvas { display: block; width: 100%; height: 100%; }
+
+/* ---- HUD ---- */
+.hud { position: fixed; inset: 0; pointer-events: none; }
+.hud[hidden] { display: none !important; }
+.sticker {
+  position: absolute; background: var(--paper); color: var(--ink);
+  border: 2px solid var(--ink); border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px;
+  box-shadow: 3px 3px 0 var(--pencil); padding: 6px 14px; font-size: 20px; line-height: 1.2;
+}
+#hud-top { top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: flex; gap: 10px; }
+#hud-top .sticker, #hud-boss .sticker { position: static; }
+#hud-top .sticker { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+#hud-top b { font-family: var(--font-hand); font-weight: 400; color: var(--pencil); font-size: 15px; margin-right: 6px; }
+#hud-hp { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); letter-spacing: 4px; font-size: 26px; }
+#hud-hp .lost { opacity: .22; }
+#hud-ammo { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; font-family: var(--font-num); font-size: 30px; font-variant-numeric: tabular-nums; min-width: 110px; }
+#hud-ammo small { display: block; font-family: var(--font-hand); font-size: 14px; color: var(--pencil); }
+#hud-ammo .reserve { font-size: 18px; color: var(--pencil); margin-left: 4px; }
+#hud-ammo .reserve.low { color: var(--red-pen); }
+#hud-ammo.pick { animation: pick .25s ease-out; }
+@keyframes pick { 0% { transform: scale(1.08); } 100% { transform: scale(1); } }
+#hud-ammo .bar { height: 6px; background: #ddd; border-radius: 3px; overflow: hidden; margin-top: 4px; display: none; }
+#hud-ammo .bar i { display: block; height: 100%; background: var(--nerf-orange); width: 0%; }
+#hud-ammo.reloading .bar { display: block; }
+#hud-ammo.empty { color: var(--red-pen); }
+#hud-boss { top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; }
+#hud-boss.on { display: flex; }
+#hud-boss .sticker { font-size: 17px; padding: 4px 12px; }
+#hud-boss .sticker.gone { text-decoration: line-through; opacity: .45; }
+#hud-boss .pips { color: var(--nerf-orange); letter-spacing: 1px; }
+#hud-buff { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%) rotate(1.5deg); display: none; background: var(--nerf-blue); color: var(--paper); border-color: var(--ink); font-size: 18px; white-space: nowrap; }
+#hud-buff.on { display: block; }
+#hud-buff b { font-weight: 400; color: #f4e27a; }
+#hud-buff #buff-time { font-family: var(--font-num); font-size: 22px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%, -50%); }
+#crosshair::before, #crosshair::after { content: ""; position: absolute; background: var(--ink); border-radius: 2px; }
+#crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%) rotate(3deg); }
+#crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%) rotate(-2deg); }
+#crosshair .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; background: var(--nerf-orange); border: 1.5px solid var(--ink); border-radius: 50%; transform: translate(-50%, -50%); }
+#hitmark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.6); color: var(--nerf-orange); font-family: var(--font-num); font-size: 34px; opacity: 0; transition: opacity .25s, transform .25s; text-shadow: 2px 2px 0 var(--ink); }
+#hitmark.show { opacity: 1; transform: translate(-50%, -50%) scale(1); transition: none; }
+#msg { position: absolute; left: 50%; top: 28%; transform: translateX(-50%) rotate(-1.2deg); font-size: clamp(24px, 4vw, 44px); text-align: center; opacity: 0; transition: opacity .3s; color: var(--ink); white-space: nowrap; max-width: 92vw; background: rgba(251, 246, 230, .9); border: 2px solid var(--ink); border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px; box-shadow: 3px 3px 0 var(--pencil); padding: 6px 22px; }
+#msg.show { opacity: 1; }
+#msg small { display: block; font-size: .5em; color: var(--pencil); }
+#vignette { position: absolute; inset: 0; box-shadow: inset 0 0 120px 40px rgba(216, 67, 43, .75); opacity: 0; transition: opacity .5s; }
+#vignette.hit { opacity: 1; transition: none; }
+
+/* ---- Overlays ---- */
+.overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: repeating-linear-gradient(transparent 0 29px, var(--paper-line) 29px 31px), var(--paper);
+  padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  overflow: auto;
+}
+.overlay[hidden] { display: none !important; }
+.overlay.translucent { background: rgba(251, 246, 230, .82); }
+.card {
+  background: var(--paper); border: 3px solid var(--ink); border-radius: 22px 26px 18px 30px / 28px 18px 30px 22px;
+  box-shadow: 6px 6px 0 var(--pencil); padding: 28px 32px; max-width: 560px; width: 100%; min-width: 0;
+  position: relative; transform: rotate(-.6deg);
+}
+.card::before { content: ""; position: absolute; top: -14px; left: 50%; width: 110px; height: 28px; transform: translateX(-50%) rotate(2deg); background: rgba(242, 138, 26, .55); border: 1px dashed rgba(43, 38, 34, .3); }
+.card h1 { margin: 0 0 4px; font-size: clamp(40px, 9vw, 64px); line-height: 1; text-wrap: balance; letter-spacing: 2px; }
+.card h1 span { color: var(--nerf-orange); -webkit-text-stroke: 1.5px var(--ink); }
+.card .sub { margin: 0 0 18px; color: var(--pencil); font-size: 18px; }
+.card h2 { margin: 0 0 8px; font-size: 36px; line-height: 1.1; text-wrap: balance; }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 20px; font-size: 17px; }
+.keys kbd { font-family: var(--font-num); font-size: 15px; border: 2px solid var(--ink); border-radius: 6px; padding: 0 7px; background: #fff; box-shadow: 2px 2px 0 var(--ink); display: inline-block; min-width: 14px; text-align: center; margin-right: 3px; }
+.keys dt { text-align: right; white-space: nowrap; }
+.keys dd { margin: 0; color: var(--pencil); }
+.btn {
+  font: inherit; font-size: 24px; cursor: pointer; color: var(--paper); background: var(--nerf-orange);
+  border: 3px solid var(--ink); border-radius: 16px 20px 14px 22px / 20px 14px 22px 16px; padding: 10px 28px;
+  box-shadow: 4px 4px 0 var(--ink); transition: transform .08s, box-shadow .08s; letter-spacing: 1px;
+}
+.btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+.btn:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.btn:focus-visible { outline: 3px dashed var(--nerf-blue); outline-offset: 3px; }
+.btn.blue { background: var(--nerf-blue); }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.note { margin-top: 14px; font-size: 14px; color: var(--pencil); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin: 10px 0 20px; font-size: 18px; }
+.stats b { font-family: var(--font-num); font-size: 30px; font-weight: 400; display: block; color: var(--nerf-blue); font-variant-numeric: tabular-nums; }
+.stats span { color: var(--pencil); font-size: 14px; }
+.red-pen { color: var(--red-pen); }
+#upgrade.compact { background: none; align-items: flex-end; pointer-events: none; padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+#upgrade.compact .card { max-width: 720px; padding: 12px 18px; transform: none; pointer-events: auto; }
+#upgrade.compact .card::before { display: none; }
+#upgrade.compact h2 { font-size: 22px; margin: 0 0 2px; }
+#upgrade.compact .sub { display: none; }
+#upgrade.compact .cards { margin: 6px 0 6px; gap: 8px; }
+#upgrade.compact .card-up { padding: 8px 10px; gap: 2px; transform: none; }
+#upgrade.compact .card-up b { font-size: 18px; } #upgrade.compact .card-up span { font-size: 13px; }
+#hud-up { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: none; font-size: 14px; color: var(--pencil); background: #fff; }
+#hud-up.on { display: block; }
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 6px 0 14px; }
+@media (max-width: 560px) { .cards { grid-template-columns: 1fr; } }
+.card-up { font: inherit; text-align: left; cursor: pointer; background: #fff; color: var(--ink); border: 2px solid var(--ink); border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px; box-shadow: 3px 3px 0 var(--pencil); padding: 12px 14px; display: grid; gap: 6px; min-width: 0; transform: rotate(-1deg); }
+.card-up:nth-child(2) { transform: rotate(0.8deg); } .card-up:nth-child(3) { transform: rotate(-0.4deg); }
+.card-up:hover, .card-up:focus-visible { background: var(--paper); transform: translate(-1px, -2px); outline: 3px dashed var(--nerf-blue); outline-offset: 2px; }
+.card-up kbd { font-family: var(--font-num); font-size: 14px; border: 2px solid var(--ink); border-radius: 6px; padding: 0 7px; background: var(--nerf-orange); color: var(--paper); width: max-content; }
+.card-up b { font-weight: 400; font-size: 22px; } .card-up span { font-size: 15px; color: var(--pencil); }
+#difficulty-row { margin: -6px 0 10px; gap: 10px; }
+#map-row { margin: 0 0 14px; gap: 10px; }
+.seg { display: inline-flex; border: 2px solid var(--ink); border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 2px 2px 0 var(--ink); }
+.seg-btn { font: inherit; font-size: 17px; padding: 4px 14px; border: 0; background: transparent; color: var(--ink); cursor: pointer; border-right: 2px solid var(--ink); }
+.seg-btn:last-child { border-right: 0; }
+.seg-btn.on { background: var(--nerf-blue); color: var(--paper); }
+.seg-btn:focus-visible { outline: 3px dashed var(--nerf-orange); outline-offset: -3px; }
+#lobby { display: grid; gap: 12px; margin: 4px 0 8px; }
+#lobby[hidden] { display: none !important; }
+.lobby-code { font-size: 22px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lobby-code b { font-family: var(--font-num); font-size: 44px; letter-spacing: 8px; color: var(--nerf-blue); background: #fff; border: 2px dashed var(--ink); padding: 2px 12px 2px 20px; border-radius: 10px; }
+.mini { font: inherit; font-size: 15px; cursor: pointer; background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; padding: 2px 10px; box-shadow: 2px 2px 0 var(--ink); }
+.mini:focus-visible, #join-code:focus-visible { outline: 3px dashed var(--nerf-blue); outline-offset: 2px; }
+#join-code { font-family: var(--font-num); font-size: 32px; letter-spacing: 6px; width: 6ch; min-width: 0; text-transform: uppercase; border: 2px solid var(--ink); border-radius: 10px; padding: 4px 10px; background: #fff; color: var(--ink); }
+#lobby-status { margin: 0; font-size: 16px; }
+#btn-begin[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { #msg, #vignette, #hitmark, .btn { transition: none; } }
+@media (max-width: 480px) { .sticker { font-size: 16px; padding: 4px 10px; } #hud-ammo { font-size: 24px; } .keys { font-size: 15px; } }
+</style>
+
+<div id="game"></div>
+
+<div class="hud" id="hud" hidden>
+  <div id="hud-top">
+    <div class="sticker"><b>波次</b><span id="wave">1</span></div>
+    <div class="sticker"><b>分數</b><span id="score">0</span></div>
+    <div class="sticker"><b>同學</b><span id="left">0</span></div>
+  </div>
+  <div id="hud-boss">
+    <div class="sticker" id="wp-1"><span class="label">眼鏡</span> <span class="pips">●●●</span></div>
+    <div class="sticker" id="wp-2"><span class="label">粉筆</span> <span class="pips">●●●</span></div>
+    <div class="sticker" id="wp-3"><span class="label">教案</span> <span class="pips">●●●</span></div>
+  </div>
+  <div class="sticker" id="hud-buff"><b id="buff-name">滿分考卷</b> <span id="buff-effect">分數雙倍</span> <span id="buff-time">12</span></div>
+  <div class="sticker" id="hud-up"></div>
+  <div class="sticker" id="hud-hp">♥♥♥♥♥</div>
+  <div class="sticker" id="hud-ammo"><span id="ammo">15</span><span class="reserve">/ <span id="reserve">30</span></span><small>彈匣 / 備用　<kbd style="font-size:12px">R</kbd> 重裝</small><div class="bar"><i id="reload-bar"></i></div></div>
+  <div id="crosshair"><div class="dot"></div></div>
+  <div id="hitmark">✕</div>
+  <div id="msg"></div>
+  <div id="vignette"></div>
+</div>
+
+<div class="overlay" id="menu">
+  <div class="card">
+    <h1>課桌<span>大戰</span></h1>
+    <p class="sub">下課十分鐘，三年二班變成戰場。躲在課桌後面，用 Nerf 槍把全班打到回座位罰坐，然後……面對回來的老師。</p>
+    <dl class="keys">
+      <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>移動</dd>
+      <dt><kbd>滑鼠</kbd></dt><dd>轉視角，左鍵發射泡棉彈</dd>
+      <dt><kbd>Ctrl</kbd></dt><dd>蹲下，整個人藏在課桌後面</dd>
+      <dt><kbd>Shift</kbd></dt><dd>跑步</dd>
+      <dt><kbd>R</kbd></dt><dd>重裝彈匣（15 發，打空會自動換）</dd>
+      <dt>地上的泡棉彈</dt><dd>走過去就撿起來當備用彈，同學和老師射的也能撿</dd>
+      <dt><kbd>E</kbd></dt><dd>連線模式：走到罰坐的隊友旁邊救他</dd>
+      <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></dt><dd>連線模式：喊話泡泡（掩護我、我沒彈了、惡霸醒了、班長來了）</dd>
+      <dt><kbd>Esc</kbd></dt><dd>暫停</dd>
+    </dl>
+    <div class="row" id="difficulty-row">
+      <span class="note">難度</span>
+      <div class="seg" role="radiogroup" aria-label="難度">
+        <button type="button" class="seg-btn" data-level="easy">簡單</button>
+        <button type="button" class="seg-btn on" data-level="normal">普通</button>
+        <button type="button" class="seg-btn" data-level="hard">困難</button>
+      </div>
+      <span class="note" id="difficulty-note">同時最多兩個同學開火，每清一波回 1 顆心。</span>
+    </div>
+    <div class="row" id="map-row">
+      <span class="note">教室</span>
+      <div class="seg" role="radiogroup" aria-label="教室">
+        <button type="button" class="seg-btn map-btn on" data-map="random">隨機</button>
+        <button type="button" class="seg-btn map-btn" data-map="classroom">三年二班</button>
+        <button type="button" class="seg-btn map-btn" data-map="lab">自然教室</button>
+        <button type="button" class="seg-btn map-btn" data-map="music">音樂教室</button>
+      </div>
+    </div>
+    <div class="row" id="menu-buttons">
+      <button class="btn" id="btn-start">單人開戰</button>
+      <button class="btn blue" id="btn-host">開房間</button>
+      <button class="btn" id="btn-join-open" style="background:var(--pencil)">輸入房號</button>
+    </div>
+    <div id="lobby" hidden>
+      <div class="lobby-code" id="lobby-code-wrap" hidden>房號 <b id="lobby-code">MILK</b> <button class="mini" id="btn-copy" type="button">複製</button></div>
+      <div class="row" id="lobby-join" hidden><label for="join-code" class="note">房號</label><input id="join-code" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false"> <button class="btn blue" id="btn-join" type="button">加入</button></div>
+      <p class="note" id="lobby-status">正在開房間……</p>
+      <div class="row"><button class="btn" id="btn-begin" type="button" hidden>開始！</button><button class="btn" id="btn-lobby-back" type="button" style="background:var(--pencil)">返回</button></div>
+    </div>
+    <p class="note" id="menu-note">建議用電腦與滑鼠遊玩。兩個人一起打：一個人開房間，另一個輸入房號。</p>
+  </div>
+</div>
+
+<div class="overlay translucent" id="pause" hidden>
+  <div class="card">
+    <h2>暫停</h2>
+    <p class="sub">老師還沒發現，快回去。</p>
+    <div class="row"><button class="btn blue" id="btn-resume">繼續</button><button class="btn" id="btn-restart-pause" style="background:var(--pencil)">重新開始</button></div>
+  </div>
+</div>
+
+<div class="overlay translucent" id="upgrade" hidden>
+  <div class="card">
+    <h2>這波清光了，挑一個升級</h2>
+    <p class="sub">按 <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 或點卡片。合作模式各選各的。</p>
+    <div class="cards" id="upgrade-cards"></div>
+    <p class="note" id="upgrade-note">下一波馬上來。</p>
+  </div>
+</div>
+
+<div class="overlay" id="over" hidden>
+  <div class="card">
+    <h2 id="over-title">你被罰坐了！</h2>
+    <p class="sub" id="over-sub"></p>
+    <div class="stats">
+      <div><b id="st-score">0</b><span>分數</span></div>
+      <div><b id="st-kills">0</b><span>打到出局的同學</span></div>
+      <div><b id="st-wave">0</b><span>撐到第幾波</span></div>
+      <div><b id="st-acc">0%</b><span>命中率</span></div>
+    </div>
+    <div class="row"><button class="btn" id="btn-again">再來一局</button></div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

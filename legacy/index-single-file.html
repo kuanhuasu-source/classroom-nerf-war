@@ -1,0 +1,1912 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<!--@@BODY-->
+<title>課桌大戰</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Iansui&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: one full-screen WebGL canvas, DOM overlays drawn like stickers on notebook paper. */
+:root {
+  --paper: #fbf6e6;
+  --paper-line: #b9cfe6;
+  --ink: #2b2622;
+  --pencil: #5a4e47;
+  --nerf-orange: #f28a1a;
+  --nerf-blue: #2f6fd1;
+  --chalk-green: #335c4b;
+  --red-pen: #d8432b;
+  --font-hand: 'Iansui', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --font-num: 'Patrick Hand', 'Iansui', sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; overflow: hidden; background: var(--paper); color: var(--ink);
+  font-family: var(--font-hand); -webkit-user-select: none; user-select: none;
+}
+#game { position: fixed; inset: 0; }
+#game canvas { display: block; width: 100%; height: 100%; }
+
+/* ---- HUD ---- */
+.hud { position: fixed; inset: 0; pointer-events: none; }
+.hud[hidden] { display: none !important; }
+.sticker {
+  position: absolute; background: var(--paper); color: var(--ink);
+  border: 2px solid var(--ink); border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px;
+  box-shadow: 3px 3px 0 var(--pencil); padding: 6px 14px; font-size: 20px; line-height: 1.2;
+}
+#hud-top { top: calc(16px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: flex; gap: 10px; }
+#hud-top .sticker, #hud-boss .sticker { position: static; }
+#hud-top .sticker { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+#hud-top b { font-family: var(--font-hand); font-weight: 400; color: var(--pencil); font-size: 15px; margin-right: 6px; }
+#hud-hp { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); letter-spacing: 4px; font-size: 26px; }
+#hud-hp .lost { opacity: .22; }
+#hud-ammo { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; font-family: var(--font-num); font-size: 30px; font-variant-numeric: tabular-nums; min-width: 110px; }
+#hud-ammo small { display: block; font-family: var(--font-hand); font-size: 14px; color: var(--pencil); }
+#hud-ammo .reserve { font-size: 18px; color: var(--pencil); margin-left: 4px; }
+#hud-ammo .reserve.low { color: var(--red-pen); }
+#hud-ammo.pick { animation: pick .25s ease-out; }
+@keyframes pick { 0% { transform: scale(1.08); } 100% { transform: scale(1); } }
+#hud-ammo .bar { height: 6px; background: #ddd; border-radius: 3px; overflow: hidden; margin-top: 4px; display: none; }
+#hud-ammo .bar i { display: block; height: 100%; background: var(--nerf-orange); width: 0%; }
+#hud-ammo.reloading .bar { display: block; }
+#hud-ammo.empty { color: var(--red-pen); }
+#hud-boss { top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; }
+#hud-boss.on { display: flex; }
+#hud-boss .sticker { font-size: 17px; padding: 4px 12px; }
+#hud-boss .sticker.gone { text-decoration: line-through; opacity: .45; }
+#hud-boss .pips { color: var(--nerf-orange); letter-spacing: 1px; }
+#hud-buff { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%) rotate(1.5deg); display: none; background: var(--nerf-blue); color: var(--paper); border-color: var(--ink); font-size: 18px; white-space: nowrap; }
+#hud-buff.on { display: block; }
+#hud-buff b { font-weight: 400; color: #f4e27a; }
+#hud-buff #buff-time { font-family: var(--font-num); font-size: 22px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%, -50%); }
+#crosshair::before, #crosshair::after { content: ""; position: absolute; background: var(--ink); border-radius: 2px; }
+#crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%) rotate(3deg); }
+#crosshair::after { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%) rotate(-2deg); }
+#crosshair .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; background: var(--nerf-orange); border: 1.5px solid var(--ink); border-radius: 50%; transform: translate(-50%, -50%); }
+#hitmark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.6); color: var(--nerf-orange); font-family: var(--font-num); font-size: 34px; opacity: 0; transition: opacity .25s, transform .25s; text-shadow: 2px 2px 0 var(--ink); }
+#hitmark.show { opacity: 1; transform: translate(-50%, -50%) scale(1); transition: none; }
+#msg { position: absolute; left: 50%; top: 28%; transform: translateX(-50%) rotate(-1.2deg); font-size: clamp(24px, 4vw, 44px); text-align: center; opacity: 0; transition: opacity .3s; color: var(--ink); white-space: nowrap; max-width: 92vw; background: rgba(251, 246, 230, .9); border: 2px solid var(--ink); border-radius: 14px 18px 12px 20px / 18px 12px 20px 14px; box-shadow: 3px 3px 0 var(--pencil); padding: 6px 22px; }
+#msg.show { opacity: 1; }
+#msg small { display: block; font-size: .5em; color: var(--pencil); }
+#vignette { position: absolute; inset: 0; box-shadow: inset 0 0 120px 40px rgba(216, 67, 43, .75); opacity: 0; transition: opacity .5s; }
+#vignette.hit { opacity: 1; transition: none; }
+
+/* ---- Overlays ---- */
+.overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: repeating-linear-gradient(transparent 0 29px, var(--paper-line) 29px 31px), var(--paper);
+  padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  overflow: auto;
+}
+.overlay[hidden] { display: none !important; }
+.overlay.translucent { background: rgba(251, 246, 230, .82); }
+.card {
+  background: var(--paper); border: 3px solid var(--ink); border-radius: 22px 26px 18px 30px / 28px 18px 30px 22px;
+  box-shadow: 6px 6px 0 var(--pencil); padding: 28px 32px; max-width: 560px; width: 100%; min-width: 0;
+  position: relative; transform: rotate(-.6deg);
+}
+.card::before { content: ""; position: absolute; top: -14px; left: 50%; width: 110px; height: 28px; transform: translateX(-50%) rotate(2deg); background: rgba(242, 138, 26, .55); border: 1px dashed rgba(43, 38, 34, .3); }
+.card h1 { margin: 0 0 4px; font-size: clamp(40px, 9vw, 64px); line-height: 1; text-wrap: balance; letter-spacing: 2px; }
+.card h1 span { color: var(--nerf-orange); -webkit-text-stroke: 1.5px var(--ink); }
+.card .sub { margin: 0 0 18px; color: var(--pencil); font-size: 18px; }
+.card h2 { margin: 0 0 8px; font-size: 36px; line-height: 1.1; text-wrap: balance; }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 20px; font-size: 17px; }
+.keys kbd { font-family: var(--font-num); font-size: 15px; border: 2px solid var(--ink); border-radius: 6px; padding: 0 7px; background: #fff; box-shadow: 2px 2px 0 var(--ink); display: inline-block; min-width: 14px; text-align: center; margin-right: 3px; }
+.keys dt { text-align: right; white-space: nowrap; }
+.keys dd { margin: 0; color: var(--pencil); }
+.btn {
+  font: inherit; font-size: 24px; cursor: pointer; color: var(--paper); background: var(--nerf-orange);
+  border: 3px solid var(--ink); border-radius: 16px 20px 14px 22px / 20px 14px 22px 16px; padding: 10px 28px;
+  box-shadow: 4px 4px 0 var(--ink); transition: transform .08s, box-shadow .08s; letter-spacing: 1px;
+}
+.btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+.btn:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.btn:focus-visible { outline: 3px dashed var(--nerf-blue); outline-offset: 3px; }
+.btn.blue { background: var(--nerf-blue); }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.note { margin-top: 14px; font-size: 14px; color: var(--pencil); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin: 10px 0 20px; font-size: 18px; }
+.stats b { font-family: var(--font-num); font-size: 30px; font-weight: 400; display: block; color: var(--nerf-blue); font-variant-numeric: tabular-nums; }
+.stats span { color: var(--pencil); font-size: 14px; }
+.red-pen { color: var(--red-pen); }
+@media (prefers-reduced-motion: reduce) { #msg, #vignette, #hitmark, .btn { transition: none; } }
+@media (max-width: 480px) { .sticker { font-size: 16px; padding: 4px 10px; } #hud-ammo { font-size: 24px; } .keys { font-size: 15px; } }
+</style>
+
+<div id="game"></div>
+
+<div class="hud" id="hud" hidden>
+  <div id="hud-top">
+    <div class="sticker"><b>波次</b><span id="wave">1</span></div>
+    <div class="sticker"><b>分數</b><span id="score">0</span></div>
+    <div class="sticker"><b>同學</b><span id="left">0</span></div>
+  </div>
+  <div id="hud-boss">
+    <div class="sticker" id="wp-glasses">眼鏡 <span class="pips">●●●</span></div>
+    <div class="sticker" id="wp-chalk">粉筆 <span class="pips">●●●</span></div>
+    <div class="sticker" id="wp-book">教案 <span class="pips">●●●</span></div>
+  </div>
+  <div class="sticker" id="hud-buff"><b id="buff-name">滿分考卷</b> <span id="buff-effect">分數雙倍</span> <span id="buff-time">12</span></div>
+  <div class="sticker" id="hud-hp">♥♥♥♥♥</div>
+  <div class="sticker" id="hud-ammo"><span id="ammo">15</span><span class="reserve">/ <span id="reserve">30</span></span><small>彈匣 / 備用　<kbd style="font-size:12px">R</kbd> 重裝</small><div class="bar"><i id="reload-bar"></i></div></div>
+  <div id="crosshair"><div class="dot"></div></div>
+  <div id="hitmark">✕</div>
+  <div id="msg"></div>
+  <div id="vignette"></div>
+</div>
+
+<div class="overlay" id="menu">
+  <div class="card">
+    <h1>課桌<span>大戰</span></h1>
+    <p class="sub">下課十分鐘，三年二班變成戰場。躲在課桌後面，用 Nerf 槍把全班打到回座位罰坐，然後……面對回來的老師。</p>
+    <dl class="keys">
+      <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>移動</dd>
+      <dt><kbd>滑鼠</kbd></dt><dd>轉視角，左鍵發射泡棉彈</dd>
+      <dt><kbd>Ctrl</kbd></dt><dd>蹲下，整個人藏在課桌後面</dd>
+      <dt><kbd>Shift</kbd></dt><dd>跑步</dd>
+      <dt><kbd>R</kbd></dt><dd>重裝彈匣（15 發，打空會自動換）</dd>
+      <dt>地上的泡棉彈</dt><dd>走過去就撿起來當備用彈，同學和老師射的也能撿</dd>
+      <dt><kbd>Esc</kbd></dt><dd>暫停</dd>
+    </dl>
+    <div class="row">
+      <button class="btn" id="btn-start">開始上課……不，開戰！</button>
+      <span class="note" id="menu-note">建議用電腦與滑鼠遊玩。</span>
+    </div>
+  </div>
+</div>
+
+<div class="overlay translucent" id="pause" hidden>
+  <div class="card">
+    <h2>暫停</h2>
+    <p class="sub">老師還沒發現，快回去。</p>
+    <div class="row"><button class="btn blue" id="btn-resume">繼續</button><button class="btn" id="btn-restart-pause" style="background:var(--pencil)">重新開始</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="over" hidden>
+  <div class="card">
+    <h2 id="over-title">你被罰坐了！</h2>
+    <p class="sub" id="over-sub"></p>
+    <div class="stats">
+      <div><b id="st-score">0</b><span>分數</span></div>
+      <div><b id="st-kills">0</b><span>打到出局的同學</span></div>
+      <div><b id="st-wave">0</b><span>撐到第幾波</span></div>
+      <div><b id="st-acc">0%</b><span>命中率</span></div>
+    </div>
+    <div class="row"><button class="btn" id="btn-again">再來一局</button></div>
+  </div>
+</div>
+
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ============================================================
+//  Config
+// ============================================================
+const CFG = {
+  room: { w: 12, d: 9, h: 3.2 },
+  player: { eye: 1.25, crouchEye: 0.62, radius: 0.28, walk: 3.2, run: 5.0, crouchSpeed: 1.7, hp: 5 },
+  gun: { mag: 15, reloadEmpty: 1.3, reloadPartial: 0.85, speed: 32, gravity: 6, fireInterval: 0.18, reserveStart: 30, reserveMax: 60, autoReloadDelay: 0.35, pickupRadius: 0.7, floorLife: 14, dropOnKnockout: 4 },
+  enemy: { hp: 3, speed: 2.6, dartSpeed: 19, spread: 0.13 },
+  waves: [3, 4, 5, 6],
+  teacher: { wpHp: 3, throwInterval: 1.6, chalkSpeed: 17 },
+  score: { hit: 50, out: 300, wave: 500, weakpoint: 1000, win: 5000 },
+  milk: { heal: 1, interval: 18, max: 2, pickupRadius: 0.75, minDistFromPlayer: 2.5 },
+  bully: { windup: 1.0, blastRadius: 1.7, grumble: 1.6, hitRadius: 0.55, deepSleep: 20 },
+  ball: { radius: 0.22, launch: 9.5, hurtSpeed: 3.5, start: { x: -0.5, z: 0.55 } },
+  monitor: { sight: 8, strokeCooldown: 2.5, reinforcements: 2, rageSeconds: 8, speed: 1.6, rest: 25 },
+  items: { interval: [20, 35], life: 15, hitRadius: 0.34, slowScale: 0.35, speedMul: 1.6 },
+  // which classroom elements show up is rolled once per game
+  features: { bully: 0.6, ball: 0.6, monitor: 0.5 },
+};
+const DESK = { w: 0.62, d: 0.46, h: 0.72 };
+const DESK_COLS = [-4.5, -2.9, -1.3, 0.3, 1.9, 3.5];
+const DESK_ROWS = [-2.2, -1.1, 0.0, 1.1, 2.2];
+const DOORS = [{ x: 5.6, z: -3.3 }, { x: 5.6, z: 3.3 }];
+const PLAYER_START = new THREE.Vector3(-5.0, 0, 3.7);
+const BUFFS = [
+  { id: 'double', name: '滿分考卷', effect: '分數雙倍', dur: 12 },
+  { id: 'infinite', name: '老師的糖果罐', effect: '彈匣不會減少', dur: 8 },
+  { id: 'speed', name: '貼紙獎勵', effect: '跑得超快', dur: 10 },
+  { id: 'slow', name: '教室時鐘', effect: '全教室慢動作', dur: 5 },
+];
+// where a special item can hang: position + facing (rotation about Y)
+const MOUNTS = [
+  { x: -2.0, y: 2.0, z: -4.41, ry: 0 }, { x: -0.6, y: 1.35, z: -4.41, ry: 0 }, { x: 1.6, y: 1.25, z: -4.41, ry: 0 }, { x: 2.3, y: 2.05, z: -4.41, ry: 0 },
+  { x: -3.2, y: 1.85, z: 4.41, ry: Math.PI }, { x: -1.9, y: 1.5, z: 4.41, ry: Math.PI },
+  { x: 4.3, y: 1.55, z: 3.93, ry: Math.PI },
+  { x: -5.96, y: 2.75, z: -1.3, ry: Math.PI / 2 }, { x: -5.96, y: 2.75, z: 1.3, ry: Math.PI / 2 },
+  { x: 5.96, y: 1.7, z: 0, ry: -Math.PI / 2 },
+];
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ============================================================
+//  Audio: all sounds synthesized, no files
+// ============================================================
+const Audio = (() => {
+  let ctx = null, master = null;
+  function init() {
+    if (ctx) return;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+    } catch (e) { ctx = null; }
+  }
+  function resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
+  function tone({ f0 = 440, f1 = f0, dur = 0.1, type = 'square', vol = 0.2, delay = 0 }) {
+    if (!ctx) return;
+    const t = ctx.currentTime + delay;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise({ dur = 0.08, vol = 0.2, hp = 800, delay = 0 }) {
+    if (!ctx) return;
+    const t = ctx.currentTime + delay;
+    const n = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const s = ctx.createBufferSource(); s.buffer = buf;
+    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
+    const g = ctx.createGain(); g.gain.value = vol;
+    s.connect(f); f.connect(g); g.connect(master); s.start(t);
+  }
+  return {
+    init, resume,
+    pew() { tone({ f0: 1100, f1: 320, dur: 0.11, type: 'sawtooth', vol: 0.14 }); noise({ dur: 0.05, vol: 0.12, hp: 2000 }); },
+    enemyPew() { tone({ f0: 900, f1: 280, dur: 0.1, type: 'sawtooth', vol: 0.07 }); },
+    empty() { tone({ f0: 200, f1: 160, dur: 0.06, type: 'square', vol: 0.1 }); },
+    reload(dur = 1.3) { tone({ f0: 300, f1: 200, dur: 0.05, type: 'square', vol: 0.12 }); tone({ f0: 500, f1: 700, dur: 0.06, type: 'square', vol: 0.12, delay: dur * 0.65 }); tone({ f0: 900, f1: 1200, dur: 0.05, type: 'square', vol: 0.1, delay: dur * 0.85 }); },
+    thud() { tone({ f0: 160, f1: 70, dur: 0.07, type: 'sine', vol: 0.18 }); },
+    hitEnemy() { noise({ dur: 0.06, vol: 0.2, hp: 600 }); tone({ f0: 520, f1: 760, dur: 0.12, type: 'triangle', vol: 0.16 }); },
+    out() { tone({ f0: 700, f1: 1400, dur: 0.18, type: 'triangle', vol: 0.18 }); tone({ f0: 1200, f1: 180, dur: 0.6, type: 'sine', vol: 0.14, delay: 0.18 }); },
+    hurt() { tone({ f0: 300, f1: 120, dur: 0.22, type: 'square', vol: 0.18 }); noise({ dur: 0.1, vol: 0.2, hp: 300 }); },
+    wave() { [523, 659, 784].forEach((f, i) => tone({ f0: f, dur: 0.14, type: 'triangle', vol: 0.16, delay: i * 0.12 })); },
+    footsteps() { for (let i = 0; i < 6; i++) tone({ f0: 90, f1: 60, dur: 0.12, type: 'sine', vol: 0.25 + i * 0.05, delay: i * 0.45 }); },
+    teacher() { tone({ f0: 140, f1: 90, dur: 0.5, type: 'sawtooth', vol: 0.2 }); tone({ f0: 220, f1: 150, dur: 0.4, type: 'sawtooth', vol: 0.14, delay: 0.3 }); },
+    chalkThrow() { tone({ f0: 1800, f1: 900, dur: 0.08, type: 'triangle', vol: 0.08 }); },
+    weakpoint() { noise({ dur: 0.1, vol: 0.25, hp: 1500 }); [880, 1100, 1320].forEach((f, i) => tone({ f0: f, dur: 0.12, type: 'square', vol: 0.12, delay: i * 0.07 })); },
+    snore() { tone({ f0: 120, f1: 180, dur: 0.5, type: 'sawtooth', vol: 0.05 }); tone({ f0: 160, f1: 110, dur: 0.45, type: 'sawtooth', vol: 0.04, delay: 0.7 }); },
+    growl() { tone({ f0: 110, f1: 70, dur: 0.6, type: 'sawtooth', vol: 0.22 }); noise({ dur: 0.3, vol: 0.12, hp: 200 }); },
+    blast() { noise({ dur: 0.35, vol: 0.35, hp: 120 }); tone({ f0: 90, f1: 40, dur: 0.4, type: 'sine', vol: 0.3 }); },
+    boing() { tone({ f0: 240, f1: 480, dur: 0.14, type: 'triangle', vol: 0.2 }); tone({ f0: 480, f1: 300, dur: 0.12, type: 'triangle', vol: 0.12, delay: 0.12 }); },
+    bounce() { tone({ f0: 300, f1: 180, dur: 0.07, type: 'triangle', vol: 0.1 }); },
+    scribble() { noise({ dur: 0.12, vol: 0.1, hp: 2500 }); noise({ dur: 0.1, vol: 0.08, hp: 2500, delay: 0.14 }); },
+    tattle() { [880, 1100, 880, 1100].forEach((f, i) => tone({ f0: f, dur: 0.12, type: 'square', vol: 0.12, delay: i * 0.1 })); },
+    item() { [660, 880, 1320, 1760].forEach((f, i) => tone({ f0: f, dur: 0.1, type: 'triangle', vol: 0.14, delay: i * 0.06 })); noise({ dur: 0.08, vol: 0.1, hp: 3000 }); },
+    itemSpawn() { tone({ f0: 1320, f1: 1320, dur: 0.08, type: 'sine', vol: 0.1 }); tone({ f0: 1760, f1: 1760, dur: 0.12, type: 'sine', vol: 0.1, delay: 0.09 }); },
+    pickup() { tone({ f0: 1400, f1: 1900, dur: 0.05, type: 'square', vol: 0.07 }); },
+    milkSpawn() { tone({ f0: 1046, f1: 1046, dur: 0.12, type: 'sine', vol: 0.14 }); tone({ f0: 1568, f1: 1568, dur: 0.18, type: 'sine', vol: 0.12, delay: 0.1 }); },
+    drink() { [420, 360, 300].forEach((f, i) => tone({ f0: f, f1: f * 0.8, dur: 0.1, type: 'sine', vol: 0.18, delay: i * 0.11 })); tone({ f0: 900, f1: 1300, dur: 0.15, type: 'triangle', vol: 0.12, delay: 0.4 }); },
+    win() { [523, 659, 784, 1046, 784, 1046, 1318].forEach((f, i) => tone({ f0: f, dur: 0.22, type: 'triangle', vol: 0.18, delay: i * 0.16 })); },
+    lose() { [440, 370, 311, 220].forEach((f, i) => tone({ f0: f, f1: f * 0.9, dur: 0.35, type: 'square', vol: 0.14, delay: i * 0.28 })); },
+  };
+})();
+
+// ============================================================
+//  Hand-drawn canvas textures
+// ============================================================
+const Draw = (() => {
+  const jit = (a) => (Math.random() * 2 - 1) * a;
+  function wobblyPath(ctx, pts, close, j = 2) {
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const x = p[0] + jit(j), y = p[1] + jit(j);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    if (close) ctx.closePath();
+  }
+  function ellipsePts(cx, cy, rx, ry, n = 28) {
+    const pts = [];
+    for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; pts.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]); }
+    return pts;
+  }
+  function shape(ctx, pts, fill, stroke = '#2b2622', lw = 4, j = 2) {
+    // crayon-ish fill: two slightly offset translucent layers, then pencil outline
+    if (fill) {
+      ctx.fillStyle = fill; ctx.globalAlpha = 0.85;
+      wobblyPath(ctx, pts, true, j); ctx.fill();
+      ctx.globalAlpha = 0.5; ctx.save(); ctx.translate(jit(3), jit(3)); wobblyPath(ctx, pts, true, j); ctx.fill(); ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; wobblyPath(ctx, pts, true, j); ctx.stroke(); }
+  }
+  function line(ctx, pts, stroke = '#2b2622', lw = 4, j = 2) {
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    wobblyPath(ctx, pts, false, j); ctx.stroke();
+  }
+  function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  function tex(c, repeat) {
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+    return t;
+  }
+
+  const SKINS = ['#f6d6b8', '#e9b98f', '#d9a070', '#f3c9ad'];
+  const SHIRTS = ['#ffffff', '#f4e27a', '#9fd3f2', '#f7a8c4', '#b7e3a1', '#f5f5f5'];
+  const HAIRS = ['#2b2622', '#4a2f1d', '#1d1f3a', '#6b3a1e'];
+
+  // state: 'normal' | 'hurt' | 'out'
+  function kid(v, state) {
+    const c = canvas(256, 512), ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 256, 512);
+    const cx = 128, headY = 130, headR = 62;
+    // legs
+    shape(ctx, [[96, 330], [122, 330], [118, 470], [92, 470]], '#3b4a8a');
+    shape(ctx, [[134, 330], [160, 330], [164, 470], [138, 470]], '#3b4a8a');
+    shape(ctx, [[86, 466], [124, 466], [128, 490], [82, 490]], '#2b2622');
+    shape(ctx, [[132, 466], [170, 466], [174, 490], [128, 490]], '#2b2622');
+    // body
+    shape(ctx, [[82, 200], [174, 200], [184, 340], [72, 340]], v.shirt);
+    // collar
+    line(ctx, [[112, 200], [128, 224], [144, 200]], '#2b2622', 3);
+    // left arm (viewer's left) hanging
+    shape(ctx, [[82, 205], [60, 300], [78, 306], [96, 220]], v.shirt);
+    shape(ctx, ellipsePts(68, 310, 13, 13, 14), v.skin);
+    if (state !== 'out') {
+      // right arm holds a Nerf blaster forward
+      shape(ctx, [[160, 205], [224, 262], [214, 280], [152, 232]], v.shirt);
+      shape(ctx, ellipsePts(222, 272, 14, 14, 14), v.skin);
+      // blaster
+      shape(ctx, [[184, 236], [250, 236], [250, 262], [184, 262]], '#f28a1a');
+      shape(ctx, [[200, 262], [218, 262], [222, 292], [204, 292]], '#2f6fd1');
+      shape(ctx, [[250, 242], [256, 242], [256, 256], [250, 256]], '#2f6fd1', '#2b2622', 3);
+    } else {
+      // right arm raised with a white flag
+      shape(ctx, [[160, 205], [196, 110], [214, 116], [178, 220]], v.shirt);
+      shape(ctx, ellipsePts(206, 108, 14, 14, 14), v.skin);
+      line(ctx, [[206, 108], [206, 10]], '#6b3a1e', 5);
+      shape(ctx, [[208, 12], [252, 30], [208, 58]], '#ffffff');
+    }
+    // head
+    shape(ctx, ellipsePts(cx, headY, headR, headR + 4), v.skin);
+    // hair
+    if (v.hair === 0) { // bowl cut
+      shape(ctx, [[cx - 66, headY - 8], [cx - 60, headY - 48], [cx - 20, headY - 70], [cx + 24, headY - 70], [cx + 62, headY - 46], [cx + 66, headY - 8], [cx + 40, headY - 32], [cx, headY - 40], [cx - 40, headY - 30]], v.hairColor);
+    } else if (v.hair === 1) { // pigtails
+      shape(ctx, [[cx - 64, headY - 10], [cx - 56, headY - 52], [cx, headY - 72], [cx + 56, headY - 52], [cx + 64, headY - 10], [cx + 20, headY - 40], [cx - 20, headY - 40]], v.hairColor);
+      shape(ctx, ellipsePts(cx - 78, headY + 10, 18, 30, 16), v.hairColor);
+      shape(ctx, ellipsePts(cx + 78, headY + 10, 18, 30, 16), v.hairColor);
+      shape(ctx, ellipsePts(cx - 72, headY - 18, 9, 9, 10), '#d8432b');
+      shape(ctx, ellipsePts(cx + 72, headY - 18, 9, 9, 10), '#d8432b');
+    } else { // spiky
+      shape(ctx, [[cx - 64, headY - 12], [cx - 70, headY - 60], [cx - 36, headY - 42], [cx - 24, headY - 92], [cx, headY - 50], [cx + 20, headY - 96], [cx + 34, headY - 44], [cx + 72, headY - 64], [cx + 64, headY - 12], [cx, headY - 34]], v.hairColor);
+    }
+    // face
+    const ey = headY + 6;
+    if (state === 'normal') {
+      shape(ctx, ellipsePts(cx - 24, ey, 7, 9, 10), '#2b2622', null);
+      shape(ctx, ellipsePts(cx + 24, ey, 7, 9, 10), '#2b2622', null);
+      line(ctx, [[cx - 36, ey - 22], [cx - 12, ey - 26]], '#2b2622', 4); // determined brows
+      line(ctx, [[cx + 12, ey - 26], [cx + 36, ey - 22]], '#2b2622', 4);
+      line(ctx, [[cx - 18, ey + 32], [cx, ey + 40], [cx + 18, ey + 30]], '#2b2622', 4);
+    } else if (state === 'hurt') {
+      line(ctx, [[cx - 32, ey - 8], [cx - 16, ey + 6]], '#2b2622', 4); line(ctx, [[cx - 32, ey + 6], [cx - 16, ey - 8]], '#2b2622', 4);
+      line(ctx, [[cx + 16, ey - 8], [cx + 32, ey + 6]], '#2b2622', 4); line(ctx, [[cx + 16, ey + 6], [cx + 32, ey - 8]], '#2b2622', 4);
+      shape(ctx, ellipsePts(cx, ey + 36, 14, 18, 12), '#8a2a2a');
+    } else {
+      shape(ctx, ellipsePts(cx - 24, ey, 8, 8, 10), '#2b2622', null);
+      shape(ctx, ellipsePts(cx + 24, ey, 8, 8, 10), '#2b2622', null);
+      // tears
+      shape(ctx, [[cx - 30, ey + 10], [cx - 20, ey + 10], [cx - 25, ey + 36]], '#6fb7ef', '#2b2622', 2);
+      shape(ctx, [[cx + 20, ey + 10], [cx + 30, ey + 10], [cx + 25, ey + 36]], '#6fb7ef', '#2b2622', 2);
+      line(ctx, [[cx - 16, ey + 40], [cx, ey + 30], [cx + 16, ey + 40]], '#2b2622', 4);
+    }
+    // cheeks
+    ctx.globalAlpha = 0.5; shape(ctx, ellipsePts(cx - 40, ey + 20, 10, 6, 10), '#f28a8a', null); shape(ctx, ellipsePts(cx + 40, ey + 20, 10, 6, 10), '#f28a8a', null); ctx.globalAlpha = 1;
+    return c;
+  }
+  function kidVariant() {
+    return { skin: pick(SKINS), shirt: pick(SHIRTS), hair: Math.floor(Math.random() * 3), hairColor: pick(HAIRS) };
+  }
+
+  // flags: { glasses, chalk, book, mood: 'angry'|'cry' }
+  function teacher(flags) {
+    const c = canvas(256, 640), ctx = c.getContext('2d');
+    const cx = 128, headY = 120, headR = 58;
+    // legs / skirt
+    shape(ctx, [[70, 330], [186, 330], [204, 470], [52, 470]], '#4b3f6b');
+    shape(ctx, [[96, 468], [120, 468], [120, 590], [96, 590]], '#f0cfae');
+    shape(ctx, [[136, 468], [160, 468], [160, 590], [136, 590]], '#f0cfae');
+    shape(ctx, [[84, 586], [124, 586], [128, 612], [80, 612]], '#2b2622');
+    shape(ctx, [[132, 586], [172, 586], [176, 612], [128, 612]], '#2b2622');
+    // body (cardigan)
+    shape(ctx, [[78, 196], [178, 196], [190, 340], [66, 340]], '#c5584a');
+    line(ctx, [[128, 210], [128, 330]], '#2b2622', 2);
+    [[128, 240], [128, 270], [128, 300]].forEach(p => shape(ctx, ellipsePts(p[0], p[1], 5, 5, 8), '#f4e27a', '#2b2622', 2));
+    // left arm holds lesson plan under arm
+    shape(ctx, [[78, 202], [40, 300], [60, 310], [96, 220]], '#c5584a');
+    shape(ctx, ellipsePts(48, 316, 14, 14, 14), '#f0cfae');
+    if (flags.book) {
+      shape(ctx, [[18, 236], [78, 236], [84, 316], [24, 316]], '#2f7d4f');
+      ctx.fillStyle = '#fbf6e6'; ctx.font = '26px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('教', 50, 270); ctx.fillText('案', 50, 300);
+    }
+    // right arm raised, holding chalk
+    shape(ctx, [[178, 202], [226, 150], [242, 164], [192, 226]], '#c5584a');
+    shape(ctx, ellipsePts(236, 150, 15, 15, 14), '#f0cfae');
+    if (flags.chalk) shape(ctx, [[232, 138], [240, 138], [244, 100], [236, 100]], '#ffffff', '#2b2622', 3);
+    // head & hair (bun)
+    shape(ctx, ellipsePts(cx, headY, headR, headR + 6), '#f0cfae');
+    shape(ctx, [[cx - 62, headY - 6], [cx - 56, headY - 50], [cx, headY - 72], [cx + 56, headY - 50], [cx + 62, headY - 6], [cx + 30, headY - 36], [cx - 30, headY - 36]], '#3a2a2a');
+    shape(ctx, ellipsePts(cx, headY - 78, 26, 20, 16), '#3a2a2a');
+    const ey = headY + 4;
+    if (flags.mood === 'cry') {
+      line(ctx, [[cx - 34, ey - 6], [cx - 14, ey + 2]], '#2b2622', 4); line(ctx, [[cx + 14, ey + 2], [cx + 34, ey - 6]], '#2b2622', 4);
+      shape(ctx, [[cx - 30, ey + 8], [cx - 18, ey + 8], [cx - 24, ey + 48]], '#6fb7ef', '#2b2622', 2);
+      shape(ctx, [[cx + 18, ey + 8], [cx + 30, ey + 8], [cx + 24, ey + 48]], '#6fb7ef', '#2b2622', 2);
+      shape(ctx, ellipsePts(cx, ey + 38, 18, 14, 12), '#8a2a2a');
+    } else {
+      shape(ctx, ellipsePts(cx - 24, ey, 7, 8, 10), '#2b2622', null);
+      shape(ctx, ellipsePts(cx + 24, ey, 7, 8, 10), '#2b2622', null);
+      line(ctx, [[cx - 40, ey - 30], [cx - 10, ey - 18]], '#2b2622', 5); // angry brows
+      line(ctx, [[cx + 10, ey - 18], [cx + 40, ey - 30]], '#2b2622', 5);
+      line(ctx, [[cx - 20, ey + 36], [cx, ey + 28], [cx + 20, ey + 36]], '#2b2622', 4);
+      if (!flags.glasses) { // squinting without glasses
+        line(ctx, [[cx - 34, ey - 2], [cx - 14, ey - 2]], '#2b2622', 5); line(ctx, [[cx + 14, ey - 2], [cx + 34, ey - 2]], '#2b2622', 5);
+      }
+    }
+    if (flags.glasses) {
+      shape(ctx, ellipsePts(cx - 24, ey, 20, 17, 16), 'rgba(160,210,255,0.35)', '#2b2622', 4);
+      shape(ctx, ellipsePts(cx + 24, ey, 20, 17, 16), 'rgba(160,210,255,0.35)', '#2b2622', 4);
+      line(ctx, [[cx - 4, ey], [cx + 4, ey]], '#2b2622', 4);
+    }
+    return c;
+  }
+
+  // the sleeping bully: a big kid in a striped tank top
+  function bully(state) {
+    const c = canvas(256, 512), ctx = c.getContext('2d');
+    const cx = 128, headY = 120, headR = 68, skin = '#eac19a';
+    shape(ctx, [[86, 330], [124, 330], [120, 470], [80, 470]], '#4a4a4a');
+    shape(ctx, [[132, 330], [170, 330], [176, 470], [136, 470]], '#4a4a4a');
+    shape(ctx, [[72, 466], [126, 466], [130, 492], [68, 492]], '#2b2622');
+    shape(ctx, [[130, 466], [184, 466], [188, 492], [126, 492]], '#2b2622');
+    shape(ctx, [[64, 196], [192, 196], [206, 340], [50, 340]], '#ffffff');
+    [[228], [262], [296]].forEach(([y]) => line(ctx, [[58, y], [198, y + 4]], '#2f6fd1', 9, 2));
+    line(ctx, [[84, 200], [96, 330]], '#d8432b', 7, 2); line(ctx, [[172, 200], [160, 330]], '#d8432b', 7, 2);
+    shape(ctx, [[64, 200], [30, 300], [54, 312], [86, 220]], skin);
+    shape(ctx, [[192, 200], [226, 300], [202, 312], [170, 220]], skin);
+    shape(ctx, ellipsePts(40, 318, 16, 16, 14), skin); shape(ctx, ellipsePts(216, 318, 16, 16, 14), skin);
+    shape(ctx, ellipsePts(cx, headY, headR, headR + 2), skin);
+    shape(ctx, [[cx - 70, headY - 20], [cx - 60, headY - 60], [cx, headY - 74], [cx + 60, headY - 60], [cx + 70, headY - 20], [cx, headY - 44]], '#2b2622');
+    shape(ctx, [[cx + 22, headY + 28], [cx + 54, headY + 20], [cx + 56, headY + 32], [cx + 24, headY + 40]], '#f4d9b0', '#2b2622', 2);
+    const ey = headY + 4;
+    if (state === 'sleep') {
+      line(ctx, [[cx - 38, ey], [cx - 24, ey + 6], [cx - 10, ey]], '#2b2622', 4);
+      line(ctx, [[cx + 10, ey], [cx + 24, ey + 6], [cx + 38, ey]], '#2b2622', 4);
+      shape(ctx, ellipsePts(cx, ey + 36, 10, 12, 10), '#8a2a2a');
+      shape(ctx, ellipsePts(cx + 30, ey + 46, 9, 12, 10), 'rgba(160,210,255,0.8)', '#2b2622', 2);
+    } else {
+      shape(ctx, ellipsePts(cx - 24, ey, 9, 9, 10), '#2b2622', null);
+      shape(ctx, ellipsePts(cx + 24, ey, 9, 9, 10), '#2b2622', null);
+      line(ctx, [[cx - 44, ey - 34], [cx - 8, ey - 16]], '#2b2622', 6); line(ctx, [[cx + 8, ey - 16], [cx + 44, ey - 34]], '#2b2622', 6);
+      shape(ctx, [[cx - 26, ey + 28], [cx + 26, ey + 28], [cx + 22, ey + 46], [cx - 22, ey + 46]], '#ffffff', '#2b2622', 3);
+      [[-14], [0], [14]].forEach(([dx]) => line(ctx, [[cx + dx, ey + 28], [cx + dx, ey + 46]], '#2b2622', 2));
+      ctx.globalAlpha = 0.45; shape(ctx, ellipsePts(cx, headY + 10, 60, 50, 16), '#f06060', null); ctx.globalAlpha = 1;
+    }
+    return c;
+  }
+  // the class monitor: pigtails, armband, notebook
+  function monitor(state) {
+    const c = canvas(256, 512), ctx = c.getContext('2d');
+    const cx = 128, headY = 130, headR = 60, skin = '#f6d6b8', hairColor = '#2b2622';
+    shape(ctx, [[82, 330], [174, 330], [182, 400], [74, 400]], '#3b4a8a');
+    shape(ctx, [[98, 398], [120, 398], [118, 470], [94, 470]], skin); shape(ctx, [[136, 398], [158, 398], [162, 470], [138, 470]], skin);
+    shape(ctx, [[86, 466], [124, 466], [128, 490], [82, 490]], '#2b2622'); shape(ctx, [[132, 466], [170, 466], [174, 490], [128, 490]], '#2b2622');
+    shape(ctx, [[82, 200], [174, 200], [180, 336], [76, 336]], '#ffffff');
+    line(ctx, [[112, 200], [128, 224], [144, 200]], '#2b2622', 3);
+    shape(ctx, [[cx - 8, 224], [cx + 8, 224], [cx, 250]], '#d8432b', '#2b2622', 2);
+    shape(ctx, [[82, 205], [58, 300], [78, 306], [98, 220]], '#ffffff');
+    shape(ctx, [[72, 232], [98, 224], [102, 248], [76, 258]], '#d8432b', '#2b2622', 2);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.save(); ctx.translate(87, 246); ctx.rotate(-0.25); ctx.fillText('班長', 0, 0); ctx.restore();
+    shape(ctx, ellipsePts(68, 312, 13, 13, 14), skin);
+    shape(ctx, [[174, 205], [214, 262], [200, 278], [160, 232]], '#ffffff');
+    shape(ctx, ellipsePts(210, 272, 13, 13, 14), skin);
+    shape(ctx, [[180, 236], [236, 226], [242, 290], [186, 300]], '#f4e27a');
+    line(ctx, [[190, 250], [228, 244]], '#2b2622', 2); line(ctx, [[192, 264], [230, 258]], '#2b2622', 2); line(ctx, [[194, 278], [226, 272]], '#2b2622', 2);
+    line(ctx, [[232, 236], [250, 206]], '#d8432b', 5, 1);
+    shape(ctx, ellipsePts(cx, headY, headR, headR + 4), skin);
+    shape(ctx, [[cx - 62, headY - 10], [cx - 54, headY - 52], [cx, headY - 72], [cx + 54, headY - 52], [cx + 62, headY - 10], [cx + 20, headY - 40], [cx - 20, headY - 40]], hairColor);
+    shape(ctx, ellipsePts(cx - 76, headY + 14, 17, 30, 16), hairColor); shape(ctx, ellipsePts(cx + 76, headY + 14, 17, 30, 16), hairColor);
+    shape(ctx, ellipsePts(cx - 70, headY - 14, 9, 9, 10), '#f4e27a'); shape(ctx, ellipsePts(cx + 70, headY - 14, 9, 9, 10), '#f4e27a');
+    const ey = headY + 6;
+    if (state === 'cry') {
+      line(ctx, [[cx - 32, ey - 4], [cx - 14, ey + 4]], '#2b2622', 4); line(ctx, [[cx + 14, ey + 4], [cx + 32, ey - 4]], '#2b2622', 4);
+      shape(ctx, [[cx - 30, ey + 10], [cx - 18, ey + 10], [cx - 24, ey + 44]], '#6fb7ef', '#2b2622', 2); shape(ctx, [[cx + 18, ey + 10], [cx + 30, ey + 10], [cx + 24, ey + 44]], '#6fb7ef', '#2b2622', 2);
+      shape(ctx, ellipsePts(cx, ey + 38, 16, 12, 12), '#8a2a2a');
+    } else {
+      shape(ctx, ellipsePts(cx - 24, ey, 7, 9, 10), '#2b2622', null); shape(ctx, ellipsePts(cx + 24, ey, 7, 9, 10), '#2b2622', null);
+      line(ctx, [[cx - 36, ey - 20], [cx - 12, ey - 18]], '#2b2622', 4); line(ctx, [[cx + 12, ey - 18], [cx + 36, ey - 20]], '#2b2622', 4);
+      line(ctx, [[cx - 14, ey + 34], [cx + 14, ey + 34]], '#2b2622', 4);
+    }
+    return c;
+  }
+  function ballTex() {
+    const c = canvas(256, 128), ctx = c.getContext('2d');
+    ctx.fillStyle = '#d8432b'; ctx.fillRect(0, 0, 256, 128);
+    shape(ctx, [[0, 50], [256, 50], [256, 78], [0, 78]], '#fbf6e6', null);
+    line(ctx, [[0, 50], [256, 50]], '#2b2622', 4, 1.5); line(ctx, [[0, 78], [256, 78]], '#2b2622', 4, 1.5);
+    ctx.fillStyle = 'rgba(0,0,0,0.08)'; for (let i = 0; i < 300; i++) ctx.fillRect(Math.random() * 256, Math.random() * 128, 2, 2);
+    return c;
+  }
+  // a 正 tally mark drawn stroke by stroke (n = 0..5)
+  function tally(ctx, x, y, size, n, color) {
+    const u = size;
+    const strokes = [
+      [[x, y], [x + u, y]],
+      [[x + u * 0.5, y], [x + u * 0.5, y + u]],
+      [[x + u * 0.5, y + u * 0.5], [x + u, y + u * 0.5]],
+      [[x + u * 0.15, y + u * 0.45], [x + u * 0.15, y + u]],
+      [[x - u * 0.05, y + u], [x + u * 1.05, y + u]],
+    ];
+    for (let i = 0; i < Math.min(5, n); i++) line(ctx, strokes[i], color, 5, 1.5);
+  }
+  // sticker-style icons for the special items
+  function itemIcon(id) {
+    const c = canvas(128, 128), ctx = c.getContext('2d');
+    shape(ctx, [[14, 10], [116, 14], [118, 116], [10, 112]], '#fbf6e6', '#2b2622', 4, 2);
+    ctx.textAlign = 'center';
+    if (id === 'double') {
+      shape(ctx, [[30, 26], [98, 26], [98, 104], [30, 104]], '#ffffff', '#2b2622', 3);
+      [44, 58, 72, 86].forEach(y => line(ctx, [[38, y], [90, y]], 'rgba(185,207,230,0.9)', 2, 1));
+      ctx.fillStyle = '#d8432b'; ctx.font = 'bold 40px "Patrick Hand", sans-serif'; ctx.save(); ctx.translate(64, 78); ctx.rotate(-0.25); ctx.fillText('100', 0, 0); ctx.restore();
+    } else if (id === 'infinite') {
+      shape(ctx, ellipsePts(64, 70, 34, 36, 20), 'rgba(160,210,255,0.5)', '#2b2622', 3);
+      shape(ctx, [[44, 30], [84, 30], [84, 42], [44, 42]], '#d8432b', '#2b2622', 3);
+      [[52, 62, '#f28a1a'], [72, 58, '#f4e27a'], [62, 80, '#f7a8c4'], [78, 82, '#b7e3a1']].forEach(([x, y, col]) => shape(ctx, ellipsePts(x, y, 9, 9, 10), col, '#2b2622', 2));
+    } else if (id === 'speed') {
+      const pts = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 18 : 42; pts.push([64 + Math.cos(a) * r, 66 + Math.sin(a) * r]); }
+      shape(ctx, pts, '#f4e27a', '#2b2622', 3);
+      ctx.fillStyle = '#2b2622'; ctx.font = 'bold 22px Iansui, "Noto Sans TC", sans-serif'; ctx.fillText('讚', 64, 74);
+    } else {
+      shape(ctx, ellipsePts(64, 64, 40, 40, 24), '#ffffff', '#2b2622', 4);
+      for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; line(ctx, [[64 + Math.cos(a) * 33, 64 + Math.sin(a) * 33], [64 + Math.cos(a) * 38, 64 + Math.sin(a) * 38]], '#2b2622', 3, 1); }
+      line(ctx, [[64, 64], [64, 36]], '#2b2622', 4, 1); line(ctx, [[64, 64], [84, 72]], '#2b2622', 4, 1);
+      shape(ctx, ellipsePts(64, 64, 4, 4, 8), '#d8432b', null);
+    }
+    return c;
+  }
+  function paperWall() {
+    const c = canvas(512, 512), ctx = c.getContext('2d');
+    ctx.fillStyle = '#fbf6e6'; ctx.fillRect(0, 0, 512, 512);
+    ctx.strokeStyle = 'rgba(185,207,230,0.7)'; ctx.lineWidth = 2;
+    for (let y = 32; y < 512; y += 48) line(ctx, [[0, y], [512, y]], 'rgba(185,207,230,0.7)', 2, 1);
+    ctx.fillStyle = 'rgba(90,78,71,0.06)';
+    for (let i = 0; i < 400; i++) ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+    return c;
+  }
+  function floor() {
+    const c = canvas(512, 512), ctx = c.getContext('2d');
+    ctx.fillStyle = '#d9b68a'; ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 4; i++) {
+      const y = i * 128;
+      ctx.fillStyle = i % 2 ? '#d3ad7f' : '#dfbd92'; ctx.fillRect(0, y, 512, 128);
+      line(ctx, [[0, y], [512, y]], 'rgba(90,60,40,0.55)', 3, 1.5);
+      const off = (i % 2) * 256;
+      line(ctx, [[off, y], [off, y + 128]], 'rgba(90,60,40,0.55)', 3, 1.5);
+      for (let k = 0; k < 6; k++) line(ctx, [[Math.random() * 512, y + 10 + Math.random() * 108], [Math.random() * 512, y + 10 + Math.random() * 108]], 'rgba(120,80,50,0.18)', 2, 4);
+    }
+    return c;
+  }
+  function blackboard(strokes = 0) {
+    const c = canvas(1024, 320), ctx = c.getContext('2d');
+    ctx.fillStyle = '#335c4b'; ctx.fillRect(0, 0, 1024, 320);
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    for (let i = 0; i < 1500; i++) ctx.fillRect(Math.random() * 1024, Math.random() * 320, 3, 1);
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.textAlign = 'left';
+    ctx.font = '54px Iansui, "Noto Sans TC", sans-serif';
+    ctx.fillText('今日課程：下課', 40, 80);
+    ctx.font = '38px Iansui, "Noto Sans TC", sans-serif';
+    ctx.fillStyle = 'rgba(255,230,160,0.9)';
+    ctx.fillText('3 + 4 = 7', 60, 150);
+    ctx.fillText('值日生：小明、小美', 60, 210);
+    ctx.fillStyle = 'rgba(255,170,160,0.95)';
+    ctx.font = '44px Iansui, "Noto Sans TC", sans-serif';
+    ctx.fillText('誰再丟泡棉彈就罰站！', 420, 150);
+    line(ctx, [[420, 162], [900, 166]], 'rgba(255,170,160,0.9)', 4, 3);
+    // doodle: a sun and a stick figure
+    line(ctx, ellipsePts(800, 250, 30, 30, 16).concat([ellipsePts(800, 250, 30, 30, 16)[0]]), 'rgba(255,230,160,0.9)', 4, 2);
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; line(ctx, [[800 + Math.cos(a) * 38, 250 + Math.sin(a) * 38], [800 + Math.cos(a) * 52, 250 + Math.sin(a) * 52]], 'rgba(255,230,160,0.9)', 4, 2); }
+    line(ctx, [[940, 220], [940, 270], [920, 300]], 'rgba(255,255,255,0.9)', 4, 2); line(ctx, [[940, 270], [960, 300]], 'rgba(255,255,255,0.9)', 4, 2);
+    line(ctx, [[910, 240], [970, 240]], 'rgba(255,255,255,0.9)', 4, 2); line(ctx, ellipsePts(940, 205, 15, 15, 12).concat([ellipsePts(940, 205, 15, 15, 12)[0]]), 'rgba(255,255,255,0.9)', 4, 2);
+    if (strokes > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.font = '34px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('班長記名：你', 420, 262);
+      const full = Math.floor(strokes / 5), rest = strokes % 5;
+      for (let i = 0; i < full; i++) tally(ctx, 640 + i * 52, 232, 36, 5, 'rgba(255,255,255,0.92)');
+      if (rest) tally(ctx, 640 + full * 52, 232, 36, rest, 'rgba(255,255,255,0.92)');
+    }
+    return c;
+  }
+  function window_() {
+    const c = canvas(256, 384), ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 0, 384); g.addColorStop(0, '#8fc7f3'); g.addColorStop(1, '#dff0fb');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 384);
+    [[60, 90, 40], [170, 160, 50], [100, 260, 36]].forEach(([x, y, r]) => {
+      shape(ctx, ellipsePts(x, y, r * 1.6, r * 0.9, 18), '#ffffff', 'rgba(90,120,160,0.6)', 3, 3);
+    });
+    line(ctx, [[128, 0], [128, 384]], '#2b2622', 8, 1); line(ctx, [[0, 192], [256, 192]], '#2b2622', 8, 1);
+    return c;
+  }
+  function milkCarton() {
+    const c = canvas(128, 192), ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 128, 192);
+    shape(ctx, [[0, 70], [128, 70], [128, 112], [0, 112]], '#2f6fd1', null);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 30px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('鮮奶', 64, 102);
+    ctx.fillStyle = '#2b2622'; ctx.font = '18px Iansui, "Noto Sans TC", sans-serif'; ctx.fillText('營養午餐', 64, 150); ctx.fillText('全脂', 64, 40);
+    line(ctx, [[0, 0], [128, 0]], '#2b2622', 4, 1); line(ctx, [[0, 190], [128, 190]], '#2b2622', 4, 1);
+    return c;
+  }
+  function gradientMap() {
+    const data = new Uint8Array([150, 205, 240, 255]);
+    const t = new THREE.DataTexture(data, 4, 1, THREE.RedFormat); t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
+    return t;
+  }
+  return { kid, kidVariant, teacher, bully, monitor, ballTex, itemIcon, paperWall, floor, blackboard, window: window_, milkCarton, gradientMap, tex, canvas };
+})();
+
+// ============================================================
+//  World: classroom geometry, collision boxes, nav grid
+// ============================================================
+class World {
+  constructor(scene) {
+    this.scene = scene;
+    this.boxes = [];          // {minX,maxX,minZ,maxZ,h}
+    this.desks = [];          // {x,z,seat:{x,z}, occupant:null}
+    this.gradient = Draw.gradientMap();
+    this.inkMat = new THREE.LineBasicMaterial({ color: 0x3a2e2a });
+    this.build();
+    this.buildGrid();
+  }
+  toon(color) { return new THREE.MeshToonMaterial({ color, gradientMap: this.gradient }); }
+  inked(mesh) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 20), this.inkMat); mesh.add(e); return mesh; }
+  box(w, h, d, x, y, z, color, { collide = true, ink = true, shadow = true } = {}) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), this.toon(color));
+    m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true;
+    if (ink) this.inked(m);
+    this.scene.add(m);
+    if (collide) this.boxes.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h: y + h / 2 });
+    return m;
+  }
+  build() {
+    const { w, d, h } = CFG.room;
+    const s = this.scene;
+    // floor
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: Draw.tex(Draw.floor(), [3, 2.25]), gradientMap: this.gradient }));
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; s.add(floor);
+    // ceiling
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ color: 0xf3eee0, gradientMap: this.gradient }));
+    ceil.rotation.x = Math.PI / 2; ceil.position.y = h; s.add(ceil);
+    // walls
+    const wallTex = Draw.tex(Draw.paperWall(), [3, 1]);
+    const wallMat = new THREE.MeshToonMaterial({ map: wallTex, gradientMap: this.gradient });
+    const mk = (pw, px, pz, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, h), wallMat); m.position.set(px, h / 2, pz); m.rotation.y = ry; m.receiveShadow = true; s.add(m); };
+    mk(w, 0, -d / 2, 0); mk(w, 0, d / 2, Math.PI); mk(d, -w / 2, 0, Math.PI / 2); mk(d, w / 2, 0, -Math.PI / 2);
+    // skirting + ceiling edge lines (ink)
+    const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d));
+    const edges = new THREE.LineSegments(edgeGeo, this.inkMat); edges.position.y = h / 2; s.add(edges);
+    // blackboard
+    this.blackboardMat = new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.blackboard()) });
+    const bb = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 1.5), this.blackboardMat);
+    bb.position.set(0, 1.65, -d / 2 + 0.03); s.add(bb);
+    this.box(5.5, 1.8, 0.05, 0, 1.65, -d / 2 + 0.02, 0x7a4a22, { collide: false, shadow: false });
+    bb.position.z += 0.03;
+    this.box(5.5, 0.08, 0.14, 0, 0.72, -d / 2 + 0.07, 0x7a4a22, { collide: false });
+    // podium (teacher desk)
+    this.box(1.3, 0.78, 0.65, 0, 0.39, -3.45, 0xb98556);
+    // windows on -x wall
+    const winTex = Draw.tex(Draw.window());
+    [-2.6, 0, 2.6].forEach(z => {
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.6), new THREE.MeshBasicMaterial({ map: winTex }));
+      win.position.set(-w / 2 + 0.03, 1.7, z); win.rotation.y = Math.PI / 2; s.add(win);
+      const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.06, 1.7, 1.6)), this.inkMat); frame.position.set(-w / 2 + 0.03, 1.7, z); s.add(frame);
+    });
+    // doors on +x wall
+    DOORS.forEach(dr => {
+      const door = this.box(0.08, 2.1, 1.0, w / 2 - 0.04, 1.05, dr.z, 0x8fb98a, { collide: false, shadow: false });
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), this.toon(0xf4e27a)); knob.position.set(-0.06, 0, -0.35); door.add(knob);
+    });
+    // clock & posters
+    const clock = new THREE.Mesh(new THREE.CircleGeometry(0.28, 24), this.toon(0xffffff)); clock.position.set(3.4, 2.6, -d / 2 + 0.02); s.add(clock);
+    const clockEdge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 24 }, (_, i) => new THREE.Vector3(Math.cos(i / 24 * 6.283) * 0.28, Math.sin(i / 24 * 6.283) * 0.28, 0))), this.inkMat); clock.add(clockEdge);
+    const hands = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0.01), new THREE.Vector3(0, 0.2, 0.01), new THREE.Vector3(0, 0, 0.01), new THREE.Vector3(0.14, 0.08, 0.01)]), new THREE.LineBasicMaterial({ color: 0x2b2622 })); clock.add(hands);
+    // back wall bulletin board
+    this.box(3.4, 1.2, 0.04, -2.5, 1.7, d / 2 - 0.02, 0xd9a86c, { collide: false, shadow: false });
+    [[-3.5, 1.9, 0xf7a8c4], [-2.6, 1.6, 0x9fd3f2], [-1.6, 1.85, 0xf4e27a]].forEach(([x, y, c]) => this.box(0.6, 0.75, 0.02, x, y, d / 2 - 0.045, c, { collide: false, shadow: false }));
+    // cupboard at back right
+    this.box(1.4, 1.9, 0.5, 4.3, 0.95, d / 2 - 0.3, 0xa88a68);
+    // desks + chairs
+    const deskMat = this.toon(0xdcc39a), legMat = this.toon(0x7a8794), chairMat = this.toon(0x5d8ad6);
+    DESK_COLS.forEach(x => DESK_ROWS.forEach(z => {
+      const g = new THREE.Group(); g.position.set(x, 0, z);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(DESK.w, 0.05, DESK.d), deskMat); top.position.y = DESK.h - 0.025; top.castShadow = true; top.receiveShadow = true; this.inked(top); g.add(top);
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, DESK.h - 0.05, 0.04), legMat); leg.position.set(sx * (DESK.w / 2 - 0.04), (DESK.h - 0.05) / 2, sz * (DESK.d / 2 - 0.04)); g.add(leg); });
+      // a notebook & pencil on each desk
+      const nb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.015, 0.3), this.toon(pick([0xf7a8c4, 0x9fd3f2, 0xb7e3a1, 0xf4e27a]))); nb.position.set(rand(-0.12, 0.12), DESK.h + 0.008, rand(-0.05, 0.05)); nb.rotation.y = rand(-0.4, 0.4); this.inked(nb); g.add(nb);
+      // chair
+      const seatZ = 0.48;
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.4), chairMat); seat.position.set(0, 0.42, seatZ); this.inked(seat); seat.castShadow = true; g.add(seat);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.04), chairMat); back.position.set(0, 0.64, seatZ + 0.18); this.inked(back); g.add(back);
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.42, 0.03), legMat); leg.position.set(sx * 0.17, 0.21, seatZ + sz * 0.17); g.add(leg); });
+      s.add(g);
+      this.boxes.push({ minX: x - DESK.w / 2, maxX: x + DESK.w / 2, minZ: z - DESK.d / 2, maxZ: z + DESK.d / 2, h: DESK.h });
+      this.boxes.push({ minX: x - 0.2, maxX: x + 0.2, minZ: z + seatZ - 0.2, maxZ: z + seatZ + 0.2, h: 0.44 });
+      this.desks.push({ x, z, seat: { x, z: z + seatZ }, occupant: null, covered: null });
+    }));
+    // room bounds for player
+    this.bounds = { minX: -w / 2 + 0.3, maxX: w / 2 - 0.3, minZ: -d / 2 + 0.3, maxZ: d / 2 - 0.3 };
+  }
+  setTally(n) { const old = this.blackboardMat.map; this.blackboardMat.map = Draw.tex(Draw.blackboard(n)); this.blackboardMat.needsUpdate = true; if (old) old.dispose(); }
+  buildGrid() {
+    this.cell = 0.3;
+    this.gw = Math.round(CFG.room.w / this.cell); this.gh = Math.round(CFG.room.d / this.cell);
+    this.grid = new Uint8Array(this.gw * this.gh);
+    const pad = 0.2;
+    for (let gz = 0; gz < this.gh; gz++) for (let gx = 0; gx < this.gw; gx++) {
+      const { x, z } = this.cellCenter(gx, gz);
+      let blocked = Math.abs(x) > CFG.room.w / 2 - 0.35 || Math.abs(z) > CFG.room.d / 2 - 0.35;
+      if (!blocked) for (const b of this.boxes) {
+        if (b.h < 0.3) continue;
+        if (x > b.minX - pad && x < b.maxX + pad && z > b.minZ - pad && z < b.maxZ + pad) { blocked = true; break; }
+      }
+      this.grid[gz * this.gw + gx] = blocked ? 1 : 0;
+    }
+  }
+  cellOf(x, z) { return { gx: clamp(Math.floor((x + CFG.room.w / 2) / this.cell), 0, this.gw - 1), gz: clamp(Math.floor((z + CFG.room.d / 2) / this.cell), 0, this.gh - 1) }; }
+  cellCenter(gx, gz) { return { x: -CFG.room.w / 2 + (gx + 0.5) * this.cell, z: -CFG.room.d / 2 + (gz + 0.5) * this.cell }; }
+  free(gx, gz) { return gx >= 0 && gz >= 0 && gx < this.gw && gz < this.gh && this.grid[gz * this.gw + gx] === 0; }
+  nearestFree(x, z) {
+    const c = this.cellOf(x, z);
+    if (this.free(c.gx, c.gz)) return c;
+    for (let r = 1; r < 8; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+      if (this.free(c.gx + dx, c.gz + dz)) return { gx: c.gx + dx, gz: c.gz + dz };
+    }
+    return c;
+  }
+  // BFS path between world points; returns array of {x,z}
+  path(from, to) {
+    const a = this.nearestFree(from.x, from.z), b = this.nearestFree(to.x, to.z);
+    const n = this.gw * this.gh, prev = new Int32Array(n).fill(-1), q = [a.gz * this.gw + a.gx];
+    const start = q[0], goal = b.gz * this.gw + b.gx; prev[start] = start;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    let head = 0, found = start === goal;
+    while (head < q.length && !found) {
+      const cur = q[head++], cx = cur % this.gw, cz = (cur / this.gw) | 0;
+      for (const [dx, dz] of dirs) {
+        const nx = cx + dx, nz = cz + dz;
+        if (!this.free(nx, nz)) continue;
+        if (dx && dz && (!this.free(cx + dx, cz) || !this.free(cx, cz + dz))) continue; // no corner cutting
+        const ni = nz * this.gw + nx;
+        if (prev[ni] !== -1) continue;
+        prev[ni] = cur; q.push(ni);
+        if (ni === goal) { found = true; break; }
+      }
+    }
+    if (!found) return [];
+    const out = [];
+    for (let i = goal; i !== start; i = prev[i]) { const c = this.cellCenter(i % this.gw, (i / this.gw) | 0); out.push(c); }
+    out.reverse();
+    // string-pull a little: drop waypoints when the straight segment is free
+    const pulled = [];
+    let cur = { x: from.x, z: from.z };
+    for (let i = 0; i < out.length; i++) {
+      const nxt = out[i + 1];
+      if (!nxt || !this.segmentFree(cur, nxt)) { pulled.push(out[i]); cur = out[i]; }
+    }
+    return pulled;
+  }
+  segmentFree(a, b) {
+    const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz), steps = Math.ceil(len / (this.cell * 0.5));
+    for (let i = 0; i <= steps; i++) { const t = i / steps, c = this.cellOf(a.x + dx * t, a.z + dz * t); if (!this.free(c.gx, c.gz)) return false; }
+    return true;
+  }
+  // push a circle (x,z,r) out of boxes and bounds
+  collideCircle(pos, r, ignoreLow = 0) {
+    pos.x = clamp(pos.x, this.bounds.minX, this.bounds.maxX); pos.z = clamp(pos.z, this.bounds.minZ, this.bounds.maxZ);
+    for (const b of this.boxes) {
+      if (b.h <= ignoreLow) continue;
+      const cx = clamp(pos.x, b.minX, b.maxX), cz = clamp(pos.z, b.minZ, b.maxZ);
+      const dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
+      if (d2 < r * r) {
+        if (d2 > 1e-6) { const d = Math.sqrt(d2); pos.x += dx / d * (r - d); pos.z += dz / d * (r - d); }
+        else { // inside: push out along smallest penetration
+          const px = Math.min(pos.x - b.minX, b.maxX - pos.x), pz = Math.min(pos.z - b.minZ, b.maxZ - pos.z);
+          if (px < pz) pos.x += (pos.x - (b.minX + b.maxX) / 2 > 0 ? 1 : -1) * (px + r); else pos.z += (pos.z - (b.minZ + b.maxZ) / 2 > 0 ? 1 : -1) * (pz + r);
+        }
+      }
+    }
+  }
+  pointInBox(p) {
+    if (Math.abs(p.x) > CFG.room.w / 2 - 0.05 || Math.abs(p.z) > CFG.room.d / 2 - 0.05) return 'wall';
+    if (p.y > CFG.room.h - 0.05) return 'wall';
+    for (const b of this.boxes) if (p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ && p.y < b.h) return b;
+    return null;
+  }
+  // march along a ray until something solid; used to converge the dart on the crosshair
+  rayDistance(origin, dir, maxDist = 30) {
+    const p = origin.clone(), step = 0.1;
+    for (let d = step; d < maxDist; d += step) {
+      p.copy(origin).addScaledVector(dir, d);
+      if (p.y < 0 || this.pointInBox(p)) return d;
+    }
+    return maxDist;
+  }
+  // 3D segment vs AABB (slab test) — used for line-of-sight
+  segmentBlocked(p0, p1) {
+    for (const b of this.boxes) {
+      let tmin = 0, tmax = 1;
+      const mins = [b.minX, 0, b.minZ], maxs = [b.maxX, b.h, b.maxZ], o = [p0.x, p0.y, p0.z], d = [p1.x - p0.x, p1.y - p0.y, p1.z - p0.z];
+      let hit = true;
+      for (let i = 0; i < 3; i++) {
+        if (Math.abs(d[i]) < 1e-9) { if (o[i] < mins[i] || o[i] > maxs[i]) { hit = false; break; } continue; }
+        let t1 = (mins[i] - o[i]) / d[i], t2 = (maxs[i] - o[i]) / d[i];
+        if (t1 > t2) [t1, t2] = [t2, t1];
+        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+        if (tmin > tmax) { hit = false; break; }
+      }
+      if (hit) return true;
+    }
+    return false;
+  }
+  freeDesk(preferNear) {
+    const free = this.desks.filter(d => !d.covered);
+    if (!free.length) return null;
+    free.sort((a, b) => Math.hypot(a.x - preferNear.x, a.z - preferNear.z) - Math.hypot(b.x - preferNear.x, b.z - preferNear.z));
+    return pick(free.slice(0, Math.min(4, free.length)));
+  }
+}
+
+// ============================================================
+//  Darts (foam darts + chalk)
+// ============================================================
+class Darts {
+  constructor(scene, world) {
+    this.scene = scene; this.world = world; this.list = [];
+    const geo = new THREE.CylinderGeometry(0.028, 0.028, 0.16, 8); geo.rotateX(Math.PI / 2);
+    this.geo = geo;
+    this.matOrange = new THREE.MeshToonMaterial({ color: 0xf28a1a, gradientMap: world.gradient });
+    this.matBlue = new THREE.MeshToonMaterial({ color: 0x2f6fd1, gradientMap: world.gradient });
+    this.matChalk = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: world.gradient });
+    this.tipGeo = new THREE.SphereGeometry(0.032, 8, 8);
+    this.chalkGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.11, 6); this.chalkGeo.rotateX(Math.PI / 2);
+  }
+  fire(pos, dir, speed, owner, kind = 'dart') {
+    let mesh;
+    if (kind === 'chalk') { mesh = new THREE.Mesh(this.chalkGeo, this.matChalk); }
+    else {
+      mesh = new THREE.Mesh(this.geo, owner === 'player' ? this.matOrange : this.matBlue);
+      const tip = new THREE.Mesh(this.tipGeo, owner === 'player' ? this.matBlue : this.matOrange); tip.position.z = 0.08; mesh.add(tip);
+    }
+    mesh.castShadow = true;
+    mesh.position.copy(pos);
+    const vel = dir.clone().normalize().multiplyScalar(speed);
+    const d = { mesh, vel, owner, kind, life: 3.2, stuck: false, restTime: 0 };
+    this.orient(d);
+    this.scene.add(mesh); this.list.push(d);
+    return d;
+  }
+  orient(d) { if (d.vel.lengthSq() > 1e-4) { const t = d.mesh.position.clone().add(d.vel); d.mesh.lookAt(t); } }
+  update(dt, hooks) {
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const d = this.list[i];
+      if (d.stuck) {
+        d.restTime += dt;
+        const limit = d.kind === 'dart' ? CFG.gun.floorLife : 2.5;
+        if (d.restTime > limit) { this.remove(i); }
+        else if (d.kind === 'dart' && d.restTime > limit - 2) { d.mesh.visible = Math.floor(d.restTime * 6) % 2 === 0; } // blink before vanishing
+        continue;
+      }
+      d.life -= dt;
+      // sub-step so a fast dart cannot skip over a small target (ball, wall item, a peeking head)
+      const n = Math.max(1, Math.ceil(d.vel.length() * dt / 0.15)), sdt = dt / n;
+      let done = false;
+      for (let k = 0; k < n && !done; k++) {
+        d.vel.y -= CFG.gun.gravity * sdt;
+        const prev = d.mesh.position.clone();
+        d.mesh.position.addScaledVector(d.vel, sdt);
+        this.orient(d);
+        const p = d.mesh.position;
+        // targets first
+        const consumed = hooks(d, prev);
+        if (consumed) { this.remove(i); done = true; break; }
+        // floor
+        if (p.y < 0.03) { p.y = 0.03; d.stuck = true; d.mesh.rotation.set(0, Math.random() * 6.28, 0); if (d.owner === 'player' || d.kind === 'chalk') Audio.thud(); break; }
+        const hit = this.world.pointInBox(p);
+        if (hit || (d.life <= 0 && k === n - 1)) {
+          d.stuck = true; d.mesh.position.copy(prev);
+          if (hit === 'wall' || (hit && hit.h > 0.5)) { /* stays stuck where it hit */ } else { d.mesh.position.y = Math.max(0.03, prev.y); }
+          if (d.kind === 'chalk') { Audio.thud(); this.remove(i); hooks({ kind: 'chalkBreak', pos: prev }); done = true; break; }
+          Audio.thud(); break;
+        }
+      }
+    }
+  }
+  remove(i) { const d = this.list[i]; this.scene.remove(d.mesh); this.list.splice(i, 1); }
+  // darts lying on the floor (dropped by a knocked-out student)
+  drop(pos, n) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, r = rand(0.25, 0.7);
+      const p = new THREE.Vector3(pos.x + Math.cos(a) * r, 0.03, pos.z + Math.sin(a) * r);
+      if (this.world.pointInBox(p)) continue;
+      const d = this.fire(p, new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), 0.01, 'enemy');
+      d.stuck = true; d.vel.set(0, 0, 0); d.mesh.rotation.set(0, Math.random() * 6.28, 0);
+    }
+    if (this.list.length > 110) { const idx = this.list.findIndex(x => x.stuck); if (idx >= 0) this.remove(idx); }
+  }
+  // pick up resting foam darts near a point; returns how many
+  pickupNear(pos, radius, max) {
+    let n = 0;
+    for (let i = this.list.length - 1; i >= 0 && n < max; i--) {
+      const d = this.list[i];
+      if (!d.stuck || d.kind !== 'dart') continue;
+      const p = d.mesh.position;
+      if (p.y < 1.7 && Math.hypot(p.x - pos.x, p.z - pos.z) < radius) { this.remove(i); n++; }
+    }
+    return n;
+  }
+  clear() { this.list.forEach(d => this.scene.remove(d.mesh)); this.list = []; }
+}
+
+// ============================================================
+//  Paper figure base
+// ============================================================
+class PaperFigure {
+  constructor(scene, canvasFn, w, h) {
+    this.scene = scene; this.w = w; this.h = h; this.canvasFn = canvasFn;
+    this.tex = Draw.tex(canvasFn());
+    this.mat = new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide });
+    const geo = new THREE.PlaneGeometry(w, h); geo.translate(0, h / 2, 0);
+    this.mesh = new THREE.Mesh(geo, this.mat); this.mesh.castShadow = true;
+    this.group = new THREE.Group(); this.group.add(this.mesh); scene.add(this.group);
+    this.flash = 0; this.wobble = 0;
+  }
+  setTexture(canvas) { this.tex.dispose(); this.tex = Draw.tex(canvas); this.mat.map = this.tex; this.mat.needsUpdate = true; }
+  face(camPos) { const dx = camPos.x - this.group.position.x, dz = camPos.z - this.group.position.z; this.group.rotation.y = Math.atan2(dx, dz); }
+  tick(dt, moving) {
+    if (this.flash > 0) { this.flash -= dt; const f = clamp(this.flash / 0.15, 0, 1); this.mat.color.setRGB(1 + f * 1.5, 1 + f * 0.6, 1 + f * 0.6); } else this.mat.color.setRGB(1, 1, 1);
+    if (moving) { this.wobble += dt * 11; this.mesh.rotation.z = Math.sin(this.wobble) * 0.09; this.mesh.position.y = Math.abs(Math.sin(this.wobble)) * 0.05; }
+    else { this.mesh.rotation.z *= 0.85; this.mesh.position.y *= 0.85; }
+  }
+  dispose() { this.scene.remove(this.group); this.tex.dispose(); this.mat.dispose(); }
+}
+
+// ============================================================
+//  Student AI
+// ============================================================
+class Student extends PaperFigure {
+  constructor(game, spawn) {
+    const v = Draw.kidVariant();
+    super(game.scene, () => Draw.kid(v, 'normal'), 0.9, 1.35);
+    this.game = game; this.v = v; this.world = game.world;
+    this.hp = CFG.enemy.hp; this.state = 'enter'; this.timer = 0; this.path = []; this.crouch = 0; this.alive = true;
+    this.group.position.set(spawn.x, 0, spawn.z);
+    this.desk = null; this.shotsLeft = 0; this.shotTimer = 0; this.speedMul = rand(0.85, 1.15);
+    this.hurtTex = null;
+    this.chooseDesk();
+  }
+  chooseDesk() {
+    if (this.desk) this.desk.covered = null;
+    const d = this.world.freeDesk(this.group.position);
+    if (!d) { this.state = 'wander'; this.timer = 1; return; }
+    this.desk = d; d.covered = this;
+    if (!d.occupant) d.occupant = this; // this becomes "my seat" when out
+    // cover point: the side of the desk facing away from player
+    const pp = this.game.player.pos;
+    let ox = d.x - pp.x, oz = d.z - pp.z; const l = Math.hypot(ox, oz) || 1; ox /= l; oz /= l;
+    const target = { x: d.x + ox * 0.62, z: d.z + oz * 0.62 };
+    this.path = this.world.path(this.group.position, target);
+    this.state = 'seekCover';
+  }
+  update(dt) {
+    const p = this.group.position, player = this.game.player;
+    let moving = false;
+    this.timer -= dt;
+    switch (this.state) {
+      case 'enter':
+      case 'seekCover':
+      case 'wander': {
+        if (this.state === 'wander' && this.timer <= 0) { this.chooseDesk(); break; }
+        if (this.path.length) {
+          const t = this.path[0], dx = t.x - p.x, dz = t.z - p.z, dist = Math.hypot(dx, dz);
+          const sp = CFG.enemy.speed * this.speedMul * dt;
+          if (dist < sp || dist < 0.08) { p.x = t.x; p.z = t.z; this.path.shift(); }
+          else { p.x += dx / dist * sp; p.z += dz / dist * sp; }
+          moving = true;
+        } else if (this.state === 'seekCover') { this.state = 'hide'; this.timer = rand(1.2, 2.6); }
+        else { this.chooseDesk(); }
+        break;
+      }
+      case 'hide': {
+        this.crouch = Math.min(1, this.crouch + dt * 5);
+        if (this.timer <= 0) { this.state = 'peek'; this.timer = 0.35; }
+        break;
+      }
+      case 'peek': {
+        this.crouch = Math.max(0, this.crouch - dt * 6);
+        if (this.timer <= 0) {
+          if (this.canSee(player)) { this.state = 'shoot'; this.shotsLeft = 1 + Math.floor(Math.random() * 3); this.shotTimer = 0.15; }
+          else { this.chooseDesk(); }
+        }
+        break;
+      }
+      case 'shoot': {
+        this.shotTimer -= dt;
+        if (this.shotTimer <= 0) {
+          this.fireAt(player); this.shotsLeft--; this.shotTimer = 0.42;
+          if (this.shotsLeft <= 0) { if (Math.random() < 0.45) this.chooseDesk(); else { this.state = 'hide'; this.timer = rand(1.4, 2.8); } }
+        }
+        break;
+      }
+      case 'hurt': {
+        this.crouch = Math.min(1, this.crouch + dt * 6);
+        if (this.timer <= 0) { this.setTexture(Draw.kid(this.v, 'normal')); this.chooseDesk(); }
+        break;
+      }
+      case 'flyOut': {
+        this.flyT += dt;
+        const t = clamp(this.flyT / 1.3, 0, 1), s = this.flyStart, e = this.desk.seat;
+        p.x = s.x + (e.x - s.x) * t; p.z = s.z + (e.z - s.z) * t; p.y = Math.sin(t * Math.PI) * 2.2;
+        this.mesh.rotation.z = t * Math.PI * 2;
+        if (t >= 1) { this.state = 'sitting'; p.y = 0; this.mesh.rotation.z = 0; this.group.scale.set(0.85, 0.72, 0.85); }
+        return;
+      }
+      case 'sitting': return;
+    }
+    // apply crouch scale (paper shrinks below desk height)
+    const sy = 1 - this.crouch * 0.55;
+    this.group.scale.y += (sy - this.group.scale.y) * Math.min(1, dt * 12);
+    this.face(this.game.camera.position);
+    this.tick(dt, moving);
+  }
+  eye() { return new THREE.Vector3(this.group.position.x, 1.1 * this.group.scale.y, this.group.position.z); }
+  canSee(player) {
+    const from = this.eye(), to = player.eyePos();
+    if (from.distanceTo(to) > 11) return false;
+    return !this.world.segmentBlocked(from, to);
+  }
+  fireAt(player) {
+    const from = this.eye(); from.y -= 0.15;
+    const target = player.eyePos(); target.y -= 0.25;
+    const dir = target.clone().sub(from); const dist = dir.length();
+    dir.y += dist * dist * CFG.gun.gravity / (2 * CFG.enemy.dartSpeed * CFG.enemy.dartSpeed);
+    const spread = CFG.enemy.spread * this.game.difficultySpread;
+    dir.normalize().add(new THREE.Vector3(rand(-spread, spread), rand(-spread, spread), rand(-spread, spread))).normalize();
+    // move dart start a little toward the target so it clears own body/desk
+    from.addScaledVector(dir, 0.5);
+    const d = this.game.darts.fire(from, dir, CFG.enemy.dartSpeed, 'enemy'); d.shooter = this;
+    Audio.enemyPew();
+  }
+  hit() {
+    if (!this.alive) return false;
+    this.hp--; this.flash = 0.15; Audio.hitEnemy();
+    this.game.addScore(CFG.score.hit); this.game.hitmark();
+    if (this.hp <= 0) { this.knockOut(); return true; }
+    this.setTexture(Draw.kid(this.v, 'hurt'));
+    this.state = 'hurt'; this.timer = 0.7;
+    // stumble back away from player
+    const pp = this.game.player.pos, dx = this.group.position.x - pp.x, dz = this.group.position.z - pp.z, l = Math.hypot(dx, dz) || 1;
+    const np = this.group.position.clone(); np.x += dx / l * 0.35; np.z += dz / l * 0.35;
+    this.world.collideCircle(np, 0.2); this.group.position.x = np.x; this.group.position.z = np.z;
+    return false;
+  }
+  knockOut() {
+    this.alive = false; Audio.out();
+    this.game.darts.drop(this.group.position, CFG.gun.dropOnKnockout);
+    if (!this.desk) { this.desk = this.world.desks.find(d => !d.occupant) || this.world.desks[0]; }
+    if (this.desk.occupant !== this) { const free = this.world.desks.find(d => !d.occupant); if (free) { this.desk.covered = this.desk.covered === this ? null : this.desk.covered; this.desk = free; } }
+    this.desk.occupant = this; this.desk.covered = this.desk.covered === this ? null : this.desk.covered;
+    this.setTexture(Draw.kid(this.v, 'out'));
+    this.state = 'flyOut'; this.flyT = 0; this.flyStart = this.group.position.clone(); this.crouch = 0; this.group.scale.y = 1;
+  }
+  dispose() { if (this.desk) { if (this.desk.covered === this) this.desk.covered = null; if (this.desk.occupant === this) this.desk.occupant = null; } super.dispose(); }
+}
+
+// ============================================================
+//  Teacher boss
+// ============================================================
+class Teacher extends PaperFigure {
+  constructor(game, spawn) {
+    const flags = { glasses: true, chalk: true, book: true, mood: 'angry' };
+    super(game.scene, () => Draw.teacher(flags), 1.15, 2.3);
+    this.game = game; this.flags = flags; this.world = game.world;
+    this.group.position.set(spawn.x, 0, spawn.z);
+    this.state = 'enter'; this.timer = 0; this.path = this.world.path(this.group.position, { x: 0.9, z: -2.75 });
+    this.throwTimer = 2.5; this.paceTarget = null; this.pauseTimer = 0; this.rage = 0;
+    this.defeated = false;
+    // weak points: local offsets on the paper (x right, y up) — mirrored by rotation
+    this.wp = {
+      glasses: { hp: CFG.teacher.wpHp, local: new THREE.Vector3(0, 1.86, 0), r: 0.24, label: '眼鏡' },
+      chalk: { hp: CFG.teacher.wpHp, local: new THREE.Vector3(-0.49, 1.86, 0), r: 0.2, label: '粉筆' },
+      book: { hp: CFG.teacher.wpHp, local: new THREE.Vector3(0.36, 1.33, 0), r: 0.22, label: '教案' },
+    };
+    // crayon target rings to tell the player where to shoot
+    this.rings = {};
+    const ringGeo = new THREE.RingGeometry(0.17, 0.21, 20);
+    for (const k in this.wp) {
+      const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xd8432b, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthTest: false }));
+      m.position.copy(this.wp[k].local); m.position.z = 0.02; this.mesh.add(m); this.rings[k] = m;
+    }
+    this.debris = [];
+  }
+  wpWorld(k) { return this.mesh.localToWorld(this.wp[k].local.clone()); }
+  update(dt) {
+    const p = this.group.position, player = this.game.player;
+    let moving = false;
+    for (const k in this.rings) { const r = this.rings[k]; r.visible = this.wp[k].hp > 0 && !this.defeated; r.scale.setScalar(1 + Math.sin(performance.now() / 180) * 0.12); }
+    // debris physics
+    for (let i = this.debris.length - 1; i >= 0; i--) {
+      const d = this.debris[i]; d.vel.y -= 9 * dt; d.mesh.position.addScaledVector(d.vel, dt); d.mesh.rotation.x += d.spin * dt; d.mesh.rotation.z += d.spin * 0.7 * dt; d.life -= dt;
+      if (d.mesh.position.y < 0.05) { d.mesh.position.y = 0.05; d.vel.y = Math.abs(d.vel.y) * 0.4; d.vel.x *= 0.7; d.vel.z *= 0.7; }
+      if (d.life <= 0) { this.scene.remove(d.mesh); this.debris.splice(i, 1); }
+    }
+    if (this.defeated) { this.face(this.game.camera.position); this.tick(dt, false); this.mesh.rotation.z = Math.sin(performance.now() / 120) * 0.05; return; }
+    if (this.path.length) {
+      const t = this.path[0], dx = t.x - p.x, dz = t.z - p.z, dist = Math.hypot(dx, dz), sp = 1.5 * dt;
+      if (dist < sp || dist < 0.08) { p.x = t.x; p.z = t.z; this.path.shift(); } else { p.x += dx / dist * sp; p.z += dz / dist * sp; }
+      moving = true;
+    } else if (this.state === 'enter') { this.state = 'pace'; this.pauseTimer = 1; }
+    else {
+      this.pauseTimer -= dt;
+      if (this.pauseTimer <= 0) {
+        // pace along the front of the room, sometimes advance toward player's row
+        const advance = Math.random() < 0.35;
+        const tx = advance ? clamp(player.pos.x + rand(-2, 2), -5, 5) : rand(-4.5, 4.5);
+        const tz = advance ? clamp(player.pos.z - 2.5, -3.9, 1.5) : rand(-3.9, -2.6);
+        this.path = this.world.path(p, { x: tx, z: tz }); this.pauseTimer = rand(1.5, 3);
+      }
+    }
+    this.rage = Math.max(0, this.rage - dt);
+    this.throwTimer -= (this.rage > 0 ? 2.2 : 1) * dt;
+    if (this.throwTimer <= 0 && this.wp.chalk.hp > 0 || (this.throwTimer <= 0 && this.wp.chalk.hp <= 0 && Math.random() < 0.5)) {
+      this.throwChalk(player); this.throwTimer = CFG.teacher.throwInterval * (this.wp.glasses.hp > 0 ? 1 : 1.35);
+    } else if (this.throwTimer <= 0) this.throwTimer = CFG.teacher.throwInterval;
+    this.face(this.game.camera.position);
+    this.tick(dt, moving);
+  }
+  throwChalk(player) {
+    const from = this.wpWorld('chalk'); from.y -= 0.1;
+    const target = player.eyePos(); target.y -= 0.2;
+    const dir = target.clone().sub(from); const dist = dir.length();
+    dir.y += dist * dist * CFG.gun.gravity / (2 * CFG.teacher.chalkSpeed * CFG.teacher.chalkSpeed);
+    const spread = this.wp.glasses.hp > 0 ? 0.045 : 0.2;
+    dir.normalize().add(new THREE.Vector3(rand(-spread, spread), rand(-spread, spread), rand(-spread, spread))).normalize();
+    from.addScaledVector(dir, 0.4);
+    this.game.darts.fire(from, dir, CFG.teacher.chalkSpeed, 'teacher', 'chalk');
+    Audio.chalkThrow();
+  }
+  // returns 'weak' | 'body' | null
+  testHit(pos) {
+    if (this.defeated) return null;
+    for (const k in this.wp) {
+      const w = this.wp[k]; if (w.hp <= 0) continue;
+      if (pos.distanceTo(this.wpWorld(k)) < w.r) { this.hitWeak(k); return 'weak'; }
+    }
+    // body: cylinder around the figure
+    const dx = pos.x - this.group.position.x, dz = pos.z - this.group.position.z;
+    if (Math.hypot(dx, dz) < 0.5 && pos.y > 0 && pos.y < 2.3) return 'body';
+    return null;
+  }
+  hitWeak(k) {
+    const w = this.wp[k]; w.hp--; this.flash = 0.15; this.game.hitmark(); this.game.addScore(CFG.score.hit * 2);
+    Audio.hitEnemy();
+    this.game.updateBossHud();
+    if (w.hp <= 0) {
+      Audio.weakpoint();
+      this.flags[k] = false; this.setTexture(Draw.teacher(this.flags));
+      this.game.addScore(CFG.score.weakpoint);
+      // debris
+      const col = k === 'glasses' ? 0x9fd3f2 : k === 'chalk' ? 0xffffff : 0x2f7d4f;
+      const size = k === 'glasses' ? [0.3, 0.1, 0.03] : k === 'chalk' ? [0.03, 0.03, 0.12] : [0.3, 0.4, 0.05];
+      const m = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshToonMaterial({ color: col, gradientMap: this.world.gradient }));
+      m.position.copy(this.wpWorld(k)); m.castShadow = true; this.scene.add(m);
+      const toP = this.game.player.pos.clone().sub(m.position).setY(0).normalize();
+      this.debris.push({ mesh: m, vel: new THREE.Vector3(toP.x * 2 + rand(-1, 1), 3.5, toP.z * 2 + rand(-1, 1)), spin: rand(4, 9), life: 4 });
+      const lines = { glasses: ['眼鏡掉了！', '老師看不清楚，準度大降'], chalk: ['粉筆飛了！', '老師沒東西可丟了……大概'], book: ['教案掉了！', '老師忘記今天要教什麼'] };
+      this.game.message(lines[k][0], lines[k][1], 2.2);
+      if (Object.values(this.wp).every(x => x.hp <= 0)) this.defeat();
+    }
+  }
+  defeat() {
+    this.defeated = true; this.flags.mood = 'cry'; this.setTexture(Draw.teacher(this.flags)); this.path = [];
+    Audio.teacher();
+    this.game.onWin();
+  }
+  dispose() { this.debris.forEach(d => this.scene.remove(d.mesh)); this.debris = []; super.dispose(); }
+}
+
+// ============================================================
+//  Classroom characters: the sleeping bully, the dodgeball, the class monitor
+// ============================================================
+class Bully extends PaperFigure {
+  constructor(game) {
+    super(game.scene, () => Draw.bully('sleep'), 1.1, 1.6);
+    this.game = game; this.world = game.world;
+    // a random desk in the back two rows, away from the player's corner
+    const back = this.world.desks.filter(d => d.z > 1.0 && d.x > -3.5 && !d.occupant);
+    const d = pick(back.length ? back : this.world.desks);
+    this.desk = d; d.covered = this; d.occupant = this;
+    this.group.position.set(d.seat.x, 0, d.seat.z);
+    this.state = 'sleep'; this.timer = 0; this.target = null; this.pack = null; this.snoreT = 0; this.deep = 0; this.deepMsgCd = 0;
+    this.group.scale.set(1.2, 0.58, 1.2);
+    const c = Draw.canvas(128, 96), ctx = c.getContext('2d');
+    ctx.fillStyle = '#2b2622'; ctx.font = 'bold 34px "Patrick Hand", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('z', 30, 80); ctx.font = 'bold 44px "Patrick Hand", sans-serif'; ctx.fillText('Z', 64, 62); ctx.font = 'bold 54px "Patrick Hand", sans-serif'; ctx.fillText('Z', 102, 44);
+    this.zz = new THREE.Sprite(new THREE.SpriteMaterial({ map: Draw.tex(c), transparent: true, depthTest: false })); this.zz.scale.set(0.5, 0.38, 1); this.zz.position.set(0.3, 1.1, 0); this.group.add(this.zz);
+    const c2 = Draw.canvas(128, 96), ctx2 = c2.getContext('2d');
+    ctx2.fillStyle = '#d8432b'; ctx2.font = 'bold 72px "Patrick Hand", sans-serif'; ctx2.textAlign = 'center'; ctx2.fillText('!!!', 64, 76);
+    this.bang = new THREE.Sprite(new THREE.SpriteMaterial({ map: Draw.tex(c2), transparent: true, depthTest: false })); this.bang.scale.set(0.7, 0.5, 1); this.bang.position.set(0, 2.1, 0); this.bang.visible = false; this.group.add(this.bang);
+  }
+  poke(owner, shooter) {
+    if (this.state !== 'sleep') return;
+    if (this.deep > 0) { if (this.deepMsgCd <= 0 && owner === 'player') { this.deepMsgCd = 4; this.game.message('惡霸睡得太沉了', '打他沒反應', 1.2); } return; }
+    const p = this.game.player.pos;
+    if (owner === 'player') this.target = new THREE.Vector3(p.x, 0, p.z);
+    else if (shooter && shooter.alive) this.target = shooter.group.position.clone().setY(0);
+    else { const s = this.game.students.filter(x => x.alive); this.target = s.length ? pick(s).group.position.clone().setY(0) : new THREE.Vector3(p.x, 0, p.z); }
+    this.state = 'wake'; this.timer = CFG.bully.windup; this.flash = 0.15;
+    this.setTexture(Draw.bully('angry')); this.zz.visible = false; this.bang.visible = true;
+    Audio.growl();
+    this.game.message(owner === 'player' ? '你吵醒惡霸了！' : '同學吵醒惡霸了！', '他要丟書包了，快跑', 1.6);
+  }
+  update(dt) {
+    const p = this.group.position; this.timer -= dt; this.deep = Math.max(0, this.deep - dt); this.deepMsgCd -= dt;
+    if (this.state === 'sleep') {
+      this.group.scale.y += (0.58 - this.group.scale.y) * Math.min(1, dt * 6);
+      this.snoreT += dt; this.zz.position.y = 1.1 + Math.sin(this.snoreT * 2) * 0.08; this.zz.material.rotation = Math.sin(this.snoreT) * 0.1;
+      if (this.snoreT > 3.2 && this.game.player.pos.distanceTo(p) < 5) { this.snoreT = 0; Audio.snore(); }
+    } else if (this.state === 'wake') {
+      this.group.scale.y += (1.05 - this.group.scale.y) * Math.min(1, dt * 10);
+      this.mesh.rotation.z = Math.sin(performance.now() / 40) * 0.06;
+      if (this.timer <= 0) { this.throwPack(); this.state = 'watch'; this.timer = CFG.bully.grumble; this.bang.visible = false; }
+    } else if (this.state === 'watch') {
+      if (this.pack) this.updatePack(dt);
+      if (this.timer <= 0 && !this.pack) { this.state = 'sleep'; this.deep = CFG.bully.deepSleep; this.setTexture(Draw.bully('sleep')); this.zz.visible = true; this.snoreT = 2.5; this.game.message('惡霸嘟囔著趴回去睡了', '這次睡得很沉', 1.4); }
+    }
+    this.face(this.game.camera.position);
+    this.tick(dt, false);
+  }
+  throwPack() {
+    const from = new THREE.Vector3(this.group.position.x, 1.5, this.group.position.z);
+    const to = this.target.clone(); to.y = 0.15;
+    const T = Math.max(0.6, Math.min(1.2, from.distanceTo(to) / 7));
+    const vel = to.clone().sub(from).divideScalar(T); vel.y += 0.5 * 9.8 * T;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.4, 0.18), new THREE.MeshToonMaterial({ color: 0xd8432b, gradientMap: this.world.gradient }));
+    m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), this.world.inkMat)); m.castShadow = true; m.position.copy(from);
+    this.game.scene.add(m);
+    this.pack = { mesh: m, vel, t: 0, T };
+  }
+  updatePack(dt) {
+    const k = this.pack; k.t += dt; k.vel.y -= 9.8 * dt; k.mesh.position.addScaledVector(k.vel, dt); k.mesh.rotation.x += 7 * dt; k.mesh.rotation.y += 3 * dt;
+    if (k.mesh.position.y <= 0.15 || k.t > k.T + 0.3) { k.mesh.position.y = Math.max(0.15, k.mesh.position.y); this.blast(k.mesh.position); this.game.scene.remove(k.mesh); this.pack = null; }
+  }
+  blast(at) {
+    Audio.blast();
+    const R = CFG.bully.blastRadius, g = this.game;
+    for (let i = 0; i < 9; i++) {
+      const a = Math.random() * Math.PI * 2;
+      g.spawnDebris(at, pick([0xf7a8c4, 0x9fd3f2, 0xb7e3a1, 0xf4e27a, 0xffffff]), [0.2, 0.03, 0.26], new THREE.Vector3(Math.cos(a) * rand(2, 4), rand(3, 5.5), Math.sin(a) * rand(2, 4)), 2.5);
+    }
+    g.spawnRing(at, R, 0xd8432b);
+    const pp = g.player.pos;
+    if (Math.hypot(pp.x - at.x, pp.z - at.z) < R && g.state === 'playing') { g.player.hurtCd = 0; g.player.hurt(); g.message('被書包砸到了！', '惡霸的書包有十公斤', 1.6); }
+    let n = 0;
+    for (const s of g.students) {
+      if (!s.alive) continue;
+      if (Math.hypot(s.group.position.x - at.x, s.group.position.z - at.z) < R) { s.hp = 1; s.hit(); n++; g.kills++; g.addScore(150); }
+    }
+    if (n) g.message(`書包砸倒了 ${n} 個同學`, '惡霸不分敵我', 1.6);
+    g.darts.drop(at, 3);
+  }
+  testHit(pos) { if (this.state !== 'sleep') return false; const d = Math.hypot(pos.x - this.group.position.x, pos.z - this.group.position.z); return d < CFG.bully.hitRadius && pos.y > 0.2 && pos.y < 1.1; }
+  awake() { return this.state === 'sleep' && this.deep <= 0; }
+  dispose() { if (this.pack) this.game.scene.remove(this.pack.mesh); if (this.desk) { this.desk.covered = null; this.desk.occupant = null; } super.dispose(); }
+}
+
+class Dodgeball {
+  constructor(game) {
+    this.game = game; this.world = game.world; this.r = CFG.ball.radius;
+    const geo = new THREE.SphereGeometry(this.r, 18, 14);
+    this.mesh = new THREE.Mesh(geo, new THREE.MeshToonMaterial({ map: Draw.tex(Draw.ballTex()), gradientMap: this.world.gradient }));
+    this.mesh.castShadow = true; this.start = this.randomSpot(); this.mesh.position.set(this.start.x, this.r, this.start.z);
+    game.scene.add(this.mesh);
+    this.vel = new THREE.Vector3(); this.lastHitBy = null; this.bounceCd = 0; this.hitCd = 0;
+  }
+  launch(dir, owner) {
+    this.vel.copy(dir).setY(0).normalize().multiplyScalar(CFG.ball.launch); this.vel.y = 2.2;
+    this.lastHitBy = owner; this.hitCd = 0; Audio.boing();
+  }
+  update(dt) {
+    const p = this.mesh.position, v = this.vel, r = this.r;
+    this.bounceCd -= dt; this.hitCd -= dt;
+    const speed = Math.hypot(v.x, v.z);
+    if (speed < 0.05 && p.y <= r + 0.005 && Math.abs(v.y) < 0.2) { v.set(0, 0, 0); p.y = r; return; }
+    v.y -= 9.8 * dt; p.addScaledVector(v, dt);
+    this.mesh.rotation.x += v.z / r * dt; this.mesh.rotation.z -= v.x / r * dt;
+    if (p.y < r) { p.y = r; if (v.y < -0.5) { v.y = -v.y * 0.5; v.x *= 0.85; v.z *= 0.85; if (this.bounceCd <= 0) { Audio.bounce(); this.bounceCd = 0.2; } } else v.y = 0; }
+    if (p.y <= r + 0.01) { const f = Math.max(0, 1 - 1.6 * dt); v.x *= f; v.z *= f; }
+    const W = CFG.room.w / 2 - r, D = CFG.room.d / 2 - r;
+    if (p.x < -W) { p.x = -W; v.x = Math.abs(v.x) * 0.7; } if (p.x > W) { p.x = W; v.x = -Math.abs(v.x) * 0.7; }
+    if (p.z < -D) { p.z = -D; v.z = Math.abs(v.z) * 0.7; } if (p.z > D) { p.z = D; v.z = -Math.abs(v.z) * 0.7; }
+    for (const b of this.world.boxes) {
+      if (p.y - r > b.h) continue;
+      const cx = clamp(p.x, b.minX, b.maxX), cz = clamp(p.z, b.minZ, b.maxZ), dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
+      if (d2 < r * r && d2 > 1e-6) {
+        const d = Math.sqrt(d2), nx = dx / d, nz = dz / d; p.x += nx * (r - d); p.z += nz * (r - d);
+        const vn = v.x * nx + v.z * nz; if (vn < 0) { v.x -= 1.7 * vn * nx; v.z -= 1.7 * vn * nz; if (this.bounceCd <= 0 && speed > 1) { Audio.bounce(); this.bounceCd = 0.2; } }
+      }
+    }
+    const sp = Math.hypot(v.x, v.z), g = this.game;
+    if (sp > CFG.ball.hurtSpeed && this.hitCd <= 0) {
+      for (const s of g.students) {
+        if (!s.alive) continue;
+        if (Math.hypot(s.group.position.x - p.x, s.group.position.z - p.z) < 0.5 && p.y < 1.4 * s.group.scale.y) {
+          s.hp = 1; s.hit(); g.kills++; g.addScore(this.lastHitBy === 'player' ? 300 : 100); v.multiplyScalar(0.35); this.hitCd = 0.4;
+          g.message(this.lastHitBy === 'player' ? '躲避球一擊出局！' : '流彈把躲避球打飛了', this.lastHitBy === 'player' ? '+300' : '同學被自己人的球打到', 1.5);
+          return;
+        }
+      }
+      const pp = g.player.pos;
+      if (g.state === 'playing' && Math.hypot(pp.x - p.x, pp.z - p.z) < 0.5 && p.y < g.player.eye + 0.2 && this.lastHitBy !== 'player') {
+        g.player.hurt(); v.multiplyScalar(0.35); this.hitCd = 0.6; g.message('被躲避球打到了！', '', 1.2);
+      }
+      if (g.bully && g.bully.awake() && Math.hypot(g.bully.group.position.x - p.x, g.bully.group.position.z - p.z) < 0.7) { g.bully.poke(this.lastHitBy === 'player' ? 'player' : 'enemy', null); v.multiplyScalar(0.3); }
+    }
+  }
+  testDart(d) {
+    if (d.mesh.position.distanceTo(this.mesh.position) < this.r + 0.08) { this.launch(d.vel, d.owner); return true; }
+    return false;
+  }
+  randomSpot() {
+    // somewhere in an aisle, not next to the player's start
+    for (let i = 0; i < 40; i++) { const x = rand(-3.8, 3.8), z = rand(-3.0, 3.0); const c = this.world.cellOf(x, z); if (this.world.free(c.gx, c.gz) && Math.hypot(x - PLAYER_START.x, z - PLAYER_START.z) > 3) return { x, z }; }
+    return { x: CFG.ball.start.x, z: CFG.ball.start.z };
+  }
+  reset() { this.mesh.position.set(this.start.x, this.r, this.start.z); this.vel.set(0, 0, 0); this.lastHitBy = null; }
+  dispose() { this.game.scene.remove(this.mesh); }
+}
+
+class Monitor extends PaperFigure {
+  constructor(game) {
+    super(game.scene, () => Draw.monitor('normal'), 0.9, 1.4);
+    this.game = game; this.world = game.world;
+    this.group.position.set(rand(-3, 3), 0, rand(-3.4, -2.6));
+    this.state = 'pause'; this.timer = 1; this.path = []; this.strokes = 0; this.strokeCd = 0; this.rest = 0;
+    const c = Draw.canvas(128, 96), ctx = c.getContext('2d');
+    ctx.fillStyle = '#2b2622'; ctx.font = 'bold 60px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('✎', 64, 70);
+    this.pen = new THREE.Sprite(new THREE.SpriteMaterial({ map: Draw.tex(c), transparent: true, depthTest: false })); this.pen.scale.set(0.4, 0.3, 1); this.pen.position.set(0.35, 1.7, 0); this.pen.visible = false; this.group.add(this.pen);
+  }
+  canSee(player) {
+    const from = new THREE.Vector3(this.group.position.x, 1.05, this.group.position.z), to = player.eyePos();
+    if (from.distanceTo(to) > CFG.monitor.sight) return false;
+    return !this.world.segmentBlocked(from, to);
+  }
+  noticeShot() {
+    if (this.state === 'cry' || this.rest > 0 || this.strokeCd > 0 || !this.canSee(this.game.player)) return;
+    this.strokeCd = CFG.monitor.strokeCooldown; this.addStroke(1, '班長記你一筆！');
+  }
+  addStroke(n, text) {
+    this.strokes += n; this.world.setTally(this.strokes); Audio.scribble();
+    if (this.state !== 'cry') { this.state = 'write'; this.timer = 0.7; this.pen.visible = true; this.path = []; }
+    const full = Math.floor(this.strokes / 5), rest = this.strokes % 5;
+    if (this.strokes % 5 === 0) this.tattle(); else this.game.message(text, `黑板上的正字：${'正'.repeat(full)}${rest ? ' ' + rest + '/5' : ''}`, 1.4);
+  }
+  tattle() {
+    Audio.tattle();
+    const g = this.game; this.rest = CFG.monitor.rest; this.restSpot = { x: rand(-2, 2), z: -3.3 };
+    if (g.teacher && !g.teacher.defeated) { g.teacher.rage = CFG.monitor.rageSeconds; g.message('班長去告狀了！', '老師更生氣，粉筆丟更快', 2); }
+    else if (!g.bossPhase) { for (let i = 0; i < CFG.monitor.reinforcements; i++) g.spawnQueue.push(DOORS[i % 2]); g.spawnTimer = Math.min(g.spawnTimer, 0.3); g.message('班長去告狀了！', '隔壁班的同學被叫進來了', 2); }
+    else g.message('班長去告狀了！', '老師馬上就到', 1.6);
+  }
+  hitByDart() {
+    if (this.state === 'cry') return;
+    if (this.rest > 0) { this.state = 'cry'; this.timer = 2.2; this.flash = 0.15; this.path = []; this.setTexture(Draw.monitor('cry')); this.pen.visible = false; this.game.message('班長又被打到了', '她已經告過狀，先哭一下', 1.4); return; }
+    this.state = 'cry'; this.timer = 2.2; this.flash = 0.15; this.path = []; this.setTexture(Draw.monitor('cry')); this.pen.visible = false;
+    this.game.message('你打到班長了！', '她哭著去找老師', 1.8); Audio.hurt();
+    this.addStroke(5 - (this.strokes % 5), '');
+  }
+  update(dt) {
+    const p = this.group.position; this.timer -= dt; this.strokeCd -= dt; this.rest = Math.max(0, this.rest - dt);
+    let moving = false;
+    // after tattling she goes to the front and stays out of the fight for a while
+    if (this.rest > 0 && this.state !== 'cry' && this.state !== 'write') {
+      if (Math.hypot(p.x - this.restSpot.x, p.z - this.restSpot.z) > 0.3) { if (this.state !== 'walk' || !this.path.length) { this.path = this.world.path(p, this.restSpot); this.state = 'walk'; } }
+      else { this.state = 'pause'; this.timer = 1; this.path = []; }
+    }
+    if (this.state === 'cry') { this.mesh.rotation.z = Math.sin(performance.now() / 90) * 0.08; if (this.timer <= 0) { this.state = 'pause'; this.timer = 0.5; this.setTexture(Draw.monitor('normal')); } }
+    else if (this.state === 'write') { if (this.timer <= 0) { this.state = 'pause'; this.timer = 0.3; this.pen.visible = false; } }
+    else if (this.state === 'walk') {
+      if (this.path.length) {
+        const t = this.path[0], dx = t.x - p.x, dz = t.z - p.z, dist = Math.hypot(dx, dz), sp = CFG.monitor.speed * dt;
+        if (dist < sp || dist < 0.08) { p.x = t.x; p.z = t.z; this.path.shift(); } else { p.x += dx / dist * sp; p.z += dz / dist * sp; }
+        moving = true;
+      } else { this.state = 'pause'; this.timer = rand(1, 2.5); }
+    } else if (this.timer <= 0 && this.rest <= 0) {
+      const pp = this.game.player.pos;
+      const tx = Math.random() < 0.5 ? clamp(pp.x + rand(-3, 3), -5.2, 5.2) : rand(-5.2, 5.2), tz = Math.random() < 0.5 ? clamp(pp.z + rand(-3, 3), -3.9, 3.9) : rand(-3.9, 3.9);
+      this.path = this.world.path(p, { x: tx, z: tz }); this.state = 'walk';
+    }
+    this.face(this.game.camera.position); this.tick(dt, moving);
+  }
+  testHit(pos) { if (this.state === 'cry') return false; return Math.hypot(pos.x - this.group.position.x, pos.z - this.group.position.z) < 0.38 && pos.y > 0 && pos.y < 1.4; }
+  dispose() { this.world.setTally(0); super.dispose(); }
+}
+
+class SpecialItem {
+  constructor(game, buff, mount) {
+    this.game = game; this.buff = buff; this.life = CFG.items.life; this.t = Math.random() * 6;
+    const geo = new THREE.PlaneGeometry(0.5, 0.5);
+    this.mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.itemIcon(buff.id)), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }));
+    this.mesh.position.set(mount.x, mount.y, mount.z); this.mesh.rotation.y = mount.ry;
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.36, 24), new THREE.MeshBasicMaterial({ color: 0xf28a1a, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+    this.mesh.add(this.ring);
+    game.scene.add(this.mesh);
+  }
+  update(dt) {
+    this.t += dt; this.life -= dt;
+    const k = 1 + Math.sin(this.t * 4) * 0.06; this.mesh.scale.set(k, k, 1); this.ring.rotation.z = this.t * 1.5;
+    if (this.life < 3) this.mesh.visible = Math.floor(this.life * 5) % 2 === 0;
+    return this.life > 0;
+  }
+  testDart(d) { return d.owner === 'player' && d.mesh.position.distanceTo(this.mesh.position) < CFG.items.hitRadius; }
+  dispose() { this.game.scene.remove(this.mesh); }
+}
+
+// ============================================================
+//  Player
+// ============================================================
+class Player {
+  constructor(game) {
+    this.game = game; this.camera = game.camera; this.world = game.world;
+    this.pos = PLAYER_START.clone(); this.yaw = -0.55; this.pitch = 0; this.eye = CFG.player.eye;
+    this.hp = CFG.player.hp; this.ammo = CFG.gun.mag; this.reserve = CFG.gun.reserveStart; this.reloading = 0; this.reloadTotal = 1; this.emptyTime = 0; this.fireCd = 0; this.crouching = false;
+    this.keys = {}; this.shots = 0; this.hits = 0; this.hurtCd = 0;
+    this.buildGun();
+  }
+  buildGun() {
+    const g = new THREE.Group(); const t = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: this.world.gradient });
+    const ink = (m) => { m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), this.world.inkMat)); return m; };
+    const body = ink(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.34), t(0xf28a1a))); g.add(body);
+    const barrel = ink(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.16), t(0x2f6fd1))); barrel.position.set(0, 0.02, -0.25); g.add(barrel);
+    const handle = ink(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.07), t(0x2f6fd1))); handle.position.set(0, -0.11, 0.08); handle.rotation.x = 0.25; g.add(handle);
+    const mag = ink(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), t(0xf4e27a))); mag.position.set(0, -0.1, -0.06); g.add(mag); this.magMesh = mag;
+    const sight = ink(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.06), t(0xf4e27a))); sight.position.set(0, 0.075, -0.05); g.add(sight);
+    const dart = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.1, 8), t(0xf28a1a)); dart.rotation.x = Math.PI / 2; dart.position.set(0, 0.02, -0.33); g.add(dart); this.loadedDart = dart;
+    g.position.set(0.28, -0.26, -0.5); g.rotation.y = -0.08;
+    this.gun = g; this.gunBase = g.position.clone(); this.camera.add(g); this.recoil = 0; this.bob = 0;
+  }
+  eyePos() { return new THREE.Vector3(this.pos.x, this.eye, this.pos.z); }
+  look(dx, dy) { this.yaw -= dx * 0.0022; this.pitch = clamp(this.pitch - dy * 0.0022, -1.4, 1.4); }
+  update(dt) {
+    const k = this.keys;
+    this.crouching = !!(k['ControlLeft'] || k['ControlRight'] || k['KeyC']);
+    const targetEye = this.crouching ? CFG.player.crouchEye : CFG.player.eye;
+    this.eye += (targetEye - this.eye) * Math.min(1, dt * 10);
+    const run = (k['ShiftLeft'] || k['ShiftRight']) && !this.crouching;
+    const speed = (this.crouching ? CFG.player.crouchSpeed : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1);
+    let mx = 0, mz = 0;
+    if (k['KeyW'] || k['ArrowUp']) mz -= 1; if (k['KeyS'] || k['ArrowDown']) mz += 1;
+    if (k['KeyA'] || k['ArrowLeft']) mx -= 1; if (k['KeyD'] || k['ArrowRight']) mx += 1;
+    const moving = mx || mz;
+    if (moving) {
+      const l = Math.hypot(mx, mz); mx /= l; mz /= l;
+      const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
+      // forward is -z in camera space rotated by yaw
+      const fx = -sin, fz = -cos, rx = cos, rz = -sin;
+      this.pos.x += (fx * -mz + rx * mx) * speed * dt; this.pos.z += (fz * -mz + rz * mx) * speed * dt;
+      this.world.collideCircle(this.pos, CFG.player.radius);
+      this.bob += dt * (run ? 13 : 9);
+    }
+    this.camera.position.set(this.pos.x, this.eye + (moving ? Math.sin(this.bob) * 0.025 : 0), this.pos.z);
+    this.camera.rotation.set(0, 0, 0, 'YXZ'); this.camera.rotation.order = 'YXZ'; this.camera.rotation.y = this.yaw; this.camera.rotation.x = this.pitch;
+    // gun animation
+    this.fireCd -= dt; this.hurtCd -= dt;
+    this.recoil = Math.max(0, this.recoil - dt * 6);
+    const bobX = moving ? Math.sin(this.bob) * 0.01 : 0, bobY = moving ? Math.abs(Math.cos(this.bob)) * 0.01 : 0;
+    const reloadDip = this.reloading > 0 ? Math.sin(Math.min(1, (this.reloadTotal - this.reloading) / this.reloadTotal) * Math.PI) * 0.22 : 0;
+    this.gun.position.set(this.gunBase.x + bobX, this.gunBase.y + bobY - reloadDip + this.recoil * 0.02, this.gunBase.z + this.recoil * 0.07);
+    this.gun.rotation.x = this.recoil * 0.25 - reloadDip * 1.2; this.gun.rotation.z = reloadDip * 0.6;
+    this.loadedDart.visible = this.ammo > 0 && this.reloading <= 0;
+    if (this.reloading > 0) {
+      this.reloading -= dt;
+      this.game.ui.reloadProgress(1 - this.reloading / this.reloadTotal);
+      if (this.reloading <= 0) {
+        const take = Math.min(CFG.gun.mag - this.ammo, this.reserve);
+        this.ammo += take; this.reserve -= take; this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve);
+      }
+    }
+    // auto reload shortly after running dry (unless the player is still holding the trigger)
+    if (this.ammo === 0 && this.reloading <= 0) { this.emptyTime += dt; if (this.emptyTime > CFG.gun.autoReloadDelay && !this.firing) this.reload(); } else this.emptyTime = 0;
+    // scavenge darts lying around
+    const got = this.game.darts.pickupNear(this.pos, CFG.gun.pickupRadius, CFG.gun.reserveMax - this.reserve);
+    if (got > 0) { this.reserve += got; Audio.pickup(); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); this.game.ui.pickFlash(); }
+    if (this.firing) this.tryFire();
+  }
+  tryFire() {
+    if (this.fireCd > 0) return;
+    if (this.reloading > 0) {
+      if (this.ammo <= 0) return;
+      this.reloading = 0; this.game.ui.reloading(false); // firing cancels a partial reload
+    }
+    if (this.ammo <= 0) {
+      Audio.empty(); this.fireCd = 0.3;
+      if (this.reserve <= 0) this.game.message('彈匣和備用彈都空了！', '去撿地上的泡棉彈', 1.4);
+      return;
+    }
+    if (!this.game.hasBuff('infinite')) this.ammo--;
+    this.fireCd = CFG.gun.fireInterval; this.recoil = 1; this.shots++;
+    const view = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const muzzle = this.camera.localToWorld(new THREE.Vector3(0.28, -0.22, -0.7));
+    // aim the dart at the point the crosshair is actually looking at, so it does not fly 28 cm to the right
+    const dist = Math.max(1.5, this.world.rayDistance(this.camera.position, view));
+    const target = this.camera.position.clone().addScaledVector(view, dist);
+    const dir = target.sub(muzzle).normalize();
+    this.game.darts.fire(muzzle, dir, CFG.gun.speed, 'player');
+    Audio.pew();
+    if (this.game.monitor) this.game.monitor.noticeShot();
+    this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve);
+  }
+  reload() {
+    if (this.reloading > 0 || this.ammo === CFG.gun.mag) return;
+    if (this.reserve <= 0) { Audio.empty(); this.game.message('沒有備用彈了！', '地上的泡棉彈走過去就能撿', 1.6); return; }
+    this.reloadTotal = this.ammo === 0 ? CFG.gun.reloadEmpty : CFG.gun.reloadPartial;
+    this.reloading = this.reloadTotal; Audio.reload(this.reloadTotal); this.game.ui.reloading(true);
+    if (this.reserve <= 5 && !this.lowWarned) { this.lowWarned = true; this.game.message('備用彈快沒了', '撿地上的泡棉彈補充', 2); }
+  }
+  hurt() {
+    if (this.hurtCd > 0) return;
+    this.hurtCd = 0.7; this.hp--; Audio.hurt(); this.game.ui.hp(this.hp); this.game.ui.vignette();
+    if (this.hp <= 0) this.game.onLose();
+  }
+}
+
+// ============================================================
+//  UI
+// ============================================================
+const $ = (id) => document.getElementById(id);
+class UI {
+  constructor() {
+    this.msgTimer = 0; this.msgEl = $('msg');
+  }
+  wave(n) { $('wave').textContent = n; }
+  score(n) { $('score').textContent = n; }
+  left(n) { $('left').textContent = n; }
+  hp(n) { let s = ''; for (let i = 0; i < CFG.player.hp; i++) s += i < n ? '♥' : '<span class="lost">♥</span>'; $('hud-hp').innerHTML = s; }
+  ammo(n, empty, reserve) { $('ammo').textContent = n; $('hud-ammo').classList.toggle('empty', !!empty); $('hud-ammo').classList.remove('reloading'); if (reserve !== undefined) { $('reserve').textContent = reserve; $('reserve').parentElement.classList.toggle('low', reserve <= 5); } }
+  pickFlash() { const el = $('hud-ammo'); el.classList.remove('pick'); void el.offsetWidth; el.classList.add('pick'); }
+  reloading(on) { $('hud-ammo').classList.toggle('reloading', on); $('reload-bar').style.width = '0%'; }
+  reloadProgress(t) { $('reload-bar').style.width = (t * 100).toFixed(0) + '%'; }
+  message(main, sub, dur) {
+    this.msgEl.innerHTML = ''; const t = document.createTextNode(main); this.msgEl.appendChild(t);
+    if (sub) { const s = document.createElement('small'); s.textContent = sub; this.msgEl.appendChild(s); }
+    this.msgEl.classList.add('show'); this.msgTimer = dur;
+  }
+  tick(dt) { if (this.msgTimer > 0) { this.msgTimer -= dt; if (this.msgTimer <= 0) this.msgEl.classList.remove('show'); } }
+  hitmark() { const h = $('hitmark'); h.classList.add('show'); clearTimeout(this._hm); this._hm = setTimeout(() => h.classList.remove('show'), 60); }
+  vignette() { const v = $('vignette'); v.classList.add('hit'); clearTimeout(this._vg); this._vg = setTimeout(() => v.classList.remove('hit'), 80); }
+  boss(on) { $('hud-boss').classList.toggle('on', on); }
+  buff(b) { const el = $('hud-buff'); if (!b) { el.classList.remove('on'); return; } el.classList.add('on'); $('buff-name').textContent = b.name; $('buff-effect').textContent = b.effect; $('buff-time').textContent = Math.ceil(b.t); }
+  bossWp(wp) { for (const k of ['glasses', 'chalk', 'book']) { const el = $('wp-' + k); el.querySelector('.pips').textContent = '●'.repeat(Math.max(0, wp[k].hp)) + '○'.repeat(CFG.teacher.wpHp - Math.max(0, wp[k].hp)); el.classList.toggle('gone', wp[k].hp <= 0); } }
+}
+
+// ============================================================
+//  Game
+// ============================================================
+class Game {
+  constructor() {
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    $('game').appendChild(this.renderer.domElement);
+    this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0xfbf6e6);
+    this.camera = new THREE.PerspectiveCamera(75, 1, 0.05, 60);
+    this.scene.add(this.camera);
+    // light: afternoon sun from the windows (-x side) + soft fill
+    const hemi = new THREE.HemisphereLight(0xfff4dc, 0xc9b79a, 0.9); this.scene.add(hemi);
+    const sun = new THREE.DirectionalLight(0xfff0c8, 1.4); sun.position.set(-7, 6, 1); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -8; sun.shadow.camera.right = 8; sun.shadow.camera.top = 7; sun.shadow.camera.bottom = -7; sun.shadow.camera.near = 1; sun.shadow.camera.far = 25; sun.shadow.bias = -0.0015;
+    this.scene.add(sun);
+    this.world = new World(this.scene);
+    this.darts = new Darts(this.scene, this.world);
+    this.ui = new UI();
+    this.player = new Player(this);
+    this.students = []; this.teacher = null; this.milks = []; this.milkTimer = 0; this.milkTex = Draw.tex(Draw.milkCarton());
+    this.bully = null; this.ball = null; this.monitor = null; this.debris = []; this.rings = [];
+    this.items = []; this.itemTimer = 0; this.buff = null;
+    this.state = 'menu'; this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.spawnTimer = 0; this.waveTimer = 0; this.difficultySpread = 1;
+    this.clock = new THREE.Clock(); this.hasLock = false; this.lockSupported = 'requestPointerLock' in document.body;
+    this.bindInput(); this.resize(); window.addEventListener('resize', () => this.resize());
+    this.renderer.setAnimationLoop(() => this.frame());
+  }
+  resize() { const w = innerWidth, h = innerHeight; this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
+  // ---------- input ----------
+  bindInput() {
+    const canvas = this.renderer.domElement;
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Escape') { if (this.state === 'playing') this.pause(); return; }
+      if (this.state !== 'playing') return;
+      this.player.keys[e.code] = true;
+      if (e.code === 'KeyR') this.player.reload();
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ControlLeft', 'ShiftLeft'].includes(e.code)) e.preventDefault();
+    });
+    document.addEventListener('keyup', e => { this.player.keys[e.code] = false; });
+    window.addEventListener('blur', () => { this.player.keys = {}; this.player.firing = false; });
+    document.addEventListener('mousemove', e => {
+      if (this.state !== 'playing') return;
+      if (this.hasLock || !this.lockSupported || this.lockFailed) this.player.look(e.movementX, e.movementY);
+    });
+    canvas.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      if (this.state === 'playing') {
+        if (this.lockSupported && !this.hasLock && !this.lockFailed) this.requestLock();
+        this.player.firing = true; this.player.tryFire();
+      }
+    });
+    document.addEventListener('mouseup', e => { if (e.button === 0) this.player.firing = false; });
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('pointerlockchange', () => {
+      this.hasLock = document.pointerLockElement === canvas;
+      if (this.hasLock) this.lockFailed = false;
+      else if (this.state === 'playing') this.pause();
+    });
+    document.addEventListener('pointerlockerror', () => this.onLockFailed());
+    $('btn-start').addEventListener('click', () => this.start());
+    $('btn-resume').addEventListener('click', () => this.resume());
+    $('btn-restart-pause').addEventListener('click', () => this.start());
+    $('btn-again').addEventListener('click', () => this.start());
+    if (!this.lockSupported || /Mobi|Android/i.test(navigator.userAgent)) $('menu-note').textContent = '這台裝置可能沒有滑鼠鎖定，請用電腦遊玩效果最好。';
+  }
+  requestLock() {
+    try {
+      const p = this.renderer.domElement.requestPointerLock();
+      if (p && p.catch) p.catch(() => this.onLockFailed());
+    } catch (e) { this.onLockFailed(); }
+  }
+  onLockFailed() {
+    if (this.hasLock || this.lockFailed) return;
+    this.lockFailed = true; this.ui.message('無法鎖定滑鼠', '改用移動滑鼠轉視角', 2.5);
+  }
+  // ---------- flow ----------
+  start() {
+    Audio.init(); Audio.resume();
+    this.reset();
+    this.state = 'playing';
+    $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
+    this.ui.hp(this.player.hp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(1); this.ui.left(0); this.ui.boss(false);
+    if (this.lockSupported) this.requestLock();
+    this.message('下課了！', '同學們從門口衝進來', 2.5);
+    this.waveTimer = 2.2; this.nextWavePending = true;
+    this.clock.getDelta();
+  }
+  reset() {
+    this.students.forEach(s => s.dispose()); this.students = [];
+    if (this.teacher) { this.teacher.dispose(); this.teacher = null; }
+    this.darts.clear(); this.world.desks.forEach(d => { d.occupant = null; d.covered = null; });
+    this.milks.forEach(m => this.scene.remove(m.mesh)); this.milks = []; this.milkTimer = CFG.milk.interval;
+    this.debris.forEach(d => this.scene.remove(d.mesh)); this.debris = []; this.rings.forEach(r => this.scene.remove(r.mesh)); this.rings = [];
+    if (this.bully) this.bully.dispose(); if (this.monitor) this.monitor.dispose(); if (this.ball) this.ball.dispose();
+    this.bully = null; this.monitor = null; this.ball = null;
+    const f = { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
+    if (!f.bully && !f.ball && !f.monitor) f[pick(['bully', 'ball', 'monitor'])] = true; // at least one surprise per game
+    this.features = f;
+    if (f.bully) this.bully = new Bully(this);
+    if (f.monitor) this.monitor = new Monitor(this);
+    if (f.ball) this.ball = new Dodgeball(this);
+    this.items.forEach(i => i.dispose()); this.items = []; this.itemTimer = rand(8, 20); this.buff = null; this.ui.buff(null);
+    this.camera.remove(this.player.gun);
+    this.player = new Player(this);
+    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false;
+  }
+  pause() {
+    if (this.state !== 'playing') return;
+    this.state = 'paused'; $('pause').hidden = false; this.player.keys = {}; this.player.firing = false;
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+  resume() {
+    if (this.state !== 'paused') return;
+    this.state = 'playing'; $('pause').hidden = true; this.clock.getDelta();
+    if (this.lockSupported && !this.lockFailed) this.requestLock();
+    Audio.resume();
+  }
+  startWave() {
+    this.wave++; this.ui.wave(this.wave); Audio.wave();
+    const count = CFG.waves[this.wave - 1];
+    this.difficultySpread = Math.max(0.6, 1 - (this.wave - 1) * 0.1);
+    this.message(`第 ${this.wave} 波`, `${count} 位同學衝進來了`, 2);
+    this.spawnQueue = Array.from({ length: count }, (_, i) => DOORS[i % 2]); this.spawnTimer = 0.4;
+  }
+  startBoss() {
+    this.bossPhase = true;
+    this.message('走廊傳來腳步聲……', '快回座位？不，拿好你的槍', 3);
+    Audio.footsteps();
+    this.bossTimer = 3.2;
+  }
+  spawnTeacher() {
+    this.teacher = new Teacher(this, DOORS[0]);
+    Audio.teacher();
+    this.message('老師回來了！！', '打掉她的眼鏡、粉筆、教案', 3.5);
+    this.ui.boss(true); this.updateBossHud(); this.ui.left('老師');
+  }
+  updateBossHud() { if (this.teacher) this.ui.bossWp(this.teacher.wp); }
+  // ---------- small physics props ----------
+  spawnDebris(at, color, size, vel, life) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshToonMaterial({ color, gradientMap: this.world.gradient }));
+    m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), this.world.inkMat)); m.castShadow = true; m.position.copy(at); m.position.y += 0.2;
+    this.scene.add(m); this.debris.push({ mesh: m, vel: vel.clone(), spin: rand(4, 10), life });
+  }
+  spawnRing(at, radius, color) {
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.3, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2; m.position.set(at.x, 0.03, at.z); this.scene.add(m); this.rings.push({ mesh: m, t: 0, radius });
+  }
+  updateProps(dt) {
+    for (let i = this.debris.length - 1; i >= 0; i--) {
+      const d = this.debris[i]; d.vel.y -= 9.8 * dt; d.mesh.position.addScaledVector(d.vel, dt); d.mesh.rotation.x += d.spin * dt; d.mesh.rotation.z += d.spin * 0.6 * dt; d.life -= dt;
+      if (d.mesh.position.y < 0.03) { d.mesh.position.y = 0.03; d.vel.y = Math.abs(d.vel.y) * 0.3; d.vel.x *= 0.6; d.vel.z *= 0.6; d.spin *= 0.5; }
+      if (d.life <= 0) { this.scene.remove(d.mesh); this.debris.splice(i, 1); }
+    }
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const r = this.rings[i]; r.t += dt; const k = Math.min(1, r.t / 0.45); r.mesh.scale.setScalar(1 + k * r.radius * 3.2); r.mesh.material.opacity = 0.9 * (1 - k);
+      if (k >= 1) { this.scene.remove(r.mesh); this.rings.splice(i, 1); }
+    }
+    if (this.bully) this.bully.update(dt);
+    if (this.monitor) this.monitor.update(dt);
+    if (this.ball) this.ball.update(dt);
+  }
+  // ---------- milk (healing) ----------
+  spawnMilk() {
+    if (this.milks.length >= CFG.milk.max) return;
+    const pp = this.player.pos;
+    const far = this.world.desks.filter(d => Math.hypot(d.x - pp.x, d.z - pp.z) > CFG.milk.minDistFromPlayer && !this.milks.some(m => m.desk === d));
+    const desk = pick(far.length ? far : this.world.desks);
+    const g = new THREE.Group();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.2, 0.13), new THREE.MeshToonMaterial({ map: this.milkTex, gradientMap: this.world.gradient }));
+    box.castShadow = true; box.add(new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), this.world.inkMat)); g.add(box);
+    const straw = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.14, 6), new THREE.MeshToonMaterial({ color: 0xd8432b, gradientMap: this.world.gradient }));
+    straw.position.set(0.03, 0.14, 0.02); straw.rotation.z = -0.3; g.add(straw);
+    g.position.set(desk.x + rand(-0.12, 0.12), DESK.h + 0.1, desk.z + rand(-0.05, 0.05));
+    this.scene.add(g);
+    this.milks.push({ mesh: g, desk, baseY: g.position.y, t: Math.random() * 6 });
+    Audio.milkSpawn();
+    this.message('有人把鮮奶放在課桌上', '走過去喝一口回血', 2.2);
+  }
+  updateMilk(dt) {
+    if (this.state === 'playing') {
+      this.milkTimer -= dt;
+      if (this.milkTimer <= 0) { this.milkTimer = CFG.milk.interval; if (this.player.hp < CFG.player.hp) this.spawnMilk(); }
+    }
+    const pp = this.player.pos;
+    for (let i = this.milks.length - 1; i >= 0; i--) {
+      const m = this.milks[i]; m.t += dt;
+      m.mesh.position.y = m.baseY + Math.sin(m.t * 3) * 0.02; m.mesh.rotation.y = m.t * 1.2;
+      if (this.state !== 'playing' || this.player.hp >= CFG.player.hp) continue;
+      if (Math.hypot(m.mesh.position.x - pp.x, m.mesh.position.z - pp.z) < CFG.milk.pickupRadius) {
+        this.scene.remove(m.mesh); this.milks.splice(i, 1);
+        this.player.hp = Math.min(CFG.player.hp, this.player.hp + CFG.milk.heal); this.ui.hp(this.player.hp);
+        Audio.drink(); this.message('咕嚕咕嚕，喝了鮮奶！', '+1 ♥', 1.6);
+      }
+    }
+  }
+  addScore(n) { if (this.hasBuff('double')) n *= 2; this.score += n; this.ui.score(this.score); }
+  hasBuff(id) { return !!(this.buff && this.buff.id === id); }
+  applyBuff(b) {
+    this.buff = { id: b.id, name: b.name, effect: b.effect, t: b.dur }; this.ui.buff(this.buff); Audio.item();
+    this.message(`射中${b.name}！`, `${b.effect} ${b.dur} 秒`, 2);
+  }
+  spawnItem() {
+    const used = new Set(this.items.map(i => i.mount));
+    const mount = pick(MOUNTS.filter(m => !used.has(m)));
+    const item = new SpecialItem(this, pick(BUFFS), mount); item.mount = mount; this.items.push(item);
+    Audio.itemSpawn(); this.message('牆上出現了特殊物品', '射中它拿獎勵', 1.6);
+  }
+  updateItems(dt, realDt) {
+    if (this.state === 'playing') { this.itemTimer -= dt; if (this.itemTimer <= 0 && this.items.length < 1) { this.itemTimer = rand(CFG.items.interval[0], CFG.items.interval[1]); this.spawnItem(); } }
+    for (let i = this.items.length - 1; i >= 0; i--) if (!this.items[i].update(dt)) { this.items[i].dispose(); this.items.splice(i, 1); }
+    if (this.buff) { this.buff.t -= realDt; if (this.buff.t <= 0) { this.buff = null; this.ui.buff(null); } else this.ui.buff(this.buff); }
+  }
+  message(a, b, d) { this.ui.message(a, b, d); }
+  hitmark() { this.ui.hitmark(); this.player.hits++; }
+  onLose() {
+    this.state = 'over'; Audio.lose();
+    if (document.pointerLockElement) document.exitPointerLock();
+    this.showOver('你被罰坐了！', pick(['泡棉彈打到五次，乖乖回座位。', '同學們歡呼，你默默舉起白旗。', '下次記得蹲在課桌後面。']), false);
+  }
+  onWin() {
+    this.addScore(CFG.score.win); this.state = 'won'; Audio.win();
+    this.message('下課！！！', '老師崩潰，宣布今天不用上課', 4);
+    setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); this.showOver('下課！老師投降了', '三個道具全掉，全班自由。你是三年二班的傳說。', true); }, 3200);
+  }
+  showOver(title, sub, win) {
+    $('over').hidden = false; $('hud').hidden = true;
+    $('over-title').textContent = title; $('over-title').classList.toggle('red-pen', !win); $('over-sub').textContent = sub;
+    $('st-score').textContent = this.score; $('st-kills').textContent = this.kills; $('st-wave').textContent = this.bossPhase ? '老師' : this.wave;
+    $('st-acc').textContent = this.player.shots ? Math.min(100, Math.round(this.player.hits / this.player.shots * 100)) + '%' : '0%';
+  }
+  // ---------- loop ----------
+  frame() {
+    const dt = Math.min(0.05, this.clock.getDelta());
+    if (this.state === 'playing' || this.state === 'won') this.step(dt);
+    this.ui.tick(dt);
+    this.renderer.render(this.scene, this.camera);
+  }
+  step(realDt) {
+    this.player.update(realDt);
+    const dt = realDt * (this.hasBuff('slow') ? CFG.items.slowScale : 1); // the world slows down, the player does not
+    this.updateItems(dt, realDt);
+    // spawning & waves
+    if (this.state === 'playing') {
+      if (this.spawnQueue.length) {
+        this.spawnTimer -= dt;
+        if (this.spawnTimer <= 0) { const door = this.spawnQueue.shift(); this.students.push(new Student(this, { x: door.x - 0.3, z: door.z })); this.spawnTimer = 0.75; this.ui.left(this.students.filter(s => s.alive).length + this.spawnQueue.length); }
+      } else if (!this.bossPhase) {
+        const alive = this.students.filter(s => s.alive).length;
+        if (alive === 0) {
+          if (this.nextWavePending) {
+            this.waveTimer -= dt;
+            if (this.waveTimer <= 0) { this.nextWavePending = false; if (this.wave >= CFG.waves.length) this.startBoss(); else this.startWave(); }
+          } else if (this.wave > 0) {
+            this.addScore(CFG.score.wave); this.nextWavePending = true; this.waveTimer = 2.5;
+            this.message('這波清光了！', '+500', 1.8);
+            if (this.player.hp < CFG.player.hp) this.spawnMilk();
+          }
+        }
+      } else if (!this.teacher) {
+        this.bossTimer -= dt; if (this.bossTimer <= 0) this.spawnTeacher();
+      }
+    }
+    this.updateMilk(dt); this.updateProps(dt);
+    for (const s of this.students) s.update(dt);
+    if (this.teacher) this.teacher.update(dt);
+    else { const left = this.students.filter(s => s.alive).length + this.spawnQueue.length; if (left !== this._left) { this._left = left; this.ui.left(left); } }
+    // darts & hits
+    const player = this.player;
+    this.darts.update(dt, (d, prev) => {
+      if (d.kind === 'chalkBreak') return false;
+      const p = d.mesh.position;
+      for (let i = this.items.length - 1; i >= 0; i--) if (this.items[i].testDart(d)) { this.applyBuff(this.items[i].buff); this.items[i].dispose(); this.items.splice(i, 1); return true; }
+      if (d.kind === 'dart' && this.ball && this.ball.testDart(d)) return true;
+      if (d.kind === 'dart' && this.bully && this.bully.testHit(p)) { this.bully.poke(d.owner, d.shooter); return true; }
+      if (d.owner === 'player' && this.monitor && this.monitor.testHit(p)) { this.monitor.hitByDart(); return true; }
+      if (d.owner === 'player') {
+        for (const s of this.students) {
+          if (!s.alive) continue;
+          const dx = p.x - s.group.position.x, dz = p.z - s.group.position.z;
+          const h = 1.35 * s.group.scale.y;
+          if (dx * dx + dz * dz < 0.36 * 0.36 && p.y > 0 && p.y < h) { if (s.hit()) { this.kills++; this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } return true; }
+        }
+        if (this.teacher) {
+          const r = this.teacher.testHit(p);
+          if (r === 'weak') return true;
+          if (r === 'body') { if (!this.bodyHintShown) { this.bodyHintShown = true; this.message('打身體沒用！', '瞄準紅圈：眼鏡、粉筆、教案', 2.5); } Audio.thud(); return true; }
+        }
+      } else if (this.state === 'playing') {
+        const dx = p.x - player.pos.x, dz = p.z - player.pos.z;
+        if (dx * dx + dz * dz < 0.32 * 0.32 && p.y > 0 && p.y < player.eye + 0.2) { player.hurt(); return true; }
+      }
+      return false;
+    });
+  }
+}
+
+// ---- boot ----
+async function boot() {
+  try { await document.fonts.ready; } catch (e) { /* fonts optional */ }
+  window.__game = new Game();
+}
+boot();
+</script>
+<!--@@END-->
+</body>
+</html>
