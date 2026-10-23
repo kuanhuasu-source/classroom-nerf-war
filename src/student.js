@@ -54,17 +54,25 @@ export class Student extends PaperFigure {
     this.state = 'seekCover';
   }
   // the closest player we can see; falls back to the closest one
+  // co-op: each kid keeps a target for 1.5 to 3 seconds, then draws again. Closer and visible players are
+  // more likely, and a player who already has many kids on them is less likely, so fire gets spread between the two.
   pickTarget() {
     const list = this.game.activeTargets(); if (list.length === 1) return list[0];
-    const from = this.eye(); let best = null, bestD = 1e9, seen = null, seenD = 1e9;
-    for (const t of list) { const d = from.distanceTo(t.eyePos()); if (d < bestD) { bestD = d; best = t; } if (d < seenD && !this.world.segmentBlocked(from, t.eyePos())) { seenD = d; seen = t; } }
-    return seen || best;
+    if (this.target && this.retargetT > 0 && list.includes(this.target)) return this.target;
+    this.retargetT = rand(1.5, 3);
+    const from = this.eye(), counts = new Map();
+    for (const o of this.game.students) if (o.alive && o !== this && o.target) counts.set(o.target, (counts.get(o.target) || 0) + 1);
+    let total = 0;
+    const w = list.map(t => { const d = from.distanceTo(t.eyePos()), vis = !this.world.segmentBlocked(from, t.eyePos()); const x = (vis ? 2 : 0.5) * 6 / (d + 2) / (1 + 0.6 * (counts.get(t) || 0)); total += x; return x; });
+    let r = Math.random() * total; this.target = list[list.length - 1];
+    for (let i = 0; i < list.length; i++) { r -= w[i]; if (r <= 0) { this.target = list[i]; break; } }
+    return this.target;
   }
   update(dt) {
     if (this.remote) { this.remoteUpdate(dt, this.game.camera.position, this.alive); if (!this.alive) this.mesh.rotation.z = this.remoteRz || 0; return; }
     const p = this.group.position, player = this.pickTarget();
     let moving = false;
-    this.timer -= dt; this.age += dt;
+    this.timer -= dt; this.age += dt; this.retargetT = (this.retargetT || 0) - dt;
     switch (this.state) {
       case 'enter':
       case 'seekCover':
