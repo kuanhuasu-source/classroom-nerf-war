@@ -23,7 +23,7 @@ export class Teacher extends PaperFigure {
     this.throwTimer = 2.5; this.pauseTimer = 0; this.rage = 0; this.throwIdx = 0; this.glideT = 0; this.special = null;
     this.specials = (def.specials || (def.special ? [{ kind: def.special, every: def.specialEvery }] : [])).map(sp => ({ ...sp, t: sp.every }));
     // the blackboard eraser: every teacher and boss except the exam committee throws one now and then
-    this.eraserOk = def.group !== 'committee'; this.eraserT = CFG.teacher.eraserEvery * (def.boss ? 1.4 : 1) * rand(0.5, 0.9);
+    this.eraserOk = def.group !== 'committee'; this.eraserT = CFG.teacher.eraserEvery * (def.boss ? 1.4 : 1) * rand(0.5, 0.9); this.retaliateT = 0;
     if (def.scale) this.group.scale.setScalar(def.scale);
     this.defeated = false;
     this.wp = {};
@@ -76,7 +76,7 @@ export class Teacher extends PaperFigure {
     }
     if (this.remote) { this.remoteUpdate(dt, this.game.camera.position, !this.defeated); if (this.defeated) this.mesh.rotation.z = Math.sin(performance.now() / 120) * 0.05; else if (this.remoteCharging) this.mesh.rotation.z = Math.sin(performance.now() / 40) * 0.1; return; }
     if (this.defeated) { this.face(this.game.camera.position); this.tick(dt, false); this.mesh.rotation.z = Math.sin(performance.now() / 120) * 0.05; return; }
-    this.rage = Math.max(0, this.rage - dt);
+    this.rage = Math.max(0, this.rage - dt); this.retaliateT = Math.max(0, this.retaliateT - dt);
     // ---- special moves take over movement ----
     if (this.special) { moving = this.updateSpecial(dt, player); }
     else {
@@ -173,9 +173,10 @@ export class Teacher extends PaperFigure {
       g.message('校長要頒獎了……', '別站在他旁邊', 1.4);
       return;
     }
-    if (kind === 'eraser') { // a lobbed eraser: wherever it lands, a cloud of chalk dust
-      this.special = { kind: 'eraser', t: 0.7, target: player };
-      Audio.scribble(); g.netEvent({ t: 'sfx', n: 'scribble' }); g.message('老師拿起板擦了！', '粉筆灰會讓人看不清楚，快閃', 1.4);
+    if (kind === 'eraser' || kind === 'eraserQuick') { // a lobbed eraser: wherever it lands, a cloud of chalk dust. Quick = thrown in anger right after being hit
+      const quick = kind === 'eraserQuick';
+      this.special = { kind: 'eraser', t: quick ? 0.35 : 0.7, target: player };
+      Audio.scribble(); g.netEvent({ t: 'sfx', n: 'scribble' }); g.message(quick ? '老師氣得丟板擦！' : '老師拿起板擦了！', '粉筆灰會讓人看不清楚，快閃', 1.4);
       return;
     }
     if (kind === 'collect') { // 收卷：3 秒內誰開槍誰被記一筆；全場慢動作
@@ -382,6 +383,11 @@ export class Teacher extends PaperFigure {
   }
   hitWeak(k) {
     const w = this.wp[k]; w.hp--; this.flash = 0.15; this.ringFlash = { k, t: 0.2 }; this.game.hitmark(); this.game.addScore(CFG.score.hit * 2);
+    if (this.eraserOk && !this.remote && this.retaliateT <= 0 && !(this.special && this.special.phase === 'go')) {
+      this.retaliateT = CFG.teacher.eraserRetaliate; const who = this.game.lastShooter, g = this.game;
+      const shooter = (who && who !== 'host' && g.remoteBySlot(who)) || g.player;
+      this.special = null; this.startSpecial(shooter.sitting ? this.nextTarget() : shooter, 'eraserQuick');
+    }
     Audio.hitEnemy();
     this.game.updateBossHud();
     if (w.hp <= 0) {
