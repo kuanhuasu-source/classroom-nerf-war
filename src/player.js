@@ -35,7 +35,8 @@ export class Player {
   look(dx, dy) { this.yaw -= dx * 0.0022; this.pitch = clamp(this.pitch - dy * 0.0022, -1.4, 1.4); }
   update(dt) {
     const k = this.keys;
-    this.crouching = !!(k['ControlLeft'] || k['ControlRight'] || k['KeyC']);
+    const tc = this.game.touchCtl, tm = tc && tc.on ? tc.move : null;
+    this.crouching = !!(k['ControlLeft'] || k['ControlRight'] || k['KeyC'] || (tc && tc.crouch));
     const targetEye = this.sitting ? 0.8 : this.crouching ? CFG.player.crouchEye : CFG.player.eye;
     this.invuln = Math.max(0, this.invuln - dt);
     if (this.sitting) this.sitUpdate(dt);
@@ -45,9 +46,10 @@ export class Player {
     let mx = 0, mz = 0;
     if (k['KeyW'] || k['ArrowUp']) mz -= 1; if (k['KeyS'] || k['ArrowDown']) mz += 1;
     if (k['KeyA'] || k['ArrowLeft']) mx -= 1; if (k['KeyD'] || k['ArrowRight']) mx += 1;
+    if (tm && (tm.x || tm.z)) { mx += tm.x; mz += tm.z; }
     const moving = (mx || mz) && !this.sitting;
     if (moving) {
-      const l = Math.hypot(mx, mz); mx /= l; mz /= l;
+      const l = Math.hypot(mx, mz); if (l > 1 || !tm) { mx /= l; mz /= l; } // the stick may walk slowly, keys never do
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
       // forward is -z in camera space rotated by yaw
       const fx = -sin, fz = -cos, rx = cos, rz = -sin;

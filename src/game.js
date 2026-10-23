@@ -18,6 +18,7 @@ import { NET, PLAYER_SKINS, COOP, EMOTES, DIFFICULTY } from './config.js';
 import { TEACHERS, BOSSES } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
+import { TouchControls } from './touch.js';
 import { UPGRADES, offerFor, takeUpgrade, byId as upgradeById, freshUp as freshUpRemote } from './upgrades.js';
 
 // ============================================================
@@ -51,6 +52,7 @@ export class Game {
     this.level = 'normal'; this.diff = DIFFICULTY.normal; this.offer = null; this.offerTimer = 0; this.supplyTimer = 0;
     this.forceTeacher = new URLSearchParams(location.search).get('teacher'); // debug: ?teacher=pe
     this.clock = new THREE.Clock(); this.hasLock = false; this.lockSupported = 'requestPointerLock' in document.body;
+    this.touchCtl = new TouchControls(this); this.touch = this.touchCtl.on;
     this.bindInput(); this.resize(); window.addEventListener('resize', () => this.resize());
     if (this.transport) this.attachTransport(this.role, this.transport); else this.darts.localWho = 'host';
     this.renderer.setAnimationLoop(() => this.frame());
@@ -168,7 +170,7 @@ export class Game {
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
     this.ui.hp(this.player.hp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(1); this.ui.left(0); this.ui.boss(false); this.ui.buff(null);
-    if (this.lockSupported) this.requestLock();
+    if (this.lockSupported && !this.touch) this.requestLock();
     Audio.bellOut();
     this.clock.getDelta();
   }
@@ -225,7 +227,7 @@ export class Game {
     canvas.addEventListener('mousedown', e => {
       if (e.button !== 0) return;
       if (this.state === 'playing') {
-        if (this.lockSupported && !this.hasLock && !this.lockFailed) this.requestLock();
+        if (this.lockSupported && !this.hasLock && !this.lockFailed && !this.touch) this.requestLock();
         this.player.firing = true; this.player.tryFire();
       }
     });
@@ -242,7 +244,7 @@ export class Game {
     $('btn-resume').addEventListener('click', () => this.resume());
     $('btn-restart-pause').addEventListener('click', () => this.start());
     $('btn-again').addEventListener('click', () => this.start());
-    if (!this.lockSupported || /Mobi|Android/i.test(navigator.userAgent)) $('menu-note').textContent = '這台裝置可能沒有滑鼠鎖定，請用電腦遊玩效果最好。';
+    if (!this.touch && !this.lockSupported) $('menu-note').textContent = '這台裝置沒有滑鼠鎖定，改用移動滑鼠轉視角。';
   }
   requestLock() {
     try {
@@ -268,7 +270,7 @@ export class Game {
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
     this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(1); this.ui.left(0); this.ui.boss(false);
-    if (this.lockSupported) this.requestLock();
+    if (this.lockSupported && !this.touch) this.requestLock();
     Audio.bellOut();
     this.message('叮咚叮咚，下課了！', `${this.world.layout.name}變成戰場`, 3.5);
     this.waveTimer = 4.6; this.nextWavePending = true;
@@ -295,7 +297,7 @@ export class Game {
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
     this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0;
-    this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]);
+    this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     if (this.remote) { this.remote.up = freshUpRemote(); this.remote.maxHp = CFG.player.hp; }
   }
   pause() {
@@ -306,7 +308,7 @@ export class Game {
   resume() {
     if (this.state !== 'paused') return;
     this.state = 'playing'; $('pause').hidden = true; this.clock.getDelta();
-    if (this.lockSupported && !this.lockFailed) this.requestLock();
+    if (this.lockSupported && !this.lockFailed && !this.touch) this.requestLock();
     Audio.resume();
   }
   startWave() {
@@ -380,7 +382,7 @@ export class Game {
     this.offer = null; this.ui.closeOffer();
     if (live) return; // nothing was paused
     this.state = 'playing';
-    if (this.lockSupported && !this.lockFailed) this.requestLock();
+    if (this.lockSupported && !this.lockFailed && !this.touch) this.requestLock();
     this.clock.getDelta();
   }
   // ---------- pencil-case ammo supply (boss fight only: no students means no darts flying in) ----------
@@ -571,7 +573,7 @@ export class Game {
     if (this.state === 'playing' || this.state === 'won') this.step(dt);
     if (this.state === 'upgrade' && this.offer) { this.offer.t -= dt; if (this.offer.t <= 0) { if (!this.offer.picked.host) this.pickUpgrade($('upgrade-cards').children[0].dataset.id); else this.closeOffer(); } }
     this.tickLiveOffer(dt);
-    this.ui.tick(dt);
+    this.ui.tick(dt); this.touchCtl.update();
     this.renderer.render(this.scene, this.camera);
   }
   step(realDt) {

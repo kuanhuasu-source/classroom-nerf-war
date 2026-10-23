@@ -124,6 +124,23 @@ body {
 #upgrade.compact .cards { margin: 6px 0 6px; gap: 8px; }
 #upgrade.compact .card-up { padding: 8px 10px; gap: 2px; transform: none; }
 #upgrade.compact .card-up b { font-size: 18px; } #upgrade.compact .card-up span { font-size: 13px; }
+/* touch controls (body.touch) */
+#touch { position: absolute; inset: 0; display: none; pointer-events: auto; touch-action: none; -webkit-user-select: none; user-select: none; }
+body.touch #touch { display: block; }
+body.touch #hud-ammo { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: calc(150px + env(safe-area-inset-right, 0px)); }
+body.touch #hud-ammo small kbd { display: none; }
+#tc-stick { position: absolute; width: 124px; height: 124px; margin: -62px 0 0 -62px; border: 2px dashed var(--ink); border-radius: 50%; background: rgba(251, 246, 230, .3); display: none; pointer-events: none; }
+#tc-stick .knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--pencil); transform: translate(-50%, -50%); }
+.tc-btn { position: absolute; width: 66px; height: 66px; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--pencil); font-family: var(--font-hand); font-size: 17px; color: var(--ink); display: flex; align-items: center; justify-content: center; padding: 0; touch-action: none; }
+.tc-btn.active, .tc-btn.held { background: var(--nerf-orange); transform: scale(.94) rotate(-3deg); }
+#tc-fire { right: calc(22px + env(safe-area-inset-right, 0px)); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); width: 96px; height: 96px; font-size: 22px; }
+#tc-reload { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(108px + env(safe-area-inset-bottom, 0px)); }
+#tc-crouch { right: calc(232px + env(safe-area-inset-right, 0px)); bottom: calc(108px + env(safe-area-inset-bottom, 0px)); }
+#tc-revive { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(190px + env(safe-area-inset-bottom, 0px)); display: none; background: #cfe6ff; }
+#tc-pause { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 44px; height: 44px; font-size: 18px; }
+#tc-emote { position: absolute; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); display: none; gap: 8px; }
+body.touch.coop #tc-emote { display: flex; }
+#tc-emote .mini { touch-action: none; }
 #hud-up { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: none; font-size: 14px; color: var(--pencil); background: #fff; }
 #hud-up.on { display: block; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 6px 0 14px; }
