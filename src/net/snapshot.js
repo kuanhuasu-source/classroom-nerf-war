@@ -16,12 +16,12 @@ export function serializeSnapshot(g) {
   const p = g.player;
   const snap = {
     t: 'snap', st: g.state, wave: g.wave, score: g.score, kills: g.kills, boss: g.bossPhase ? 1 : 0,
-    left: g.teacher ? '老師' : g.students.filter(s => s.alive).length + g.spawnQueue.length,
+    left: g.teachers.length ? '老師' : g.students.filter(s => s.alive).length + g.spawnQueue.length,
     slow: g.worldSlow() ? 1 : 0,
     host: { x: r2(p.pos.x), z: r2(p.pos.z), yaw: r2(p.yaw), eye: r2(p.eye), c: p.crouching ? 1 : 0, hp: p.hp, sit: p.sitting ? 1 : 0, sx: p.seat ? r2(p.seat.x) : 0, sz: p.seat ? r2(p.seat.z) : 0 },
     guest: g.remote ? { hp: g.remote.hp, mh: g.remote.maxHp, sit: g.remote.sitting ? 1 : 0, sx: g.remote.seat ? r2(g.remote.seat.x) : 0, sz: g.remote.seat ? r2(g.remote.seat.z) : 0, st: r2(g.remote.sitT) } : null,
     students: g.students.map(s => s.serialize(g.fullSnapNext)),
-    teacher: g.teacher ? g.teacher.serialize() : null,
+    tc: g.teachers.map(t => t.serialize()),
     bully: g.bully ? g.bully.serialize() : null,
     ball: g.ball ? g.ball.serialize() : null,
     monitor: g.monitor ? g.monitor.serialize() : null,
@@ -53,9 +53,13 @@ export function applySnapshot(g, s) {
     me.hp = s.guest.hp; if (s.guest.mh) me.maxHp = s.guest.mh; g.ui.hp(s.guest.hp, me.maxHp);
   }
   sync(g, 'students', s.students.map(Student.unpack), (st) => new Student(g, { x: st.x, z: st.z }, { remote: true, id: st.id, v: st.v }));
-  if (s.teacher && !g.teacher) { g.teacher = new Teacher(g, { x: s.teacher.x, z: s.teacher.z }, { remote: true, kind: s.teacher.k }); g.ui.boss(true); g.ui.left(g.teacher.def.name); Audio.teacher(); }
-  if (!s.teacher && g.teacher) { g.teacher.dispose(); g.teacher = null; g.ui.boss(false); }
-  if (g.teacher) { g.teacher.applyState(s.teacher); g.updateBossHud(); }
+  const tc = s.tc || [];
+  while (g.teachers.length > tc.length) g.teachers.pop().dispose();
+  tc.forEach((ts, i) => {
+    if (!g.teachers[i]) { g.teachers[i] = new Teacher(g, { x: ts.x, z: ts.z }, { remote: true, kind: ts.k }); if (i === 0) { g.ui.boss(true); Audio.teacher(); } g.bossName = tc.length > 1 ? '會考委員會' : g.teachers[0].def.name; g.ui.left(g.bossName); }
+    g.teachers[i].applyState(ts);
+  });
+  if (tc.length) g.updateBossHud(); else g.ui.boss(false);
   if (s.bully && !g.bully) g.bully = new Bully(g, { remote: true, di: s.bully.di });
   if (!s.bully && g.bully) { g.bully.dispose(); g.bully = null; }
   if (g.bully) g.bully.applyState(s.bully);

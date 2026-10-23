@@ -137,6 +137,7 @@ function hall() {
     id: 'hall', name: '活動中心', w: W, d: D, h: 6, style: 'gym',
     doors: [{ x: 7.6, z: -4.5 }, { x: 7.6, z: 5.5, floor: BALC }], windows: [-4.5, -1.5, 1.5, 4.5], windowY: 3.8,
     start: { x: -5.8, z: 3.2, yaw: -0.5 }, front: -3.0, board: { w: 5.0, h: 1.4, style: 'chalk' }, boardY: STAGE + 0.3,
+    stage: { minX: -4.3, maxX: 4.3, minZ: -6.6, maxZ: -4.4 },
     terrain, desks, furniture, props: [{ kind: 'trash', x: -7.2, z: -6.3 }, { kind: 'trash', x: 5.6, z: 3.4 }, { kind: 'bucket', door: 0 }],
     mounts: [
       { x: -3.2, y: STAGE + 2.4, z: -6.96, ry: 0 }, { x: 3.6, y: STAGE + 2.1, z: -6.96, ry: 0 },

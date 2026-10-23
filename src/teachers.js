@@ -66,4 +66,37 @@ export const BOSSES = [
     intro: ['校長親自來了！！', '他的話會追著你跑'], sfx: 'chord',
   },
 ];
-export const teacherById = (id) => TEACHERS.find(t => t.id === id) || BOSSES.find(t => t.id === id) || TEACHERS[0];
+// 會考委員會三人組：只在活動中心出現，三人同時站上舞台。每人兩個弱點、兩格血，倒一個其餘加班變快，只剩一個會下台追人。
+export const COMMITTEE = {
+  id: 'committee', name: '會考委員會', wpHp: 3, intro: ['會考委員會來了！！', '三位監考官上台。鐘響時要蹲下'], sfx: 'tattle',
+  members: [
+    {
+      id: 'chief', name: '主考官', short: '主考', boss: true, group: 'committee', move: 'stage', chase: true, speed: 1.4, attack: 'planes', planesKey: 'papers', interval: 3.2,
+      specials: [{ kind: 'collect', every: 14 }], enterTo: [0, -4.7],
+      style: { top: '#4b3f6b', bottom: '#2b2622', pants: true, suit: true, hair: 'bald', hairColor: '#8a8a8a', tie: '#2f6fd1' },
+      wp: [
+        { key: 'glasses', label: '老花眼鏡', local: [0, 1.86, 0], r: 0.3, color: 0x9fd3f2, size: [0.3, 0.1, 0.03], lost: ['老花眼鏡掉了！', '主考官看不清，考卷亂飛'] },
+        { key: 'papers', label: '考卷', local: [-0.4, 1.3, 0], r: 0.32, color: 0xffffff, size: [0.3, 0.36, 0.04], lost: ['考卷散了一地！', '不會再喊收卷'] },
+      ],
+    },
+    {
+      id: 'timer', name: '監考官（碼表）', short: '監考A', boss: true, group: 'committee', move: 'stage', chase: true, speed: 1.8, attack: 'planes', interval: 4.2,
+      specials: [{ kind: 'countdown', every: 12 }], enterTo: [-2.6, -5.3],
+      style: { top: '#5a4e47', bottom: '#2b2622', pants: true, suit: true, hair: 'short', hairColor: '#2b2622', tie: '#d8432b' },
+      wp: [
+        { key: 'stopwatch', label: '碼表', local: [0, 1.45, 0], r: 0.3, color: 0x7a8794, size: [0.16, 0.16, 0.05], lost: ['碼表摔壞了！', '不會再倒數盯人'] },
+        { key: 'tie', label: '領帶', local: [0, 1.75, 0], r: 0.24, color: 0xd8432b, size: [0.1, 0.5, 0.03], lost: ['領帶被射掉了！', '監考官不好意思，走慢了'] },
+      ],
+    },
+    {
+      id: 'stamper', name: '監考官（印章）', short: '監考B', boss: true, group: 'committee', move: 'stage', chase: true, speed: 1.3, attack: 'planes', interval: 4.8,
+      specials: [{ kind: 'stamp', every: 11 }], enterTo: [2.6, -5.3],
+      style: { top: '#2b3a67', bottom: '#2b3a67', pants: true, suit: true, hair: 'bun', hairColor: '#3a2a2a', tie: '#f4e27a' },
+      wp: [
+        { key: 'stamp', label: '印章', local: [0.5, 1.9, 0], r: 0.3, color: 0xd8432b, size: [0.14, 0.26, 0.14], lost: ['印章飛了！', '不會再蓋不及格'] },
+        { key: 'badge', label: '名牌', local: [-0.3, 1.5, 0], r: 0.26, color: 0xffffff, size: [0.26, 0.14, 0.02], lost: ['名牌掉了！', '沒人知道她是誰，丟得慢'] },
+      ],
+    },
+  ],
+};
+export const teacherById = (id) => TEACHERS.find(t => t.id === id) || BOSSES.find(t => t.id === id) || COMMITTEE.members.find(t => t.id === id) || TEACHERS[0];

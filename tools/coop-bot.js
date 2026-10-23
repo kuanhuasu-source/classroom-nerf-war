@@ -30,7 +30,7 @@ window.__bot = (() => {
       }
       let aim = null;
       if (target) { const pos = target.group.position; const prev = prevPos.get(target.id) || pos.clone(); const vel = pos.clone().sub(prev).multiplyScalar(60); const dist = eye.distanceTo(pos); aim = pos.clone().addScaledVector(vel, dist / 32); aim.y = 0.78 * target.group.scale.y + dist * dist * 0.0029; }
-      else if (g.teacher && !g.teacher.defeated) { const t2 = g.teacher; const key = Object.keys(t2.wp).find(k2 => t2.wp[k2].hp > 0); if (key) { t2.group.updateMatrixWorld(true); const w = t2.wpWorld(key); if (!g.world.segmentBlocked(eye, w)) aim = w; } }
+      else if ((g.teachers || []).some(t => !t.defeated)) { const t2 = g.teachers.find(t => !t.defeated); const key = Object.keys(t2.wp).find(k2 => t2.wp[k2].hp > 0); if (key) { t2.group.updateMatrixWorld(true); const w = t2.wpWorld(key); if (!g.world.segmentBlocked(eye, w)) aim = w; } }
       for (const s of g.students) prevPos.set(s.id, s.group.position.clone());
       // teammate down? go revive
       const mate = role === 'host' ? g.remote : g.hostFigure;

@@ -3,7 +3,7 @@ import { CFG, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { Draw } from './draw.js';
 import { PaperFigure } from './paperfigure.js';
-import { TEACHERS, BOSSES, teacherById } from './teachers.js';
+import { TEACHERS, BOSSES, COMMITTEE, teacherById } from './teachers.js';
 
 // ============================================================
 //  Teacher boss — one of four subjects, each with her own attack, movement and weak points
@@ -17,7 +17,9 @@ export class Teacher extends PaperFigure {
     this.group.position.set(spawn.x, game.world.heightAt(spawn.x, spawn.z), spawn.z);
     this.remote = !!opts.remote;
     this.L = this.world.layout;
-    this.state = 'enter'; this.timer = 0; this.path = this.remote ? [] : this.world.path(this.group.position, { x: 0.9, z: this.L.front });
+    const enterTo = def.enterTo ? { x: def.enterTo[0], z: def.enterTo[1] } : { x: 0.9, z: this.L.front };
+    this.state = 'enter'; this.timer = 0; this.path = this.remote ? [] : this.world.path(this.group.position, enterTo);
+    this.overtime = false; this.alone = false; // committee: colleagues fell
     this.throwTimer = 2.5; this.pauseTimer = 0; this.rage = 0; this.throwIdx = 0; this.glideT = 0; this.special = null;
     this.specials = (def.specials || (def.special ? [{ kind: def.special, every: def.specialEvery }] : [])).map(sp => ({ ...sp, t: sp.every }));
     if (def.scale) this.group.scale.setScalar(def.scale);
@@ -56,6 +58,8 @@ export class Teacher extends PaperFigure {
     if (this.def.id === 'pe' && !this.has('cap')) s *= 0.5;
     if (this.def.id === 'math' && !this.has('book')) s *= 0.6;
     if (this.def.id === 'principal' && this.rage > 0) s *= 1.6;
+    if (this.def.id === 'timer' && !this.has('tie')) s *= 0.7;
+    if (this.overtime) s *= 1.2;
     return s;
   }
   update(dt) {
@@ -84,6 +88,8 @@ export class Teacher extends PaperFigure {
       let iv = this.def.interval * (this.game.diff ? this.game.diff.teacherMul : 1);
       if (this.def.id === 'music' && !this.has('sheet')) iv *= 1.6;
       if (this.def.id === 'math' && !this.has('glasses')) iv *= 1.35;
+      if (this.def.id === 'stamper' && !this.has('badge')) iv *= 1.5;
+      if (this.overtime) iv *= 0.7;
       this.throwTimer = fired ? iv : iv * 0.6;
     }
     this.face(this.game.camera.position);
@@ -102,7 +108,15 @@ export class Teacher extends PaperFigure {
     const p = this.group.position;
     const L = this.L, gx = L.w / 2 - 2.8;
     if (this.state === 'enter') { if (this.followPath(dt, this.moveSpeed())) return true; this.state = 'roam'; this.pauseTimer = 1; this.glideT = Math.asin(clamp(p.x / gx, -1, 1)); return false; }
-    switch (this.def.move) {
+    const style = this.alone && this.def.chase ? 'pace' : this.def.move;
+    switch (style) {
+      case 'stage': { // wanders between spots on the stage
+        if (this.followPath(dt, this.moveSpeed())) return true;
+        this.pauseTimer -= dt;
+        const S = L.stage || { minX: -L.w / 2 + 1, maxX: L.w / 2 - 1, minZ: -L.d / 2 + 0.6, maxZ: L.front + 0.15 };
+        if (this.pauseTimer <= 0) { this.path = this.world.path(p, { x: rand(S.minX, S.maxX), z: rand(S.minZ, S.maxZ) }); this.pauseTimer = rand(1.2, 2.6); }
+        return false;
+      }
       case 'glide': { // sways along the front of the room like she is conducting
         this.glideT += dt * 0.55;
         const nx = Math.sin(this.glideT) * gx, nz = L.front + Math.sin(this.glideT * 2.4) * 0.22;
@@ -124,7 +138,7 @@ export class Teacher extends PaperFigure {
         if (this.followPath(dt, this.moveSpeed())) return true;
         this.pauseTimer -= dt;
         if (this.pauseTimer <= 0) {
-          const advance = Math.random() < 0.35;
+          const advance = Math.random() < (this.alone ? 0.7 : 0.35);
           const tx = advance ? clamp(player.pos.x + rand(-2, 2), -L.w / 2 + 1, L.w / 2 - 1) : rand(-L.w / 2 + 1.5, L.w / 2 - 1.5);
           const tz = advance ? clamp(player.pos.z - 2.5, -L.d / 2 + 0.6, 1.5) : rand(-L.d / 2 + 0.6, L.front + 0.15);
           this.path = this.world.path(p, { x: tx, z: tz }); this.pauseTimer = rand(1.5, 3);
@@ -156,6 +170,25 @@ export class Teacher extends PaperFigure {
       g.message('校長要頒獎了……', '別站在他旁邊', 1.4);
       return;
     }
+    if (kind === 'collect') { // 收卷：3 秒內誰開槍誰被記一筆；全場慢動作
+      if (!this.has('papers')) return;
+      this.special = { kind: 'collect', phase: 'windup', t: 1.0, shots: null, punished: new Set() };
+      Audio.tattle(); g.netEvent({ t: 'sfx', n: 'tattle' }); g.message('主考官：收卷！', '接下來 3 秒不要開槍', 1.6);
+      return;
+    }
+    if (kind === 'countdown') { // 倒數：盯住一個人，5 秒內沒躲好就連丟三張考卷
+      if (!this.has('stopwatch')) return;
+      this.special = { kind: 'countdown', t: CFG.committee.countdown, target: player, ringT: 0 };
+      Audio.whistle(); g.netEvent({ t: 'sfx', n: 'whistle' });
+      g.message(`監考官盯上${player === g.player ? '你' : (player.skin ? player.skin.name : '隊友')}了！`, '5 秒內蹲到掩體後面', 2);
+      return;
+    }
+    if (kind === 'stamp') { // 不及格：往一個人腳下蓋章，留下會扣血的紅圈
+      if (!this.has('stamp')) return;
+      this.special = { kind: 'stamp', phase: 'windup', t: 1.2, target: player.pos.clone(), ringT: 0 };
+      Audio.boing(); g.message('監考官要蓋「不及格」了！', '紅圈會留在地上，別站進去', 1.6);
+      return;
+    }
     if (kind === 'charge') {
       if (!this.has('whistle')) return;
       this.special = { kind: 'charge', phase: 'windup', t: 1.0, target: player.pos.clone() };
@@ -169,6 +202,42 @@ export class Teacher extends PaperFigure {
   }
   updateSpecial(dt, player) {
     const s = this.special, g = this.game, p = this.group.position;
+    if (s.kind === 'collect') {
+      s.t -= dt; this.mesh.rotation.z = Math.sin(performance.now() / 60) * 0.06;
+      if (s.phase === 'windup') { if (s.t <= 0) { s.phase = 'hold'; s.t = CFG.committee.collectHold; g.slowT = CFG.committee.collectHold; s.shots = new Map(g.activeTargets().map(pl => [pl, pl.shots])); g.spawnWave(p, 7, 1.0, 0xf4e27a); } return false; }
+      for (const pl of g.activeTargets()) { const was = s.shots.get(pl); if (was !== undefined && pl.shots > was && !s.punished.has(pl)) { s.punished.add(pl); pl.hurtCd = 0; pl.hurt(); g.message('收卷時間還開槍，記一筆！', '主考官瞪著你', 1.4); } }
+      if (s.t <= 0) { this.special = null; g.slowT = 0; }
+      return false;
+    }
+    if (s.kind === 'countdown') {
+      s.t -= dt; s.ringT -= dt;
+      const tgt = s.target;
+      if (s.ringT <= 0) { s.ringT = 0.5; g.spawnRing(tgt.pos, 0.7, 0xd8432b); }
+      if (s.t <= 0) {
+        const eye = new THREE.Vector3(p.x, p.y + 1.6, p.z);
+        const hidden = tgt.sitting || tgt.crouching || tgt.crouch || this.world.segmentBlocked(eye, tgt.eyePos());
+        if (hidden) g.message('躲過了！', '監考官找不到人', 1.4);
+        else {
+          const { from, dir } = this.aimAt('stopwatch', tgt, 12, 1.5, 0.02), up = new THREE.Vector3(0, 1, 0);
+          for (let i = 0; i < 3; i++) g.darts.fire(from.clone(), dir.clone().applyAxisAngle(up, (i - 1) * 0.12), 12, 'teacher', 'plane');
+          Audio.chalkThrow(); g.message('時間到！三張考卷飛過來', '', 1.4);
+        }
+        this.special = null;
+      }
+      return false;
+    }
+    if (s.kind === 'stamp') {
+      s.t -= dt; s.ringT -= dt;
+      if (s.ringT <= 0) { s.ringT = 0.4; g.spawnRing(s.target, CFG.committee.stampRadius, 0xd8432b); }
+      this.mesh.rotation.z = Math.sin(performance.now() / 45) * 0.1;
+      if (s.t <= 0) {
+        Audio.blast(); g.netEvent({ t: 'sfx', n: 'blast' });
+        g.addZone(s.target, CFG.committee.stampRadius, CFG.committee.stampLife, 'fail');
+        for (let i = 0; i < 6; i++) { const a = Math.random() * Math.PI * 2; g.spawnDebris(s.target, 0xd8432b, [0.1, 0.02, 0.1], new THREE.Vector3(Math.cos(a) * rand(1, 2.5), rand(2, 4), Math.sin(a) * rand(1, 2.5)), 2); }
+        this.special = null; this.pauseTimer = 0.5;
+      }
+      return false;
+    }
     if (s.kind === 'broadcast') {
       s.t -= dt;
       if (s.phase === 'windup') { this.mesh.rotation.z = Math.sin(performance.now() / 50) * 0.08; if (s.t <= 0) { s.phase = 'wave'; s.t = 1.1; g.spawnWave(p, 5.0, 1.1, 0xd8432b); Audio.blast(); g.netEvent({ t: 'sfx', n: 'blast' }); } return false; }
@@ -256,9 +325,9 @@ export class Teacher extends PaperFigure {
         }
         Audio.sing(); g.netEvent({ t: 'sfx', n: 'sing' }); return true;
       }
-      case 'planes': { // report cards folded into paper planes
-        const n = this.has('reports') ? 3 : 1;
-        const { from, dir } = this.aimAt('reports', player, 11, 1.5, 0.04);
+      case 'planes': { // report cards (or exam papers) folded into paper planes
+        const key = this.def.planesKey || 'reports', n = this.has(key) ? 3 : 1;
+        const { from, dir } = this.aimAt(key, player, 11, 1.5, this.def.id === 'chief' && !this.has('glasses') ? 0.2 : 0.04);
         const up = new THREE.Vector3(0, 1, 0);
         for (let i = 0; i < n; i++) { const a = n === 1 ? 0 : (i - 1) * 0.22; g.darts.fire(from.clone(), dir.clone().applyAxisAngle(up, a), 11, 'teacher', 'plane'); }
         Audio.chalkThrow(); return true;
@@ -314,7 +383,7 @@ export class Teacher extends PaperFigure {
   defeat() {
     this.defeated = true; this.special = null; this.flags.mood = 'cry'; this.setTexture(Draw.teacher(this.def, this.flags)); this.path = [];
     Audio.teacher();
-    this.game.onWin();
+    this.game.onTeacherDefeated(this);
   }
   dispose() { this.debris.forEach(d => this.scene.remove(d.mesh)); this.debris = []; super.dispose(); }
 }
