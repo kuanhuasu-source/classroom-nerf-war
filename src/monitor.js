@@ -29,7 +29,7 @@ export class Monitor extends PaperFigure {
   }
   noticeShot(who = this.game.player) {
     if (this.state === 'cry' || this.rest > 0 || this.strokeCd > 0 || !this.canSee(who)) return;
-    this.strokeCd = CFG.monitor.strokeCooldown; this.game.stat(who === this.game.player ? 'host' : 'guest', 'strokes');
+    this.strokeCd = CFG.monitor.strokeCooldown; this.game.stat(who === this.game.player ? 'host' : who.slot, 'strokes');
     this.addStroke(1, who === this.game.player ? '班長記你一筆！' : '班長記了' + (who.skin ? who.skin.name : '隊友') + '一筆！');
   }
   addStroke(n, text) {

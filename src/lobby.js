@@ -5,7 +5,7 @@ import { $ } from './ui.js';
 export function initLobby(game) {
   const q = new URLSearchParams(location.search);
   const peerOpts = q.get('peer') === 'local' ? { host: 'localhost', port: 9000, path: '/', secure: false } : null;
-  let transport = null, reconnectTimer = 0;
+  let transport = null;
   const status = (t) => { $('lobby-status').textContent = t; };
   const show = (mode) => {
     $('menu-buttons').hidden = mode !== 'menu'; $('lobby').hidden = mode === 'menu';
@@ -13,7 +13,7 @@ export function initLobby(game) {
   };
   const leave = () => { if (transport) { transport.close(); transport = null; } game.detachTransport(); show('menu'); };
   // the single-file build (Claude Artifact) runs in a sandbox without WebRTC: solo only
-  if (import.meta.env.VITE_SOLO_ONLY === '1') { $('btn-host').hidden = true; $('btn-join-open').hidden = true; $('menu-note').textContent = '建議用電腦與滑鼠遊玩。雙人連線模式在網站版才有。'; }
+  if (import.meta.env.VITE_SOLO_ONLY === '1') { $('btn-host').hidden = true; $('btn-join-open').hidden = true; $('menu-note').textContent = '建議用電腦與滑鼠遊玩。連線模式（最多四人）在網站版才有。'; }
 
   // difficulty: remembered per browser
   const NOTES = { easy: '少一點同學、準度低、一次只有一個同學開火，每清一波回 2 顆心。', normal: '同時最多兩個同學開火，每清一波回 1 顆心。', hard: '原本的難度：人多、準、四個同學同時射你，不回血。' };
@@ -32,10 +32,17 @@ export function initLobby(game) {
     leave(); show('host');
     const code = roomCode(); $('lobby-code').textContent = code; status('正在開房間……');
     transport = new PeerTransport(peerOpts);
+    const roster = () => {
+      const names = game.lobbyNames();
+      if (!names.length) status('房間開好了。把房號告訴隊友（最多三個人），等他們進來。');
+      else status(`${names.join('、')}連上了（${names.length}/3）。人到齊就按「開始」。`);
+      $('btn-begin').hidden = !names.length;
+    };
+    game.onLobbyChange = roster;
     transport.onStatus((s, info) => {
-      if (s === 'listening') status('房間開好了。把房號告訴隊友，等她進來。');
-      else if (s === 'open') { status('小美連上了！按「開始」就上課……不，開戰。'); $('btn-begin').hidden = false; clearTimeout(reconnectTimer); game.onPeerOpen(); }
-      else if (s === 'closed') { status('隊友斷線了，30 秒內用同一個房號可以回來。'); game.onPeerClosed(); reconnectTimer = setTimeout(() => game.onPeerGone(), 30000); }
+      if (s === 'listening') roster();
+      else if (s === 'open') game.onPeerOpen(info);
+      else if (s === 'closed') { game.onPeerClosed(info); if (game.state === 'menu') roster(); else status('有人斷線了，30 秒內用同一個房號可以回來。'); }
       else if (s === 'error') status(info);
     });
     game.attachTransport('host', transport);
@@ -47,10 +54,12 @@ export function initLobby(game) {
     const code = normalizeCode($('join-code').value); if (code.length !== 4) { status('房號是四個字母。'); return; }
     if (transport) { transport.close(); transport = null; }
     transport = new PeerTransport(peerOpts);
+    game.onWelcome = (m) => status(`連上了！你是${m.name}，等房主按開始。`);
+    game.onFull = () => status('這間教室滿了（最多四個人），找別的房號。');
     transport.onStatus((s, info) => {
       if (s === 'connecting') status('連線中……');
-      else if (s === 'open') status('連上了！等房主按開始。');
-      else if (s === 'closed') { status('房主離開了教室。'); game.onPeerClosed(); }
+      else if (s === 'open') { status('連上了，正在報到……'); game.sendHello(); }
+      else if (s === 'closed') { status('房主離開了教室。'); game.onPeerClosed(info); }
       else if (s === 'error') status(info);
     });
     game.attachTransport('guest', transport);

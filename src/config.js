@@ -28,17 +28,23 @@ export const DESK_ROWS = [-2.2, -1.1, 0.0, 1.1, 2.2];
 export const DOORS = [{ x: 5.6, z: -3.3 }, { x: 5.6, z: 3.3 }];
 export const PLAYER_START = new THREE.Vector3(-5.0, 0, 3.7);
 export const NET = { snapHz: 15, inputHz: 20 };
-export const PLAYER_SKINS = {
-  host: { name: '小明', v: { skin: '#f6d6b8', shirt: '#9fd3f2', hair: 0, hairColor: '#2b2622' } },
-  guest: { name: '小美', v: { skin: '#f3c9ad', shirt: '#f4e27a', hair: 1, hairColor: '#4a2f1d' } },
-};
+// up to four kids in a room: the host and three guests, each with a fixed look and name
+export const PLAYERS = [
+  { slot: 'host', name: '小明', v: { skin: '#f6d6b8', shirt: '#9fd3f2', hair: 0, hairColor: '#2b2622' } },
+  { slot: 'g1', name: '小美', v: { skin: '#f3c9ad', shirt: '#f4e27a', hair: 1, hairColor: '#4a2f1d' } },
+  { slot: 'g2', name: '阿強', v: { skin: '#e9c39c', shirt: '#b7e3a1', hair: 2, hairColor: '#2b2622' } },
+  { slot: 'g3', name: '小芳', v: { skin: '#f6d6b8', shirt: '#f7a8c4', hair: 0, hairColor: '#5a3a1e' } },
+];
+export const skinOf = (slot) => PLAYERS.find(p => p.slot === slot) || PLAYERS[0];
+export const GUEST_SLOTS = ['g1', 'g2', 'g3'];
+export const PLAYER_SKINS = { host: PLAYERS[0], guest: PLAYERS[1] };
 // Difficulty presets. maxShooters is the big one: how many students may be firing at once.
 export const DIFFICULTY = {
   easy:   { label: '簡單', waves: [2, 3, 3, 4, 4, 5], enemyHp: 2, spread: 1.8, minSpread: 1.4, maxShooters: 1, spawnGap: 2.0, healPerWave: 2, burstMax: 2, teacherMul: 1.5, peekDelay: 0.9, dartSpeed: 12, firstShotMul: 2.5, bossChance: 0.1, hideMul: 1.5 },
   normal: { label: '普通', waves: [3, 4, 4, 5, 5, 6], enemyHp: 2, spread: 1.5, minSpread: 1.0, maxShooters: 2, spawnGap: 1.5, healPerWave: 1, burstMax: 2, teacherMul: 1.2, peekDelay: 0.7, dartSpeed: 14, firstShotMul: 2.0, bossChance: 0.25, hideMul: 1.3 },
   hard:   { label: '困難', waves: [3, 4, 5, 6, 7, 8], enemyHp: 3, spread: 1.1, minSpread: 0.7, maxShooters: 3, spawnGap: 0.9, healPerWave: 0, burstMax: 3, teacherMul: 1.0, peekDelay: 0.5, dartSpeed: 18, firstShotMul: 1.3, bossChance: 0.4, hideMul: 1.0 },
 };
-export const COOP = { offerSeconds: 10, waveMul: 1.4, supplyAmount: 30, lowInterval: 8, starters: { host: 'mag', guest: 'magnet' }, waves: [4, 6, 6, 8, 8, 9], teacherWpHp: 4, reinforcements: 3, sitSeconds: 12, reviveRadius: 1.2, reviveHp: 2, invuln: 1.5 };
+export const COOP = { offerSeconds: 10, waveMul: 1.4, supplyAmount: 30, lowInterval: 8, maxGuests: 3, starters: { host: 'mag', g1: 'magnet', g2: 'rapid', g3: 'bag' }, waves: [4, 6, 6, 8, 8, 9], teacherWpHp: 4, reinforcements: 3, sitSeconds: 12, reviveRadius: 1.2, reviveHp: 2, invuln: 1.5 };
 export const EMOTES = ['', '掩護我！', '我沒彈了！', '惡霸醒了！', '班長來了！'];
 export const BUFFS = [
   { id: 'double', name: '滿分考卷', effect: '分數雙倍', dur: 12 },

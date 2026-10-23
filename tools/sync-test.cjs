@@ -16,9 +16,9 @@ const { chromium } = require('playwright');
   const relay = async () => {
     const h = await host.evaluate(() => window.__transport.drain());
     const g = await guest.evaluate(() => window.__transport.drain());
-    for (const m of h) bytes += m.length; msgs += h.length;
-    await guest.evaluate((list) => list.forEach(s => window.__transport.receive(s)), h);
-    await host.evaluate((list) => list.forEach(s => window.__transport.receive(s)), g);
+    for (const m of h) bytes += m.str.length; msgs += h.length;
+    await guest.evaluate((list) => list.forEach(s => { const t = window.__transport; if (!s.to || s.to === t.id) t.receive(s.str, s.from); }), h);
+    await host.evaluate((list) => list.forEach(s => { const t = window.__transport; if (!s.to || s.to === t.id) t.receive(s.str, s.from); }), g);
   };
   const stepBoth = async (secs) => {
     const ticks = Math.round(secs * 10);
@@ -31,7 +31,7 @@ const { chromium } = require('playwright');
   };
   const snapOf = (page) => page.evaluate(() => { const g = window.__game; return { state: g.state, wave: g.wave, score: g.score, students: g.students.map(s => [s.id, +s.group.position.x.toFixed(1), +s.group.position.z.toFixed(1), s.texState, s.alive ? 1 : 0]), darts: g.darts.list.length, teacher: !!g.teacher, bully: g.bully ? [g.bully.di, g.bully.state] : null, ball: g.ball ? g.ball.mesh.position.toArray().map(v => +v.toFixed(1)) : null, monitor: g.monitor ? [+g.monitor.group.position.x.toFixed(1), g.monitor.state, g.monitor.strokes] : null, items: g.items.map(i => [i.id, i.buff.id, i.mi]), milks: g.milks.length, hud: { wave: document.getElementById('wave').textContent, score: document.getElementById('score').textContent, left: document.getElementById('left').textContent, hp: document.getElementById('hud-hp').textContent } }; });
   // host starts; the guest should flip to playing via the 'start' event
-  await host.click('#btn-start'); await relay();
+  await relay(); await host.click('#btn-start'); await relay();
   console.log('guest state after start:', await guest.evaluate(() => window.__game.state), '| host features:', await host.evaluate(() => JSON.stringify(window.__game.features)));
   await host.evaluate(() => { const g = window.__game; g.player.hurt = function () { this.hp = 5; }; });
   await stepBoth(8);

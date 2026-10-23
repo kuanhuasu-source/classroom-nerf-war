@@ -14,7 +14,7 @@ import { Player } from './player.js';
 import { UI, $ } from './ui.js';
 import { RemotePlayer } from './remoteplayer.js';
 import { serializeSnapshot, applySnapshot } from './net/snapshot.js';
-import { NET, PLAYER_SKINS, COOP, EMOTES, DIFFICULTY } from './config.js';
+import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, COOP, EMOTES, DIFFICULTY } from './config.js';
 import { TEACHERS, BOSSES, COMMITTEE } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
@@ -28,7 +28,12 @@ export class Game {
   constructor(opts = {}) {
     // role: 'solo' (default), 'host' (runs the simulation and streams it) or 'guest' (renders snapshots)
     this.role = opts.role || 'solo'; this.isHost = this.role !== 'guest'; this.transport = opts.transport || null;
-    this.seq = 0; this.events = []; this.snapTimer = 0; this.inputTimer = 0; this.pending = []; this.remote = null; this.hostFigure = null;
+    this.seq = 0; this.events = []; this.snapTimer = 0; this.inputTimer = 0; this.pending = []; this.hostFigure = null;
+    // host side: one RemotePlayer per guest slot (g1..g3); conns maps a transport connection to its slot, pids remembers slots across reconnects
+    this.remotes = new Map(); this.conns = new Map(); this.pids = new Map(); this.goneTimers = new Map();
+    // guest side: the host's figure plus the other guests
+    this.others = new Map(); this.mySlot = 'host'; this.buffs = {};
+    this.pid = opts.pid || Game.persistentId();
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -47,7 +52,7 @@ export class Game {
     this.player = new Player(this);
     this.students = []; this.teachers = []; this.slowT = 0; this.bellT = 0; this.bell = null; this.bossName = ''; this.milks = []; this.milkTimer = 0; this.milkTex = Draw.tex(Draw.milkCarton());
     this.bully = null; this.ball = null; this.monitor = null; this.debris = []; this.rings = [];
-    this.items = []; this.itemTimer = 0; this.myBuff = null; this.remoteBuff = null; this.zones = []; this.props = [];
+    this.items = []; this.itemTimer = 0; this.zones = []; this.props = [];
     this.state = 'menu'; this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.spawnTimer = 0; this.waveTimer = 0; this.difficultySpread = 1;
     this.level = 'normal'; this.diff = DIFFICULTY.normal; this.offer = null; this.offerTimer = 0; this.supplyTimer = 0;
     this.forceTeacher = new URLSearchParams(location.search).get('teacher'); // debug: ?teacher=pe
@@ -58,32 +63,67 @@ export class Game {
     this.renderer.setAnimationLoop(() => this.frame());
   }
   // ---------- connection lifecycle (called by the lobby) ----------
+  static persistentId() {
+    try { let id = localStorage.getItem('cnw-pid'); if (!id) { id = Math.random().toString(36).slice(2, 10); localStorage.setItem('cnw-pid', id); } return id; } catch (e) { return Math.random().toString(36).slice(2, 10); }
+  }
   attachTransport(role, transport) {
     this.role = role; this.isHost = role !== 'guest'; this.transport = transport;
-    this.darts.localWho = role === 'guest' ? 'guest' : 'host';
-    transport.onMessage(str => this.onNet(str));
-    if (this.isHost && !this.remote) this.remote = new RemotePlayer(this, PLAYER_SKINS.guest);
-    if (!this.isHost && this.remote) { this.remote.dispose(); this.remote = null; }
+    this.mySlot = 'host'; this.darts.localWho = 'host';
+    transport.onMessage((str, from) => this.onNet(str, from));
+    if (!this.isHost) this.sendHello();
   }
   detachTransport() {
     if (this.transport && this.transport.close) this.transport.close();
-    this.transport = null; this.role = 'solo'; this.isHost = true; this.darts.localWho = 'host';
-    if (this.remote) { this.remote.dispose(); this.remote = null; }
+    this.transport = null; this.role = 'solo'; this.isHost = true; this.mySlot = 'host'; this.darts.localWho = 'host';
+    for (const r of this.remotes.values()) r.dispose(); this.remotes.clear(); this.conns.clear(); this.pids.clear();
+    for (const t of this.goneTimers.values()) clearTimeout(t); this.goneTimers.clear();
+    for (const o of this.others.values()) o.dispose(); this.others.clear();
     if (this.hostFigure) { this.hostFigure.dispose(); this.hostFigure = null; }
   }
-  onPeerOpen() { // the guest (re)connected: if we are already playing, pull them straight in
-    this.fullSnapNext = true;
-    if (this.isHost && this.transport && (this.state === 'playing' || this.state === 'paused')) {
-      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1 }));
-      if (this.remote) this.transport.send(JSON.stringify({ t: 'restore', taken: this.remote.up.taken, ammo: this.remote.ammo, res: this.remote.reserve, hp: this.remote.hp, buff: this.remoteBuff || null }));
-      this.message('小美回來了！', '', 1.5);
+  // ---- who is who ----
+  get remote() { return this.remotes.values().next().value || null; } // the first guest (two-player code paths and tests)
+  remoteBySlot(slot) { return this.remotes.get(slot) || null; }
+  remoteList() { return [...this.remotes.values()].filter(r => r.group.visible && !r.offline); }
+  connOf(slot) { for (const [c, s] of this.conns) if (s === slot) return c; return null; }
+  sendTo(slot, msg) { const c = this.connOf(slot); if (c && this.transport) this.transport.send(JSON.stringify(msg), c); }
+  lobbyNames() { return [...this.remotes.values()].filter(r => !r.offline && this.connOf(r.slot)).map(r => r.skin.name); }
+  sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid })); }
+  // a guest said hello on a connection: give it its slot (the same one if it came back) and catch it up
+  onHello(from, pid) {
+    let slot = this.pids.get(pid);
+    if (!slot) {
+      const used = new Set(this.pids.values());
+      slot = GUEST_SLOTS.slice(0, COOP.maxGuests).find(s => !used.has(s));
+      if (!slot) { this.transport.send(JSON.stringify({ t: 'full' }), from); return; }
+      this.pids.set(pid, slot);
     }
+    for (const [c, s] of [...this.conns]) if (s === slot && c !== from) this.conns.delete(c);
+    this.conns.set(from, slot);
+    let r = this.remotes.get(slot); const back = !!r;
+    if (!r) { r = new RemotePlayer(this, skinOf(slot)); this.remotes.set(slot, r); }
+    r.offline = false; r.group.visible = true;
+    if (this.goneTimers.has(slot)) { clearTimeout(this.goneTimers.get(slot)); this.goneTimers.delete(slot); }
+    this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
+    this.fullSnapNext = true;
+    if (this.state === 'playing' || this.state === 'paused') {
+      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1 }), from);
+      this.transport.send(JSON.stringify({ t: 'restore', taken: r.up.taken, ammo: r.ammo, res: r.reserve, hp: r.hp, buff: this.buffs[slot] || null }), from);
+      if (!this.stats[slot]) this.stats[slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 };
+      this.message(back ? `${r.skin.name}回來了！` : `${r.skin.name}中途加入了！`, '', 1.5);
+    }
+    if (this.onLobbyChange) this.onLobbyChange();
   }
-  onPeerClosed() {
-    if (this.isHost) { if (this.state === 'playing') this.message('小美斷線了', '30 秒內可以回來', 2.5); if (this.remote) this.remote.offline = true; }
-    else { if (this.state === 'playing' || this.state === 'paused') { this.message('房主離開了教室', '回到首頁', 2.5); setTimeout(() => location.reload(), 2500); } }
+  onPeerOpen() { this.fullSnapNext = true; } // the hello that follows does the rest
+  onPeerClosed(connId) {
+    if (this.isHost) {
+      const slot = this.conns.get(connId); if (!slot) return; this.conns.delete(connId);
+      const r = this.remotes.get(slot); if (!r) return; r.offline = true;
+      if (this.state === 'playing') this.message(`${r.skin.name}斷線了`, '30 秒內可以回來', 2.5);
+      this.goneTimers.set(slot, setTimeout(() => this.onPeerGone(slot), 30000));
+      if (this.onLobbyChange) this.onLobbyChange();
+    } else if (this.state === 'playing' || this.state === 'paused') { this.message('房主離開了教室', '回到首頁', 2.5); setTimeout(() => location.reload(), 2500); }
   }
-  onPeerGone() { if (this.isHost && this.remote) { this.remote.group.visible = false; this.message('小美回不來了', '你只好自己撐住', 2.5); } }
+  onPeerGone(slot) { const r = this.remotes.get(slot); if (this.isHost && r && r.offline) { r.group.visible = false; this.message(`${r.skin.name}回不來了`, '剩下的人撐住', 2.5); } }
   nextId() { return ++this.seq; }
   // ---------- rooms ----------
   setLayout(id) {
@@ -99,7 +139,7 @@ export class Game {
   }
   setDifficulty(level) { if (DIFFICULTY[level]) { this.level = level; this.diff = DIFFICULTY[level]; } }
   // how many students are currently firing; the difficulty caps this
-  shootersBusy() { let n = 0; for (const s of this.students) if (s.alive && s.state === 'shoot') n++; return n >= this.diff.maxShooters + (this.coop ? 1 : 0) + (this.leaderAlive() ? 1 : 0); }
+  shootersBusy() { let n = 0; for (const s of this.students) if (s.alive && s.state === 'shoot') n++; return n >= this.diff.maxShooters + (this.coop ? this.players().length - 1 : 0) + (this.leaderAlive() ? 1 : 0); }
   leaderAlive() { return this.students.some(s => s.alive && s.leader); }
   // the wave leader (班長) fell: the rest panic for a while
   onLeaderDown(s) {
@@ -108,26 +148,32 @@ export class Game {
     this.message('班長出局了！', '其他人慌了，趁現在', 2);
   }
   // everyone the enemies can go after (host side); the guest counts once connected and not sitting
-  players() { const l = [this.player]; if (this.isHost && this.remote && this.remote.group.visible && !this.remote.offline) l.push(this.remote); return l; }
+  players() { return this.isHost ? [this.player, ...this.remoteList()] : [this.player]; }
   activeTargets() { const l = this.players().filter(p => !p.sitting); return l.length ? l : [this.player]; }
-  stat(who, key, n = 1) { if (this.stats && this.stats[who]) this.stats[who][key] = (this.stats[who][key] || 0) + n; }
+  stat(who, key, n = 1) { if (!this.stats) return; if (!this.stats[who]) this.stats[who] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; this.stats[who][key] = (this.stats[who][key] || 0) + n; }
   // one player ran out of hearts
   onPlayerDown(p) {
     if (!this.coop) { if (p === this.player) this.onLose(); return; }
     const near = this.world.desks.filter(d => !d.occupant).sort((a, b) => Math.hypot(a.seat.x - p.pos.x, a.seat.z - p.pos.z) - Math.hypot(b.seat.x - p.pos.x, b.seat.z - p.pos.z));
     const seat = near.length ? near[0].seat : { x: p.pos.x, z: p.pos.z };
     p.sitDown(seat);
-    const name = p === this.player ? '你' : this.remote.skin.name;
+    const name = p === this.player ? '你' : p.skin.name;
     this.message(`${name}被打到回座位了`, '隊友走過去按 E 可以救', 2);
     if (this.players().every(x => x.sitting)) this.onLose();
+  }
+  // someone standing at `at` pulls up the nearest sitting player within reach; returns that player
+  reviveNear(at, except) {
+    const sitting = this.players().filter(x => x !== except && x.sitting && Math.hypot(x.pos.x - at.x, x.pos.z - at.z) < COOP.reviveRadius);
+    if (!sitting.length) return null;
+    sitting.sort((a, b) => Math.hypot(a.pos.x - at.x, a.pos.z - at.z) - Math.hypot(b.pos.x - at.x, b.pos.z - at.z));
+    const t = sitting[0]; t.standUp(COOP.reviveHp); return t;
   }
   tryRevive() {
     if (this.state !== 'playing') return;
     if (this.isHost) {
-      const r = this.remote;
-      if (r && r.sitting && !this.player.sitting && Math.hypot(r.pos.x - this.player.pos.x, r.pos.z - this.player.pos.z) < COOP.reviveRadius) {
-        r.standUp(COOP.reviveHp); this.stat('host', 'revives'); this.addScore(200); this.message(`你把${r.skin.name}拉起來了！`, '+200', 1.6); this.netEvent({ t: 'sfx', n: 'wave' });
-      }
+      if (this.player.sitting) return;
+      const r = this.reviveNear(this.player.pos, this.player);
+      if (r) { this.stat('host', 'revives'); this.addScore(200); this.message(`你把${r.skin.name}拉起來了！`, '+200', 1.6); this.netEvent({ t: 'sfx', n: 'wave' }); }
     } else if (this.transport) this.transport.send(JSON.stringify({ t: 'revive' }));
   }
   emote(n) {
@@ -137,21 +183,25 @@ export class Game {
     if (this.isHost) this.netEvent({ t: 'emote', who: 'host', n });
     else if (this.transport) this.transport.send(JSON.stringify({ t: 'emote', n }));
   }
-  netEvent(e) { if (this.isHost && this.transport) this.events.push(e); }
+  netEvent(e, to) { if (this.isHost && this.transport) { if (to) e.to = to; this.events.push(e); } }
   // ---------- network ----------
-  onNet(str) {
+  onNet(str, from = 'peer') {
     let m; try { m = JSON.parse(str); } catch (e) { return; }
     if (this.isHost) {
-      if (m.t === 'input' && this.remote) this.remote.applyInput(m);
-      else if (m.t === 'fire') { if (this.remote && this.remote.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = 'guest'; if (this.monitor && this.remote) this.monitor.noticeShot(this.remote); }
-      else if (m.t === 'pick') { if (this.remote) { const u = takeUpgrade(this.remote.up, m.id); if (u && this.remote.up.healFull) { this.remote.maxHp = CFG.player.hp + this.remote.up.maxHpBonus; this.remote.hp = this.remote.maxHp; this.remote.up.healFull = false; } if (this.remote.up.refill) { this.remote.reserve += this.remote.up.refill; this.remote.up.refill = 0; } } if (this.offer) { this.offer.picked.guest = true; this.maybeCloseOffer(); } }
+      if (m.t === 'hello') { this.onHello(from, m.pid); return; }
+      const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
+      if (m.t === 'input') r.applyInput(m);
+      else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; if (this.monitor) this.monitor.noticeShot(r); }
+      else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = CFG.player.hp + r.up.maxHpBonus; r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
       else if (m.t === 'revive') {
-        const r = this.remote;
-        if (r && this.player.sitting && !r.sitting && Math.hypot(r.pos.x - this.player.pos.x, r.pos.z - this.player.pos.z) < COOP.reviveRadius) { this.player.standUp(COOP.reviveHp); this.stat('guest', 'revives'); this.addScore(200); this.message(`${r.skin.name}把你拉起來了！`, '+200', 1.6); }
+        if (r.sitting) return; const t = this.reviveNear(r.pos, r);
+        if (t) { this.stat(slot, 'revives'); this.addScore(200); this.message(`${r.skin.name}把${t === this.player ? '你' : t.skin.name}拉起來了！`, '+200', 1.6); this.netEvent({ t: 'sfx', n: 'wave' }); }
       }
-      else if (m.t === 'emote') { const text = EMOTES[m.n]; if (text && this.remote) { this.remote.say(text); this.ui.message(`${this.remote.skin.name}：${text}`, '', 1.2); } }
+      else if (m.t === 'emote') { const text = EMOTES[m.n]; if (text) { r.say(text); this.ui.message(`${r.skin.name}：${text}`, '', 1.2); this.netEvent({ t: 'emote', who: slot, n: m.n }); } }
     } else {
-      if (m.t === 'start') { if (m.map) this.setLayout(m.map); this.startGuest(); if (m.coop && !m.resume) this.giveStarter('guest'); }
+      if (m.t === 'welcome') { this.mySlot = m.slot; this.darts.localWho = m.slot; if (this.onWelcome) this.onWelcome(m); }
+      else if (m.t === 'full') { if (this.onFull) this.onFull(); }
+      else if (m.t === 'start') { if (m.map) this.setLayout(m.map); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
       else if (m.t === 'restore') { // back after a disconnect: the host remembers what we had
         const p = this.player;
         for (const [id, n] of Object.entries(m.taken || {})) for (let i = 0; i < n; i++) { const u = takeUpgrade(p.up, id); if (u) { p.up.refill = 0; p.up.healFull = false; p.applyUpgrade(u); } }
@@ -183,7 +233,7 @@ export class Game {
     this.darts.clear(); this.world.setTally(0); this.zones.forEach(z => { this.scene.remove(z.mesh); (z.puffs || []).forEach(p => this.scene.remove(p)); }); this.zones = [];
     this.props.forEach(p => p.dispose()); this.props = (this.world.layout.props || []).map((d, i) => new Prop(this, d, i));
     this.camera.remove(this.player.gun); this.player = new Player(this);
-    this.wave = 0; this.score = 0; this.kills = 0; this.myBuff = null; this.bossPhase = false; this.pending = []; this.ui.closeOffer(); this.ui.upgrades([]); this.ui.buff(null);
+    this.wave = 0; this.score = 0; this.kills = 0; this.buffs = {}; this.bossPhase = false; this.pending = []; this.ui.closeOffer(); this.ui.upgrades([]); this.ui.buff(null);
   }
   guestStep(dt) {
     this.player.update(dt);
@@ -193,6 +243,7 @@ export class Game {
     for (const t of this.teachers) t.update(dt);
     if (this.bully) this.bully.update(dt); if (this.monitor) this.monitor.update(dt); if (this.ball) this.ball.update(dt);
     if (this.hostFigure) this.hostFigure.update(dt);
+    for (const o of this.others.values()) o.update(dt);
     for (const i of this.items) i.update(dt);
     if (this.myBuff) { this.myBuff.t -= dt; if (this.myBuff.t <= 0) { this.myBuff = null; this.ui.buff(null); } else this.ui.buff(this.myBuff); }
     for (const m of this.milks) { m.t += dt; m.mesh.position.y = m.baseY + Math.sin(m.t * 3) * 0.02; m.mesh.rotation.y = m.t * 1.2; }
@@ -293,11 +344,11 @@ export class Game {
     Audio.init(); Audio.resume();
     this.setLayout(this.pickLayout());
     this.reset();
-    this.coop = !!(this.transport && this.transport.open); this.fullSnapNext = true; this.sentRestVersion = -1;
-    this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }, guest: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
-    if (this.remote) { this.remote.hp = this.remote.maxHp; this.remote.sitting = false; this.remote.setTex('normal'); this.remote.targetSy = 1; }
+    this.coop = this.isHost && this.remoteList().length > 0; this.fullSnapNext = true; this.sentRestVersion = -1;
+    this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
+    for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
     if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0 }));
-    if (this.coop) { this.giveStarter('host'); if (this.remote) { const u = takeUpgrade(this.remote.up, COOP.starters.guest); if (u) { this.remote.up.refill = 0; this.remote.up.healFull = false; } } }
+    if (this.coop) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
     this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(1); this.ui.left(0); this.ui.boss(false);
@@ -322,14 +373,14 @@ export class Game {
     if (f.bully) this.bully = new Bully(this);
     if (f.monitor) this.monitor = new Monitor(this);
     if (f.ball) this.ball = new Dodgeball(this);
-    this.items.forEach(i => i.dispose()); this.items = []; this.itemTimer = rand(8, 20); this.myBuff = null; this.remoteBuff = null; this.ui.buff(null);
+    this.items.forEach(i => i.dispose()); this.items = []; this.itemTimer = rand(8, 20); this.buffs = {}; this.ui.buff(null);
     this.zones.forEach(z => { this.scene.remove(z.mesh); (z.puffs || []).forEach(p => this.scene.remove(p)); }); this.zones = [];
     this.props.forEach(p => p.dispose()); this.props = (this.world.layout.props || []).map((d, i) => new Prop(this, d, i));
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
     this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0;
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
-    if (this.remote) { this.remote.up = freshUpRemote(); this.remote.maxHp = CFG.player.hp; }
+    for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = CFG.player.hp; }
   }
   pause() {
     if (this.state !== 'playing') return;
@@ -352,7 +403,7 @@ export class Game {
   startWave() {
     this.wave++; this.ui.wave(this.wave); Audio.wave();
     for (const p of this.props) if (p.kind === 'bucket' && p.state !== 'up') { p.reset(); this.netEvent({ t: 'prop', id: p.id, st: 'up' }); }
-    const base = this.diff.waves[this.wave - 1], count = this.coop ? Math.round(base * COOP.waveMul) : base;
+    const np = this.players().length, base = this.diff.waves[this.wave - 1], count = this.coop ? Math.round(base * (1 + (COOP.waveMul - 1) * (np - 1))) : base;
     this.difficultySpread = Math.max(this.diff.minSpread, this.diff.spread - (this.wave - 1) * 0.1);
     this.message(`第 ${this.wave} 波`, `${count} 位同學衝進來了`, 2);
     const doors = this.world.layout.doors;
@@ -374,7 +425,7 @@ export class Game {
     return stageOk && Math.random() < 0.5 ? COMMITTEE : pick(BOSSES);
   }
   spawnTeacher(def = this.pickBoss()) {
-    const door = this.world.layout.doors[0], extra = this.coop ? 1 : 0;
+    const door = this.world.layout.doors[0], extra = this.coop ? Math.min(2, this.players().length - 1) : 0;
     if (def.members) { // the whole committee walks in together
       def.members.forEach((m, i) => this.teachers.push(new Teacher(this, { x: door.x, z: door.z + (i - 1) * 0.7 }, { def: m, wpHp: def.wpHp + extra })));
       this.bellT = CFG.committee.bellEvery;
@@ -414,19 +465,18 @@ export class Game {
   // ---------- upgrades ----------
   // co-op: each kid brings one thing from home — 小明 a big magazine, 小美 magnet gloves
   giveStarter(who) {
-    const id = COOP.starters[who], u = takeUpgrade(this.player.up, id); if (!u) return;
+    const id = COOP.starters[who] || COOP.starters.host, u = takeUpgrade(this.player.up, id); if (!u) return;
     this.player.up.refill = 0; this.player.up.healFull = false; this.player.applyUpgrade(u);
     this.ui.upgrades(Object.entries(this.player.up.taken).map(([k, n]) => upgradeById(k).name + (n > 1 ? '×' + n : '')));
-    const other = who === 'host' ? COOP.starters.guest : COOP.starters.host;
-    this.message(`你帶了${u.name}`, `隊友帶的是${upgradeById(other).name}`, 2.5);
+    this.message(`你帶了${u.name}`, '每個人從家裡帶的東西都不一樣', 2.5);
   }
   openOffer() {
     if (!this.isHost) return;
     const mine = offerFor(this.player.up);
-    const guestIn = !!(this.remote && this.remote.group.visible && !this.remote.offline);
-    if (guestIn) { const theirs = offerFor(this.remote.up); this.transport.send(JSON.stringify({ t: 'offer', ids: theirs })); }
-    if (this.coop) { // no pause with a partner: a compact panel and 10 seconds to decide, play goes on
-      this.offer = { picked: { host: false, guest: !guestIn }, t: COOP.offerSeconds, live: true };
+    const picked = { host: false };
+    for (const r of this.remoteList()) { picked[r.slot] = false; this.sendTo(r.slot, { t: 'offer', ids: offerFor(r.up) }); }
+    if (this.coop) { // no pause with partners: a compact panel and 10 seconds to decide, play goes on
+      this.offer = { picked, t: COOP.offerSeconds, live: true };
       this.ui.offer(mine.map(upgradeById), (id) => this.pickUpgrade(id), COOP.offerSeconds);
       return;
     }
@@ -452,7 +502,7 @@ export class Game {
   }
   maybeCloseOffer() {
     const o = this.offer; if (!o) return;
-    if (o.picked.host && o.picked.guest) this.closeOffer();
+    if (Object.values(o.picked).every(Boolean)) this.closeOffer();
   }
   closeOffer() {
     const live = this.offer && this.offer.live;
@@ -563,7 +613,7 @@ export class Game {
       else { // during the waves a pencil case shows up nearby whenever someone is running low
         this.lowTimer = (this.lowTimer || 0) - dt;
         const low = this.players().some(pl => pl.ammo + pl.reserve < CFG.supply.lowAt);
-        if (low && this.lowTimer <= 0 && this.milks.filter(m => m.kind === 'ammo').length < (this.coop ? 2 : 1)) { this.lowTimer = this.coop ? COOP.lowInterval : CFG.supply.lowInterval; this.spawnSupply(true); }
+        if (low && this.lowTimer <= 0 && this.milks.filter(m => m.kind === 'ammo').length < this.players().length) { this.lowTimer = this.coop ? COOP.lowInterval : CFG.supply.lowInterval; this.spawnSupply(true); }
       }
     }
     const pp = this.player.pos;
@@ -585,14 +635,17 @@ export class Game {
       }
     }
   }
-  addScore(n, who = this.lastShooter || 'host') { const b = who === 'guest' ? this.remoteBuff : this.myBuff; if (b && b.id === 'double') n *= 2; this.score += n; this.ui.score(this.score); }
-  // buffs belong to the kid who shot the item; slow motion is the exception, the whole room slows for everyone
-  hasBuff(id, who = 'host') { const b = who === 'guest' ? this.remoteBuff : this.myBuff; return !!(b && b.id === id); }
-  worldSlow() { return this.hasBuff('slow') || this.hasBuff('slow', 'guest') || this.slowT > 0; }
-  applyBuff(b, who = 'host') {
+  addScore(n, who = this.lastShooter || 'host') { const b = this.buffs[who]; if (b && b.id === 'double') n *= 2; this.score += n; this.ui.score(this.score); }
+  // buffs belong to the kid who shot the item (keyed by slot); slow motion is the exception, the whole room slows for everyone
+  get myBuff() { return this.buffs[this.mySlot] || null; }
+  set myBuff(v) { if (v) this.buffs[this.mySlot] = v; else delete this.buffs[this.mySlot]; }
+  hasBuff(id, who = this.mySlot) { const b = this.buffs[who]; return !!(b && b.id === id); }
+  worldSlow() { return Object.values(this.buffs).some(b => b.id === 'slow') || this.slowT > 0 || !!this.remoteSlow; }
+  applyBuff(b, who = this.mySlot) {
     const buff = { id: b.id, name: b.name, effect: b.effect, t: b.dur };
-    if (who === 'guest') { this.remoteBuff = buff; this.netEvent({ t: 'buff', b: buff }); this.message(`小美射中${b.name}！`, `${b.effect} ${b.dur} 秒`, 2); return; }
-    this.myBuff = buff; this.ui.buff(buff); Audio.item();
+    this.buffs[who] = buff;
+    if (who !== this.mySlot) { const r = this.remotes.get(who); this.netEvent({ t: 'buff', b: buff }, who); this.message(`${r ? r.skin.name : '隊友'}射中${b.name}！`, `${b.effect} ${b.dur} 秒`, 2); return; }
+    this.ui.buff(buff); Audio.item();
     this.message(`射中${b.name}！`, `${b.effect} ${b.dur} 秒`, 2);
   }
   spawnItem() {
@@ -604,17 +657,16 @@ export class Game {
   updateItems(dt, realDt) {
     if (this.state === 'playing') { this.itemTimer -= dt; if (this.itemTimer <= 0 && this.items.length < 1) { this.itemTimer = rand(CFG.items.interval[0], CFG.items.interval[1]); this.spawnItem(); } }
     for (let i = this.items.length - 1; i >= 0; i--) if (!this.items[i].update(dt)) { this.items[i].dispose(); this.items.splice(i, 1); }
-    if (this.myBuff) { this.myBuff.t -= realDt; if (this.myBuff.t <= 0) { this.myBuff = null; this.ui.buff(null); } else this.ui.buff(this.myBuff); }
-    if (this.remoteBuff) { this.remoteBuff.t -= realDt; if (this.remoteBuff.t <= 0) this.remoteBuff = null; }
+    for (const k of Object.keys(this.buffs)) { const b = this.buffs[k]; b.t -= realDt; if (b.t <= 0) { delete this.buffs[k]; if (k === this.mySlot) this.ui.buff(null); } else if (k === this.mySlot) this.ui.buff(b); }
     if (this.slowT > 0) this.slowT -= realDt;
   }
   message(a, b, d) { this.ui.message(a, b, d); this.netEvent({ t: 'msg', a, b, d }); }
-  hitmark() { const who = this.lastShooter || 'host'; this.stat(who, 'hits'); if (who === 'guest') { if (this.remote) this.remote.hits++; this.netEvent({ t: 'hitmark' }); } else { this.ui.hitmark(); this.player.hits++; } }
+  hitmark() { const who = this.lastShooter || 'host'; this.stat(who, 'hits'); if (who !== 'host') { const r = this.remotes.get(who); if (r) r.hits++; this.netEvent({ t: 'hitmark' }, who); } else { this.ui.hitmark(); this.player.hits++; } }
   onLose() {
     this.state = 'over'; Audio.lose();
-    this.netEvent({ t: 'over', win: 0, title: this.coop ? '兩個人都被罰坐了' : '你被罰坐了！', sub: '沒有人能來救，全班歡呼。', stats: this.coopStats() });
+    this.netEvent({ t: 'over', win: 0, title: this.coop ? '全部的人都被罰坐了' : '你被罰坐了！', sub: '沒有人能來救，全班歡呼。', stats: this.coopStats() });
     if (document.pointerLockElement) document.exitPointerLock();
-    if (this.coop) this.showOver('兩個人都被罰坐了', '沒有人能來救，全班歡呼。', false);
+    if (this.coop) this.showOver('全部的人都被罰坐了', '沒有人能來救，全班歡呼。', false);
     else this.showOver('你被罰坐了！', pick(['泡棉彈打到五次，乖乖回座位。', '同學們歡呼，你默默舉起白旗。', '下次記得蹲在課桌後面。']), false);
   }
   onWin() {
@@ -632,9 +684,10 @@ export class Game {
     const st = remoteStats || this.coopStats();
     if (st) {
       const acc = (h, s) => s ? Math.min(100, Math.round(h / s * 100)) + '%' : '0%';
-      $('st-kills').textContent = `${st.host.name} ${st.host.kills}・${st.guest.name} ${st.guest.kills}`;
-      $('st-acc').textContent = `${acc(st.host.hits, st.host.shots)}・${acc(st.guest.hits, st.guest.shots)}`;
-      $('over-sub').textContent = sub + ` 互相救了 ${st.host.revives + st.guest.revives} 次，被班長記了 ${st.host.strokes + st.guest.strokes} 筆。`;
+      $('st-kills').textContent = st.map(p => `${p.name} ${p.kills}`).join('・');
+      $('st-acc').textContent = st.map(p => acc(p.hits, p.shots)).join('・');
+      $('st-kills').style.fontSize = $('st-acc').style.fontSize = st.length > 2 ? '18px' : '';
+      $('over-sub').textContent = sub + ` 互相救了 ${st.reduce((a, p) => a + p.revives, 0)} 次，被班長記了 ${st.reduce((a, p) => a + p.strokes, 0)} 筆。`;
     } else {
       $('st-kills').textContent = this.kills;
       $('st-acc').textContent = this.player.shots ? Math.min(100, Math.round(this.player.hits / this.player.shots * 100)) + '%' : '0%';
@@ -642,9 +695,9 @@ export class Game {
   }
   coopStats() {
     if (!this.coop || !this.stats) return null;
-    const h = this.stats.host, g = this.stats.guest;
-    return { host: { name: PLAYER_SKINS.host.name, kills: h.kills, hits: this.player.hits, shots: this.player.shots, revives: h.revives, strokes: h.strokes },
-      guest: { name: PLAYER_SKINS.guest.name, kills: g.kills, hits: this.remote ? this.remote.hits : 0, shots: this.remote ? this.remote.shots : 0, revives: g.revives, strokes: g.strokes } };
+    const h = this.stats.host, out = [{ slot: 'host', name: PLAYERS[0].name, kills: h.kills, hits: this.player.hits, shots: this.player.shots, revives: h.revives, strokes: h.strokes }];
+    for (const r of this.remotes.values()) { const g = this.stats[r.slot] || { kills: 0, revives: 0, strokes: 0 }; out.push({ slot: r.slot, name: r.skin.name, kills: g.kills, hits: r.hits, shots: r.shots, revives: g.revives, strokes: g.strokes }); }
+    return out;
   }
   // ---------- loop ----------
   frame() {
@@ -658,7 +711,7 @@ export class Game {
   step(realDt) {
     if (!this.isHost) return this.guestStep(realDt);
     this.player.update(realDt);
-    if (this.remote) this.remote.update(realDt);
+    for (const r of this.remotes.values()) r.update(realDt);
     const dt = realDt * (this.worldSlow() ? CFG.items.slowScale : 1); // the world slows down, the players do not
     this.updateItems(dt, realDt);
     // spawning & waves
@@ -697,7 +750,7 @@ export class Game {
     this.darts.update(dt, (d, prev) => {
       if (d.kind && d.kind.endsWith('Break')) { if (d.kind === 'tubeBreak') this.addZone(d.pos, 1.1, 4); return false; }
       const p = d.mesh.position;
-      for (let i = this.items.length - 1; i >= 0; i--) if (this.items[i].testDart(d)) { this.applyBuff(this.items[i].buff, d.who === 'guest' ? 'guest' : 'host'); this.items[i].dispose(); this.items.splice(i, 1); return true; }
+      for (let i = this.items.length - 1; i >= 0; i--) if (this.items[i].testDart(d)) { this.applyBuff(this.items[i].buff, d.who || 'host'); this.items[i].dispose(); this.items.splice(i, 1); return true; }
       for (const pr of this.props) if (pr.testDart(d)) return true;
       if (d.kind === 'dart' && this.ball && this.ball.testDart(d)) return true;
       if (d.kind === 'dart' && this.bully && this.bully.testHit(p)) { this.bully.poke(d.owner, d.shooter, d.who); return true; }
@@ -724,14 +777,15 @@ export class Game {
       return false;
     });
     // the guest's scavenging and milk are judged here, where the darts and cartons live
-    if (this.remote && this.remote.group.visible && !this.remote.sitting && this.state === 'playing') {
-      const got = this.darts.pickupNear(this.remote.pos, CFG.gun.pickupRadius * this.remote.up.pickupMul, Math.max(0, CFG.gun.reserveMax + this.remote.up.reserveBonus - this.remote.reserve));
-      if (got > 0) { this.remote.reserve += got; this.netEvent({ t: 'pickup', n: got }); }
+    for (const rp of this.remoteList()) {
+      if (rp.sitting || this.state !== 'playing') continue;
+      const got = this.darts.pickupNear(rp.pos, CFG.gun.pickupRadius * rp.up.pickupMul, Math.max(0, CFG.gun.reserveMax + rp.up.reserveBonus - rp.reserve));
+      if (got > 0) { rp.reserve += got; this.netEvent({ t: 'pickup', n: got }, rp.slot); }
       for (let i = this.milks.length - 1; i >= 0; i--) {
         const m = this.milks[i];
-        if (Math.hypot(m.mesh.position.x - this.remote.pos.x, m.mesh.position.z - this.remote.pos.z) >= CFG.milk.pickupRadius || Math.abs(m.mesh.position.y - this.remote.pos.y) >= 1.6) continue;
-        if (m.kind === 'ammo') { if (this.remote.reserve >= CFG.gun.reserveMax + this.remote.up.reserveBonus) continue; this.scene.remove(m.mesh); this.milks.splice(i, 1); this.remote.reserve += this.supplyAmount(); this.netEvent({ t: 'pickup', n: this.supplyAmount() }); break; }
-        if (this.remote.hp < this.remote.maxHp) { this.scene.remove(m.mesh); this.milks.splice(i, 1); this.remote.hp = Math.min(this.remote.maxHp, this.remote.hp + CFG.milk.heal); this.stat('guest', 'milk'); this.netEvent({ t: 'drink' }); break; }
+        if (Math.hypot(m.mesh.position.x - rp.pos.x, m.mesh.position.z - rp.pos.z) >= CFG.milk.pickupRadius || Math.abs(m.mesh.position.y - rp.pos.y) >= 1.6) continue;
+        if (m.kind === 'ammo') { if (rp.reserve >= CFG.gun.reserveMax + rp.up.reserveBonus) continue; this.scene.remove(m.mesh); this.milks.splice(i, 1); rp.reserve += this.supplyAmount(); this.netEvent({ t: 'pickup', n: this.supplyAmount() }, rp.slot); break; }
+        if (rp.hp < rp.maxHp) { this.scene.remove(m.mesh); this.milks.splice(i, 1); rp.hp = Math.min(rp.maxHp, rp.hp + CFG.milk.heal); this.stat(rp.slot, 'milk'); this.netEvent({ t: 'drink' }, rp.slot); break; }
       }
     }
     if (this.transport) {

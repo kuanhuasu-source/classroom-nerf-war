@@ -61,13 +61,13 @@ export class TouchControls {
     for (const n of ['touchstart', 'touchmove', 'touchend']) document.addEventListener(n, block, { passive: false });
     for (const n of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(n, e => e.preventDefault(), { passive: false });
     document.addEventListener('dblclick', e => { if (e.target === game.renderer.domElement || (e.target.closest && e.target.closest('#touch'))) e.preventDefault(); });
-    $('menu-note').textContent = '手機／平板：左半邊拖曳走路，右半邊拖曳轉視角、點一下射一發，右下的貼紙按鈕射擊、重裝、蹲。兩個人一起打：一個人開房間，另一個輸入房號。';
+    $('menu-note').textContent = '手機／平板：左半邊拖曳走路，右半邊拖曳轉視角、點一下射一發，右下的貼紙按鈕射擊、重裝、蹲。最多四個人一起打：一個人開房間，其他人輸入房號。';
   }
   // called every frame: the revive button only when a partner needs it, the shout strip only in co-op
   update() {
     if (!this.on) return;
-    const g = this.game, mate = g.isHost ? g.remote : g.hostFigure;
-    $('tc-revive').style.display = g.coop && mate && mate.sitting && !g.player.sitting ? 'flex' : 'none';
+    const g = this.game, mates = g.isHost ? [...g.remotes.values()] : [g.hostFigure, ...g.others.values()];
+    $('tc-revive').style.display = g.coop && mates.some(m => m && m.sitting) && !g.player.sitting ? 'flex' : 'none';
     document.body.classList.toggle('coop', !!g.coop);
   }
   reset() { this.move.x = this.move.z = 0; this.stick = null; this.look = null; this.firing = false; if (this.on) this.stickEl.style.display = 'none'; }

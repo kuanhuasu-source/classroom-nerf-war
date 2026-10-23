@@ -32,7 +32,7 @@ export class Bully extends PaperFigure {
   poke(owner, shooter, who) {
     if (this.state !== 'sleep') return;
     if (this.deep > 0) { if (this.deepMsgCd <= 0 && owner === 'player') { this.deepMsgCd = 4; this.game.message('惡霸睡得太沉了', '打他沒反應', 1.2); } return; }
-    const p = (who === 'guest' && this.game.remote ? this.game.remote.pos : this.game.player.pos);
+    const rp = who !== 'host' && this.game.remoteBySlot ? this.game.remoteBySlot(who) : null; const p = rp ? rp.pos : this.game.player.pos;
     if (owner === 'player') this.target = new THREE.Vector3(p.x, 0, p.z);
     else if (shooter && shooter.alive) this.target = shooter.group.position.clone().setY(0);
     else { const s = this.game.students.filter(x => x.alive); this.target = s.length ? pick(s).group.position.clone().setY(0) : new THREE.Vector3(p.x, 0, p.z); }

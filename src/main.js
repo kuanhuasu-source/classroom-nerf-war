@@ -9,10 +9,12 @@ async function boot() {
   // real rooms (PeerJS) come in the next step.
   window.__teachers = TEACHERS; window.__bosses = BOSSES;
   const mapParam = new URLSearchParams(location.search).get('map'); // handy for tests and for the ?teacher=id debug switch
-  const role = new URLSearchParams(location.search).get('role');
+  const q = new URLSearchParams(location.search), role = q.get('role');
   if (role === 'host' || role === 'guest') {
-    const transport = new QueueTransport(); window.__transport = transport;
-    window.__game = new Game({ role, transport }); if (mapParam) window.__game.mapChoice = mapParam;
+    // a guest page is ?role=guest&slot=g1 (g1 by default); its persistent id is derived from the slot so tests are deterministic
+    const id = role === 'host' ? 'host' : (q.get('slot') || 'g1');
+    const transport = new QueueTransport(id); window.__transport = transport;
+    window.__game = new Game({ role, transport, pid: role === 'host' ? null : 'test-' + id }); if (mapParam) window.__game.mapChoice = mapParam;
     document.getElementById('btn-start').addEventListener('click', () => window.__game.start()); // no lobby in the fake link
   } else { window.__game = new Game(); initLobby(window.__game); }
   if (mapParam) window.__game.mapChoice = mapParam;

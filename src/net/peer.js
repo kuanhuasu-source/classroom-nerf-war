@@ -6,19 +6,23 @@ const PREFIX = 'classroom-nerf-war-';
 export function roomCode() { let s = ''; for (let i = 0; i < 4; i++) s += LETTERS[Math.floor(Math.random() * LETTERS.length)]; return s; }
 export function normalizeCode(s) { return (s || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); }
 
-// PeerJS point-to-point transport. One host, one guest. Status events:
-//   'listening' (host is waiting), 'connecting', 'open', 'closed', 'error' (with a reason)
+// PeerJS star transport: the host keeps one connection per guest, a guest has one connection to the host.
+// Status events: 'listening' (host is waiting), 'connecting', 'open' (info = connection id),
+// 'closed' (info = connection id), 'error' (with a reason)
 export class PeerTransport {
   constructor(peerOpts = null) {
-    this.peerOpts = peerOpts; this.peer = null; this.conn = null;
+    this.peerOpts = peerOpts; this.peer = null; this.conns = new Map(); // id -> DataConnection
     this.handlers = []; this.statusHandlers = []; this.closed = false; this.role = null; this.code = null;
-    this.lastRecv = 0; this.beat = null;
+    this.beat = null;
   }
   onMessage(fn) { this.handlers.push(fn); }
   onStatus(fn) { this.statusHandlers.push(fn); }
   emit(status, info) { for (const h of this.statusHandlers) h(status, info); }
-  send(str) { if (this.conn && this.conn.open) { try { this.conn.send(str); } catch (e) { /* dropped */ } } }
-  get open() { return !!(this.conn && this.conn.open); }
+  send(str, to) {
+    for (const [id, c] of this.conns) { if (to && id !== to) continue; if (c.open) { try { c.send(str); } catch (e) { /* dropped */ } } }
+  }
+  get open() { for (const c of this.conns.values()) if (c.open) return true; return false; }
+  get count() { let n = 0; for (const c of this.conns.values()) if (c.open) n++; return n; }
   makePeer(id) {
     const p = this.peerOpts ? new Peer(id, this.peerOpts) : new Peer(id);
     p.on('error', err => this.emit('error', this.reason(err)));
@@ -37,11 +41,7 @@ export class PeerTransport {
     this.role = 'host'; this.code = code;
     this.peer = this.makePeer(PREFIX + code);
     this.peer.on('open', () => this.emit('listening', code));
-    this.peer.on('connection', c => {
-      // a second connection replaces the first (that is how a guest reconnects)
-      if (this.conn && this.conn !== c) { try { this.conn.close(); } catch (e) { /* ignore */ } }
-      this.attach(c);
-    });
+    this.peer.on('connection', c => this.attach(c)); // every guest gets its own connection; the game sorts out who is who
   }
   join(code) {
     this.role = 'guest'; this.code = code; this.emit('connecting', code);
@@ -52,23 +52,26 @@ export class PeerTransport {
     });
   }
   attach(c) {
-    this.conn = c; this.lastRecv = performance.now();
-    const opened = () => { this.lastRecv = performance.now(); this.startHeartbeat(); this.emit('open'); };
+    const id = this.role === 'guest' ? 'host' : c.peer + '#' + (++PeerTransport.seq);
+    c.lastRecv = performance.now(); this.conns.set(id, c);
+    const opened = () => { c.lastRecv = performance.now(); this.startHeartbeat(); this.emit('open', id); };
     c.on('open', opened);
-    c.on('data', d => { this.lastRecv = performance.now(); if (d === 'ping' || (d && d.t === 'ping')) return; const s = typeof d === 'string' ? d : JSON.stringify(d); for (const h of this.handlers) h(s); });
-    c.on('close', () => this.dropped(c));
+    c.on('data', d => { c.lastRecv = performance.now(); if (d === 'ping' || (d && d.t === 'ping')) return; const s = typeof d === 'string' ? d : JSON.stringify(d); for (const h of this.handlers) h(s, id); });
+    c.on('close', () => this.dropped(id));
     c.on('error', err => this.emit('error', this.reason(err)));
     if (c.open) opened();
   }
   // WebRTC can take a long time to notice the other side is gone, so we ping every second
   startHeartbeat() {
-    clearInterval(this.beat);
+    if (this.beat) return;
     this.beat = setInterval(() => {
-      const c = this.conn; if (!c) { clearInterval(this.beat); return; }
-      if (performance.now() - this.lastRecv > 5000) { this.dropped(c); try { c.close(); } catch (e) { /* ignore */ } return; }
-      if (c.open) { try { c.send('ping'); } catch (e) { /* ignore */ } }
+      for (const [id, c] of this.conns) {
+        if (performance.now() - c.lastRecv > 5000) { this.dropped(id); try { c.close(); } catch (e) { /* ignore */ } continue; }
+        if (c.open) { try { c.send('ping'); } catch (e) { /* ignore */ } }
+      }
     }, 1000);
   }
-  dropped(c) { if (this.conn === c) { this.conn = null; clearInterval(this.beat); this.emit('closed'); } }
-  close() { this.closed = true; clearInterval(this.beat); try { if (this.conn) this.conn.close(); } catch (e) { /* ignore */ } try { if (this.peer) this.peer.destroy(); } catch (e) { /* ignore */ } }
+  dropped(id) { if (this.conns.has(id)) { this.conns.delete(id); this.emit('closed', id); } }
+  close() { this.closed = true; clearInterval(this.beat); this.beat = null; for (const c of this.conns.values()) { try { c.close(); } catch (e) { /* ignore */ } } this.conns.clear(); try { if (this.peer) this.peer.destroy(); } catch (e) { /* ignore */ } }
 }
+PeerTransport.seq = 0;

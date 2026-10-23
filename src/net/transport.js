@@ -1,11 +1,13 @@
-// A transport moves strings between the two ends of a game.
-// QueueTransport is for tests and the in-page fake link; PeerTransport (PeerJS) comes next.
+// A transport moves strings between a host and its guests. Messages carry the sender's id on the
+// way in and an optional recipient on the way out (undefined = everyone).
+// QueueTransport is for tests and the in-page fake link; PeerTransport (PeerJS) is the real one.
 export class QueueTransport {
-  constructor() { this.outbox = []; this.handlers = []; this.closed = false; }
+  constructor(id = 'peer') { this.id = id; this.outbox = []; this.handlers = []; this.closed = false; }
   get open() { return !this.closed; }
-  send(str) { if (!this.closed) this.outbox.push(str); }
+  get count() { return 1; }
+  send(str, to) { if (!this.closed) this.outbox.push({ to: to || null, from: this.id, str }); }
   onMessage(fn) { this.handlers.push(fn); }
-  receive(str) { for (const h of this.handlers) h(str); }
+  receive(str, from = 'peer') { for (const h of this.handlers) h(str, from); }
   drain() { const o = this.outbox; this.outbox = []; return o; }
   close() { this.closed = true; }
 }

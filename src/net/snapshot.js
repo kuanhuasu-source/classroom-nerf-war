@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BUFFS, MOUNTS, PLAYER_SKINS, EMOTES } from '../config.js';
+import { BUFFS, MOUNTS, PLAYER_SKINS, EMOTES, skinOf } from '../config.js';
 import { Audio } from '../audio.js';
 import { Student } from '../student.js';
 import { Teacher } from '../teacher.js';
@@ -19,7 +19,7 @@ export function serializeSnapshot(g) {
     left: g.teachers.length ? '老師' : g.students.filter(s => s.alive).length + g.spawnQueue.length,
     slow: g.worldSlow() ? 1 : 0,
     host: { x: r2(p.pos.x), z: r2(p.pos.z), yaw: r2(p.yaw), eye: r2(p.eye), c: p.crouching ? 1 : 0, hp: p.hp, sit: p.sitting ? 1 : 0, sx: p.seat ? r2(p.seat.x) : 0, sz: p.seat ? r2(p.seat.z) : 0 },
-    guest: g.remote ? { hp: g.remote.hp, mh: g.remote.maxHp, sit: g.remote.sitting ? 1 : 0, sx: g.remote.seat ? r2(g.remote.seat.x) : 0, sz: g.remote.seat ? r2(g.remote.seat.z) : 0, st: r2(g.remote.sitT) } : null,
+    pl: Object.fromEntries([...g.remotes.values()].map(r => [r.slot, { x: r2(r.pos.x), z: r2(r.pos.z), yaw: r2(r.yaw), eye: r2(r.eye), c: r.crouch ? 1 : 0, hp: r.hp, mh: r.maxHp, sit: r.sitting ? 1 : 0, sx: r.seat ? r2(r.seat.x) : 0, sz: r.seat ? r2(r.seat.z) : 0, st: r2(r.sitT), off: r.offline || !r.group.visible ? 1 : 0 }])),
     students: g.students.map(s => s.serialize(g.fullSnapNext)),
     tc: g.teachers.map(t => t.serialize()),
     bully: g.bully ? g.bully.serialize() : null,
@@ -44,14 +44,22 @@ export function applySnapshot(g, s) {
   g.remoteSlow = !!s.slow;
   if (!g.hostFigure) g.hostFigure = new RemotePlayer(g, PLAYER_SKINS.host);
   g.hostFigure.applyInput(s.host);
-  if (s.guest) {
+  const pl = s.pl || {}, mine = pl[g.mySlot];
+  if (mine) {
     const me = g.player;
-    if (s.guest.sit && !me.sitting) me.sitDown({ x: s.guest.sx, z: s.guest.sz }, s.guest.st);
-    else if (!s.guest.sit && me.sitting) me.standUp(s.guest.hp);
-    if (me.sitting) me.sitT = s.guest.st;
-    if (s.guest.hp < me.hp && !me.sitting) { Audio.hurt(); g.ui.vignette(); }
-    me.hp = s.guest.hp; if (s.guest.mh) me.maxHp = s.guest.mh; g.ui.hp(s.guest.hp, me.maxHp);
+    if (mine.sit && !me.sitting) me.sitDown({ x: mine.sx, z: mine.sz }, mine.st);
+    else if (!mine.sit && me.sitting) me.standUp(mine.hp);
+    if (me.sitting) me.sitT = mine.st;
+    if (mine.hp < me.hp && !me.sitting) { Audio.hurt(); g.ui.vignette(); }
+    me.hp = mine.hp; if (mine.mh) me.maxHp = mine.mh; g.ui.hp(mine.hp, me.maxHp);
   }
+  // the other guests, drawn like the host's figure
+  for (const [slot, st] of Object.entries(pl)) {
+    if (slot === g.mySlot) continue;
+    let o = g.others.get(slot); if (!o) { o = new RemotePlayer(g, skinOf(slot)); g.others.set(slot, o); }
+    o.applyInput(st); o.group.visible = !st.off; o.hp = st.hp;
+  }
+  for (const [slot, o] of [...g.others]) if (!pl[slot]) { o.dispose(); g.others.delete(slot); }
   sync(g, 'students', s.students.map(Student.unpack), (st) => new Student(g, { x: st.x, z: st.z }, { remote: true, id: st.id, v: st.v }));
   const tc = s.tc || [];
   while (g.teachers.length > tc.length) g.teachers.pop().dispose();
@@ -73,7 +81,7 @@ export function applySnapshot(g, s) {
   sync(g, 'items', s.items, (it) => new SpecialItem(g, BUFFS.find(b => b.id === it.b), g.world.layout.mounts[it.mi], { remote: true, id: it.id }));
   syncMilks(g, s.milks);
   g.darts.applyState(s.dm, s.ds, s.dx, s.dr);
-  for (const e of s.ev || []) applyEvent(g, e);
+  for (const e of s.ev || []) if (!e.to || e.to === g.mySlot) applyEvent(g, e);
   if ((s.st === 'over' || s.st === 'won') && g.state === 'playing') {
     g.state = s.st; const ov = g.pendingOver; if (s.st === 'won') { Audio.bellOut(); setTimeout(() => Audio.win(), 1800); } else Audio.lose();
     setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); g.showOver(ov ? ov.title : (s.st === 'won' ? '下課！老師投降了' : '全班被罰坐了'), ov ? ov.sub : '', s.st === 'won', ov ? ov.stats : null); }, s.st === 'won' ? 3200 : 0);
@@ -103,7 +111,7 @@ function applyEvent(g, e) {
     case 'wave': g.spawnWave(new THREE.Vector3(e.p[0], 0, e.p[1]), e.r, e.d, e.c); break;
     case 'pickup': { const p = g.player; p.reserve = Math.min(p.reserveCap(), p.reserve + e.n); Audio.pickup(); g.ui.ammo(p.ammo, p.ammo === 0, p.reserve); g.ui.pickFlash(); break; }
     case 'drink': Audio.drink(); g.ui.message('咕嚕咕嚕，喝了鮮奶！', '+1 ♥', 1.6); break;
-    case 'emote': { const text = EMOTES[e.n]; if (text && g.hostFigure) { g.hostFigure.say(text); g.ui.message(`${PLAYER_SKINS.host.name}：${text}`, '', 1.2); } break; }
+    case 'emote': { const text = EMOTES[e.n]; if (!text || e.who === g.mySlot) break; const fig = e.who === 'host' || !e.who ? g.hostFigure : g.others.get(e.who); if (fig) fig.say(text); g.ui.message(`${skinOf(e.who || 'host').name}：${text}`, '', 1.2); break; }
     case 'over': g.pendingOver = e; break;
   }
 }
