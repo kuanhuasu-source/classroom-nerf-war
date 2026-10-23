@@ -210,7 +210,7 @@ body.touch.coop #tc-emote { display: flex; }
       <dt>地上的泡棉彈</dt><dd>走過去就撿起來當備用彈，同學和老師射的也能撿</dd>
       <dt><kbd>E</kbd></dt><dd>連線模式：走到罰坐的隊友旁邊救他</dd>
       <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></dt><dd>連線模式：喊話泡泡（掩護我、我沒彈了、惡霸醒了、班長來了）</dd>
-      <dt><kbd>Esc</kbd></dt><dd>暫停</dd>
+      <dt><kbd>Esc</kbd></dt><dd>暫停（遊戲會進入全螢幕，按 <kbd>F11</kbd> 離開全螢幕會暫停，再按一次就繼續）</dd>
     </dl>
     <div class="row" id="difficulty-row">
       <span class="note">難度</span>
@@ -249,8 +249,8 @@ body.touch.coop #tc-emote { display: flex; }
 <div class="overlay translucent" id="pause" hidden>
   <div class="card">
     <h2>暫停</h2>
-    <p class="sub">老師還沒發現，快回去。</p>
-    <div class="row"><button class="btn blue" id="btn-resume">繼續</button><button class="btn" id="btn-restart-pause" style="background:var(--pencil)">重新開始</button></div>
+    <p class="sub">老師還沒發現，快回去。（按 <kbd>F11</kbd> 也能繼續）</p>
+    <div class="row"><button class="btn blue" id="btn-resume">繼續</button><button class="btn" id="btn-restart-pause" style="background:var(--pencil)">重新開始</button><button class="btn" id="btn-menu-pause" style="background:var(--pencil)">回到主選單</button></div>
   </div>
 </div>
 
@@ -273,7 +273,7 @@ body.touch.coop #tc-emote { display: flex; }
       <div><b id="st-wave">0</b><span>撐到第幾波</span></div>
       <div><b id="st-acc">0%</b><span>命中率</span></div>
     </div>
-    <div class="row"><button class="btn" id="btn-again">再來一局</button></div>
+    <div class="row"><button class="btn" id="btn-again">再來一局</button><button class="btn" id="btn-menu-over" style="background:var(--pencil)">回到主選單</button></div>
   </div>
 </div>
 

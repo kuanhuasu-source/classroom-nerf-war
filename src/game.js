@@ -209,6 +209,7 @@ export class Game {
   bindInput() {
     const canvas = this.renderer.domElement;
     document.addEventListener('keydown', e => {
+      if (e.code === 'F11') { e.preventDefault(); this.toggleFullscreen(); return; }
       if (e.code === 'Escape') { if (this.state === 'playing') this.pause(); return; }
       if (this.ui.offerOpen && /^Digit[1-3]$/.test(e.code)) { const b = $('upgrade-cards').children[+e.code[5] - 1]; if (b) this.pickUpgrade(b.dataset.id); return; }
       if (this.state !== 'playing') return;
@@ -217,7 +218,11 @@ export class Game {
       if (e.code === 'KeyE') this.tryRevive();
       if (/^Digit[1-4]$/.test(e.code)) this.emote(+e.code[5]);
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ControlLeft', 'ShiftLeft'].includes(e.code)) e.preventDefault();
+      // Ctrl is crouch, so Ctrl+S / Ctrl+D / Ctrl+A... must not reach the browser's own shortcuts
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
     });
+    // Ctrl+W / Ctrl+T / Ctrl+N can't be blocked by a page; at least ask before crouch+forward closes the tab
+    window.addEventListener('beforeunload', e => { if (this.state === 'playing') { e.preventDefault(); e.returnValue = ''; } });
     document.addEventListener('keyup', e => { this.player.keys[e.code] = false; });
     window.addEventListener('blur', () => { this.player.keys = {}; this.player.firing = false; });
     document.addEventListener('mousemove', e => {
@@ -235,11 +240,12 @@ export class Game {
     canvas.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('pointerlockchange', () => {
       this.hasLock = document.pointerLockElement === canvas;
-      if (this.hasLock) this.lockFailed = false;
+      if (this.hasLock) { this.lockFailed = false; this.lockFails = 0; this.lockPending = false; }
       else if (this.ignoreUnlock) this.ignoreUnlock = false; // we let go of the mouse on purpose (upgrade cards)
       else if (this.state === 'playing' && !this.ui.offerOpen) this.pause();
     });
     document.addEventListener('pointerlockerror', () => this.onLockFailed());
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) this.pause(); });
     // the start button belongs to the lobby (lobby.js), which decides between solo and a room
     $('btn-resume').addEventListener('click', () => this.resume());
     $('btn-restart-pause').addEventListener('click', () => this.start());
@@ -247,14 +253,39 @@ export class Game {
     if (!this.touch && !this.lockSupported) $('menu-note').textContent = '這台裝置沒有滑鼠鎖定，改用移動滑鼠轉視角。';
   }
   requestLock() {
+    // without a click/key press behind it the browser always says no (the upgrade-card timer, the partner closing the offer):
+    // don't count that as a failure, just ask for a click
+    if (navigator.userActivation && !navigator.userActivation.isActive) { this.ui.message('點一下畫面', '鎖定滑鼠繼續瞄準', 2); return; }
+    this.enterFullscreen();
+    this.lockPending = true;
     try {
       const p = this.renderer.domElement.requestPointerLock();
       if (p && p.catch) p.catch(() => this.onLockFailed());
     } catch (e) { this.onLockFailed(); }
   }
+  // fullscreen + Keyboard Lock (Chrome/Edge) is the only way a page receives Ctrl+W / Ctrl+T / Ctrl+N,
+  // so crouch+forward can't close the tab. Leaving fullscreen (F11 or holding Esc) pauses; a short Esc still pauses too.
+  enterFullscreen() {
+    const el = document.documentElement;
+    if (document.fullscreenElement || !el.requestFullscreen) return;
+    el.requestFullscreen().then(() => {
+      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(() => {});
+    }).catch(() => {}); // no user gesture (e.g. offer closed by the partner) or refused: just stay windowed
+  }
+  // F11 out = pause, F11 in = resume. Resuming runs inside the key press so the mouse can be locked again too.
+  toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else if (this.state === 'paused') this.resume();
+    else if (!this.touch) this.enterFullscreen();
+  }
+  // a refused lock is usually temporary (Chrome refuses for about a second after Esc, or mid fullscreen switch),
+  // so the next click tries again; only a browser that keeps refusing (e.g. a sandboxed iframe) gets the free-cursor mode
   onLockFailed() {
-    if (this.hasLock || this.lockFailed) return;
-    this.lockFailed = true; this.ui.message('無法鎖定滑鼠', '改用移動滑鼠轉視角', 2.5);
+    if (this.hasLock || this.lockFailed || !this.lockPending) return; // promise rejection + pointerlockerror: count once
+    this.lockPending = false;
+    this.lockFails = (this.lockFails || 0) + 1;
+    if (this.lockFails >= 3) { this.lockFailed = true; this.ui.message('無法鎖定滑鼠', '改用移動滑鼠轉視角', 2.5); }
+    else this.ui.message('滑鼠沒鎖住', '點一下畫面再試一次', 2);
   }
   // ---------- flow ----------
   start() {
@@ -309,7 +340,14 @@ export class Game {
     if (this.state !== 'paused') return;
     this.state = 'playing'; $('pause').hidden = true; this.clock.getDelta();
     if (this.lockSupported && !this.lockFailed && !this.touch) this.requestLock();
+    else if (!this.touch) this.enterFullscreen();
     Audio.resume();
+  }
+  toMenu() { // from the pause or game-over screen; the lobby then hangs up any room
+    if (this.isHost) this.reset(); else this.guestReset();
+    this.state = 'menu';
+    $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = true; $('menu').hidden = false;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
   startWave() {
     this.wave++; this.ui.wave(this.wave); Audio.wave();
