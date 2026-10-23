@@ -62,7 +62,8 @@ body {
 #hud-boss .sticker.gone { text-decoration: line-through; opacity: .45; }
 #hud-boss .pips { color: var(--nerf-orange); letter-spacing: 1px; }
 #hud-boss b { font-family: var(--font-hand); font-weight: 400; color: var(--pencil); margin-right: 6px; }
-#hud-boss.many .sticker { font-size: 15px; padding: 3px 10px; }
+#hud-boss.many { flex-wrap: wrap; justify-content: center; max-width: min(72vw, 820px); row-gap: 6px; }
+#hud-boss.many .sticker { font-size: 14px; padding: 3px 9px; white-space: nowrap; }
 #hud-boss .item.gone { text-decoration: line-through; opacity: .45; }
 #hud-boss .dot { color: var(--pencil); margin: 0 5px; }
 #hud-buff { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%) rotate(1.5deg); display: none; background: var(--nerf-blue); color: var(--paper); border-color: var(--ink); font-size: 18px; white-space: nowrap; }
