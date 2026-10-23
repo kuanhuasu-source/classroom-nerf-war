@@ -82,6 +82,7 @@ body {
 #msg small { display: block; font-size: .5em; color: var(--pencil); }
 #vignette { position: absolute; inset: 0; box-shadow: inset 0 0 120px 40px rgba(216, 67, 43, .75); opacity: 0; transition: opacity .5s; }
 #vignette.hit { opacity: 1; transition: none; }
+#dust { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(250, 247, 238, .5) 0%, rgba(240, 236, 224, .95) 100%); transition: opacity .15s; }
 
 /* ---- Overlays ---- */
 .overlay {
@@ -199,6 +200,7 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
   <div id="hitmark">✕</div>
   <div id="msg"></div>
   <div id="vignette"></div>
+  <div id="dust"></div>
 </div>
 
 <div class="overlay" id="menu">

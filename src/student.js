@@ -137,7 +137,7 @@ export class Student extends PaperFigure {
   canSee(player) {
     const from = this.eye(), to = player.eyePos();
     if (from.distanceTo(to) > 11) return false;
-    if (this.game.inZone(from, 'stink') || this.game.inZone(to, 'stink')) return false;
+    if (this.game.inZone(from, 'stink') || this.game.inZone(to, 'stink') || this.game.inZone(from, 'dust') || this.game.inZone(to, 'dust')) return false;
     return !this.world.segmentBlocked(from, to);
   }
   fireAt(player) {

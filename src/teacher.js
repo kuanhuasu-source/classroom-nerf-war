@@ -22,6 +22,8 @@ export class Teacher extends PaperFigure {
     this.overtime = false; this.alone = false; // committee: colleagues fell
     this.throwTimer = 2.5; this.pauseTimer = 0; this.rage = 0; this.throwIdx = 0; this.glideT = 0; this.special = null;
     this.specials = (def.specials || (def.special ? [{ kind: def.special, every: def.specialEvery }] : [])).map(sp => ({ ...sp, t: sp.every }));
+    // the blackboard eraser: every teacher and boss except the exam committee throws one now and then
+    this.eraserOk = def.group !== 'committee'; this.eraserT = CFG.teacher.eraserEvery * (def.boss ? 1.4 : 1) * rand(0.5, 0.9);
     if (def.scale) this.group.scale.setScalar(def.scale);
     this.defeated = false;
     this.wp = {};
@@ -80,6 +82,7 @@ export class Teacher extends PaperFigure {
     else {
       moving = this.updateMove(dt, player);
       for (const sp of this.specials) { sp.t -= dt; if (sp.t <= 0 && !this.special) { sp.t = sp.every; this.startSpecial(player, sp.kind); } }
+      if (this.eraserOk) { this.eraserT -= dt; if (this.eraserT <= 0 && !this.special) { this.eraserT = CFG.teacher.eraserEvery * (this.def.boss ? 1.4 : 1) * rand(0.8, 1.2) * (this.game.diff ? this.game.diff.teacherMul : 1); this.startSpecial(player, 'eraser'); } }
     }
     // ---- ranged attack ----
     this.throwTimer -= (this.rage > 0 ? 2.2 : 1) * dt;
@@ -170,6 +173,11 @@ export class Teacher extends PaperFigure {
       g.message('校長要頒獎了……', '別站在他旁邊', 1.4);
       return;
     }
+    if (kind === 'eraser') { // a lobbed eraser: wherever it lands, a cloud of chalk dust
+      this.special = { kind: 'eraser', t: 0.7, target: player };
+      Audio.scribble(); g.netEvent({ t: 'sfx', n: 'scribble' }); g.message('老師拿起板擦了！', '粉筆灰會讓人看不清楚，快閃', 1.4);
+      return;
+    }
     if (kind === 'collect') { // 收卷：3 秒內誰開槍誰被記一筆；全場慢動作
       if (!this.has('papers')) return;
       this.special = { kind: 'collect', phase: 'windup', t: 1.0, shots: null, punished: new Set() };
@@ -202,6 +210,15 @@ export class Teacher extends PaperFigure {
   }
   updateSpecial(dt, player) {
     const s = this.special, g = this.game, p = this.group.position;
+    if (s.kind === 'eraser') {
+      s.t -= dt; this.mesh.rotation.z = Math.sin(performance.now() / 45) * 0.1;
+      if (s.t <= 0) {
+        const { from, dir } = this.aimAt('eraser', s.target, CFG.teacher.eraserSpeed, CFG.gun.gravity, 0.03);
+        const d = g.darts.fire(from, dir, CFG.teacher.eraserSpeed, 'teacher', 'eraser'); d.life = 4;
+        Audio.chalkThrow(); this.special = null;
+      }
+      return false;
+    }
     if (s.kind === 'collect') {
       s.t -= dt; this.mesh.rotation.z = Math.sin(performance.now() / 60) * 0.06;
       if (s.phase === 'windup') { if (s.t <= 0) { s.phase = 'hold'; s.t = CFG.committee.collectHold; g.slowT = CFG.committee.collectHold; s.shots = new Map(g.activeTargets().map(pl => [pl, pl.shots])); g.spawnWave(p, 7, 1.0, 0xf4e27a); } return false; }

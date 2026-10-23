@@ -10,7 +10,7 @@ export const CFG = {
   supply: { interval: 12, amount: 20, lowInterval: 12, lowAt: 40, near: 4 },
   enemy: { hp: 3, speed: 2.6, dartSpeed: 19, spread: 0.13 },
   waves: [3, 4, 5, 6],
-  teacher: { wpHp: 3, throwInterval: 1.6, chalkSpeed: 17 },
+  teacher: { wpHp: 3, throwInterval: 1.6, chalkSpeed: 17, eraserEvery: 11, eraserSpeed: 11, dustRadius: 1.5, dustLife: 5, dustBlind: 2.2 }, // the eraser: every teacher throws one now and then; its chalk dust blinds whoever stands in it
   committee: { wpHp: 2, bellEvery: 25, bellWarn: 2.2, collectHold: 3, countdown: 5, stampLife: 7, stampRadius: 1.4 },
   score: { hit: 50, out: 300, wave: 500, weakpoint: 1000, win: 5000, leader: 600 },
   leader: { hpBonus: 3, peekMul: 0.9, panicSeconds: 5, panicSpreadMul: 2.2, drop: 10 },

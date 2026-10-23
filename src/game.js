@@ -233,6 +233,7 @@ export class Game {
     this.clock.getDelta();
   }
   guestReset() {
+    this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
     this.students.forEach(s => s.dispose()); this.students = [];
     this.teachers.forEach(t => t.dispose()); this.teachers = [];
     if (this.bully) { this.bully.dispose(); this.bully = null; } if (this.monitor) { this.monitor.dispose(); this.monitor = null; } if (this.ball) { this.ball.dispose(); this.ball = null; }
@@ -391,6 +392,7 @@ export class Game {
     this.player = new Player(this);
     this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null;
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
+    this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
     for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = CFG.player.hp; }
   }
   pause() {
@@ -541,14 +543,25 @@ export class Game {
     Audio.itemSpawn(); this.message('有人放了一盒泡棉彈在課桌上', `走過去撿 +${this.supplyAmount()} 發`, 2);
   }
   supplyAmount() { return this.coop ? COOP.supplyAmount : CFG.supply.amount; }
+  // ---------- chalk dust (the eraser) ----------
+  dustBurst(at) {
+    this.addZone(at, CFG.teacher.dustRadius, CFG.teacher.dustLife, 'dust');
+    Audio.puff(); this.netEvent({ t: 'sfx', n: 'puff' });
+    for (let i = 0; i < 6; i++) { const a = Math.random() * Math.PI * 2; this.spawnDebris(at, 0xf7f4ea, [0.08, 0.08, 0.08], new THREE.Vector3(Math.cos(a) * rand(0.5, 2), rand(1.5, 3), Math.sin(a) * rand(0.5, 2)), 1.5); }
+  }
+  dustOn(pl, secs) {
+    if (pl === this.player) { this.dustT = Math.max(this.dustT || 0, secs); return; }
+    const now = performance.now(); if (!pl.dustSent || now - pl.dustSent > 600) { pl.dustSent = now; this.netEvent({ t: 'dust', d: secs }, pl.slot); }
+  }
   // ---------- hazard zones (the science teacher's spills) ----------
   addZone(at, r, life, kind = 'acid') {
     this.netEvent({ t: 'zone', p: [+at.x.toFixed(2), +at.z.toFixed(2)], r, l: life, k: kind });
-    const color = kind === 'stink' ? 0x9aa88a : kind === 'water' ? 0x6fb7ef : kind === 'fail' ? 0xe0463a : 0x5fcf7a;
+    const color = kind === 'stink' ? 0x9aa88a : kind === 'water' ? 0x6fb7ef : kind === 'fail' ? 0xe0463a : kind === 'dust' ? 0xf4f1e6 : 0x5fcf7a;
     const m = new THREE.Mesh(new THREE.CircleGeometry(r, 28), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: kind === 'water' ? 0.6 : 0.5, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.position.set(at.x, this.world.heightAt(at.x, at.z) + 0.025, at.z); this.scene.add(m);
     const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 28 }, (_, i) => new THREE.Vector3(Math.cos(i / 28 * 6.283) * r, Math.sin(i / 28 * 6.283) * r, 0.001))), this.world.inkMat); m.add(edge);
     const z = { mesh: m, x: at.x, z: at.z, r, t: life, life, kind, puffs: [] };
+    if (kind === 'dust') for (let i = 0; i < 8; i++) { const p = new THREE.Mesh(new THREE.SphereGeometry(0.35 + Math.random() * 0.3, 10, 8), new THREE.MeshBasicMaterial({ color: 0xf7f4ea, transparent: true, opacity: 0.6, depthWrite: false })); p.position.set(at.x + (Math.random() - 0.5) * r * 1.4, this.world.heightAt(at.x, at.z) + 0.3 + Math.random() * 1.2, at.z + (Math.random() - 0.5) * r * 1.4); p.userData.v = 0.15 + Math.random() * 0.2; this.scene.add(p); z.puffs.push(p); }
     if (kind === 'stink') for (let i = 0; i < 5; i++) { const p = new THREE.Mesh(new THREE.SphereGeometry(0.3 + Math.random() * 0.25, 10, 8), new THREE.MeshBasicMaterial({ color: 0xb5c2a6, transparent: true, opacity: 0.45, depthWrite: false })); p.position.set(at.x + (Math.random() - 0.5) * r, 0.4 + Math.random() * 0.8, at.z + (Math.random() - 0.5) * r); p.userData.v = 0.25 + Math.random() * 0.3; this.scene.add(p); z.puffs.push(p); }
     this.zones.push(z); return z;
   }
@@ -560,6 +573,11 @@ export class Game {
       if (z.t <= 0) { this.scene.remove(z.mesh); z.puffs.forEach(p => this.scene.remove(p)); this.zones.splice(i, 1); continue; }
       if (!this.isHost || this.state !== 'playing') continue;
       if (z.kind === 'acid' || z.kind === 'fail') { for (const pl of this.activeTargets()) if (Math.hypot(pl.pos.x - z.x, pl.pos.z - z.z) < z.r && Math.abs(pl.pos.y - this.world.heightAt(z.x, z.z)) < 0.6) { if (pl.hurtCd <= 0) { pl.hurt(); this.message(z.kind === 'fail' ? '站在不及格章上！' : '踩到藥水了！', z.kind === 'fail' ? '快離開紅色的圈' : '快離開綠色的地方', 1); } } }
+      else if (z.kind === 'dust') { // chalk dust: whoever stands in it cannot see for a while, kids included
+        const zy = this.world.heightAt(z.x, z.z);
+        for (const pl of this.activeTargets()) if (Math.hypot(pl.pos.x - z.x, pl.pos.z - z.z) < z.r && Math.abs(pl.pos.y - zy) < 1.6) this.dustOn(pl, CFG.teacher.dustBlind);
+        for (const s of this.students) if (s.alive && !s.remote && Math.hypot(s.group.position.x - z.x, s.group.position.z - z.z) < z.r && s.state !== 'hide' && s.state !== 'hurt') { s.state = 'hide'; s.timer = 0.6; s.alert.visible = false; }
+      }
       else if (z.kind === 'stink') { for (const s of this.students) if (s.alive && !s.remote && Math.hypot(s.group.position.x - z.x, s.group.position.z - z.z) < z.r && s.state !== 'hide' && s.state !== 'hurt') { s.state = 'hide'; s.timer = 0.6; s.alert.visible = false; } }
       else if (z.kind === 'water') { for (const s of this.students) if (s.alive && Math.hypot(s.group.position.x - z.x, s.group.position.z - z.z) < z.r) { this.lastShooter = z.who || 'host'; s.hp = 1; if (s.hit()) { this.kills++; this.stat(z.who || 'host', 'kills'); this.message('同學踩進水坑，滑倒出局！', '', 1.2); } this.lastShooter = null; } }
     }
@@ -730,6 +748,7 @@ export class Game {
     // the simulation runs in fixed 1/60 s steps however fast the screen refreshes, so a slow host does not slow the room
     if (this.state === 'playing' || this.state === 'won') { this.acc += dt; let n = 0; while (this.acc >= 1 / 60 && n < 6) { this.step(1 / 60); this.acc -= 1 / 60; n++; } if (n === 6) this.acc = 0; }
     else this.acc = 0;
+    if (this.dustT > 0 || this.dustShown) { this.dustT = Math.max(0, (this.dustT || 0) - dt); this.ui.dust(this.dustT, this.renderer.domElement); this.dustShown = this.dustT > 0; }
     if (this.net.tick(dt) && this.transport) this.ui.net(this.showNet ? (this.isHost ? this.net.hostText(Object.fromEntries([...this.remotes.values()].map(r => [r.slot, r.skin.name]))) : this.net.guestText()) : '');
     if (this.state === 'upgrade' && this.offer) { this.offer.t -= dt; if (this.offer.t <= 0) { if (!this.offer.picked.host) this.pickUpgrade($('upgrade-cards').children[0].dataset.id); else this.closeOffer(); } }
     this.tickLiveOffer(dt);
@@ -776,7 +795,7 @@ export class Game {
     // darts & hits
     const player = this.player;
     this.darts.update(dt, (d, prev) => {
-      if (d.kind && d.kind.endsWith('Break')) { if (d.kind === 'tubeBreak') this.addZone(d.pos, 1.1, 4); return false; }
+      if (d.kind && d.kind.endsWith('Break')) { if (d.kind === 'tubeBreak') this.addZone(d.pos, 1.1, 4); else if (d.kind === 'eraserBreak') this.dustBurst(d.pos); return false; }
       const p = d.mesh.position;
       for (let i = this.items.length - 1; i >= 0; i--) if (this.items[i].testDart(d)) { this.applyBuff(this.items[i].buff, d.who || 'host'); this.items[i].dispose(); this.items.splice(i, 1); return true; }
       for (const pr of this.props) if (pr.testDart(d)) return true;
@@ -799,7 +818,7 @@ export class Game {
         for (const pl of this.activeTargets()) {
           const dx = p.x - pl.pos.x, dz = p.z - pl.pos.z;
           const hr = 0.28 * (1 - (pl.up ? pl.up.dodge : 0));
-          if (dx * dx + dz * dz < hr * hr && p.y > pl.pos.y && p.y < pl.pos.y + pl.eye + 0.2) { pl.hurt(); return true; }
+          if (dx * dx + dz * dz < hr * hr && p.y > pl.pos.y && p.y < pl.pos.y + pl.eye + 0.2) { if (d.kind === 'eraser') this.dustBurst(p.clone()); pl.hurt(); return true; }
         }
       }
       return false;

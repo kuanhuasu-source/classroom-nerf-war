@@ -20,6 +20,7 @@ export class Darts {
     this.chalkGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.11, 6); this.chalkGeo.rotateX(Math.PI / 2);
     this.ballGeo = new THREE.SphereGeometry(0.18, 14, 10); this.matBall = new THREE.MeshToonMaterial({ map: Draw.tex(Draw.ballTex()), gradientMap: world.gradient });
     this.tubeGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.16, 8); this.tubeGeo.rotateX(Math.PI / 2); this.matTube = new THREE.MeshToonMaterial({ color: 0x9fe3c8, transparent: true, opacity: 0.85, gradientMap: world.gradient });
+    this.eraserGeo = new THREE.BoxGeometry(0.16, 0.05, 0.07); this.eraserBackGeo = new THREE.BoxGeometry(0.16, 0.025, 0.07); this.matFelt = new THREE.MeshToonMaterial({ color: 0x4a4440, gradientMap: world.gradient }); this.matWood = new THREE.MeshToonMaterial({ color: 0xb98556, gradientMap: world.gradient });
     this.noteMat = new THREE.SpriteMaterial({ map: Draw.tex(Draw.noteIcon()), transparent: true, depthTest: true });
     this.planeMat = new THREE.SpriteMaterial({ map: Draw.tex(Draw.planeIcon()), transparent: true, depthTest: true });
     this.speechMats = ['不要跑', '認真點', '要有禮貌', '校長的話'].map(t => new THREE.SpriteMaterial({ map: Draw.tex(Draw.speechIcon(t)), transparent: true, depthTest: true }));
@@ -29,6 +30,7 @@ export class Darts {
     if (kind === 'chalk') { mesh = new THREE.Mesh(this.chalkGeo, this.matChalk); }
     else if (kind === 'ball') { mesh = new THREE.Mesh(this.ballGeo, this.matBall); }
     else if (kind === 'tube') { mesh = new THREE.Mesh(this.tubeGeo, this.matTube); const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.03, 8), this.matChalk); cork.rotation.x = Math.PI / 2; cork.position.z = 0.09; mesh.add(cork); }
+    else if (kind === 'eraser') { mesh = new THREE.Mesh(this.eraserGeo, this.matFelt); const back = new THREE.Mesh(this.eraserBackGeo, this.matWood); back.position.y = 0.037; mesh.add(back); }
     else if (kind === 'note') { mesh = new THREE.Sprite(this.noteMat); mesh.scale.set(0.36, 0.36, 1); }
     else if (kind === 'plane') { mesh = new THREE.Sprite(this.planeMat); mesh.scale.set(0.4, 0.4, 1); }
     else if (kind === 'speech') { mesh = new THREE.Sprite(this.speechMats[Math.floor(Math.random() * this.speechMats.length)]); mesh.scale.set(0.9, 0.45, 1); }

@@ -40,6 +40,7 @@ export class UI {
   tick(dt) { if (this.msgTimer > 0) { this.msgTimer -= dt; if (this.msgTimer <= 0) this.msgEl.classList.remove('show'); } }
   hitmark() { const h = $('hitmark'); h.classList.add('show'); clearTimeout(this._hm); this._hm = setTimeout(() => h.classList.remove('show'), 60); }
   vignette() { const v = $('vignette'); v.classList.add('hit'); clearTimeout(this._vg); this._vg = setTimeout(() => v.classList.remove('hit'), 80); }
+  dust(t, canvas) { const el = $('dust'); el.style.opacity = t > 0 ? Math.min(0.85, t / 1.4).toFixed(2) : 0; canvas.style.filter = t > 0 ? `blur(${Math.min(6, t * 4).toFixed(1)}px)` : ''; }
   net(text) { const el = $('hud-net'); if (!text) { el.classList.remove('on'); return; } el.classList.add('on'); el.textContent = text; }
   boss(on) { $('hud-boss').classList.toggle('on', on); }
   buff(b) { const el = $('hud-buff'); if (!b) { el.classList.remove('on'); return; } el.classList.add('on'); $('buff-name').textContent = b.name; $('buff-effect').textContent = b.effect; $('buff-time').textContent = Math.ceil(b.t); }

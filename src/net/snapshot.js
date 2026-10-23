@@ -118,6 +118,7 @@ function applyEvent(g, e) {
     case 'sfx': if (e.n === 'footstepsLater') setTimeout(() => Audio.footsteps(), 3200); else if (typeof Audio[e.n] === 'function') Audio[e.n](); break;
     case 'hitmark': g.ui.hitmark(); g.player.hits++; break;
     case 'buff': g.myBuff = e.b; g.ui.buff(e.b); Audio.item(); break;
+    case 'dust': g.dustT = Math.max(g.dustT || 0, e.d); break;
     case 'zone': g.addZone(new THREE.Vector3(e.p[0], 0, e.p[1]), e.r, e.l, e.k || 'acid'); break;
     case 'prop': { const p = g.props[e.id]; if (p) p.applyState(e.st); break; }
     case 'wave': g.spawnWave(new THREE.Vector3(e.p[0], 0, e.p[1]), e.r, e.d, e.c); break;

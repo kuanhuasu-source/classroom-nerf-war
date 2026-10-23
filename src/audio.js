@@ -56,6 +56,7 @@ export const Audio = (() => {
     empty() { tone({ f0: 200, f1: 160, dur: 0.06, type: 'square', vol: 0.1 }); },
     reload(dur = 1.3) { tone({ f0: 300, f1: 200, dur: 0.05, type: 'square', vol: 0.12 }); tone({ f0: 500, f1: 700, dur: 0.06, type: 'square', vol: 0.12, delay: dur * 0.65 }); tone({ f0: 900, f1: 1200, dur: 0.05, type: 'square', vol: 0.1, delay: dur * 0.85 }); },
     thud() { tone({ f0: 160, f1: 70, dur: 0.07, type: 'sine', vol: 0.18 }); },
+    puff() { noise({ dur: 0.3, vol: 0.22, hp: 500 }); tone({ f0: 220, f1: 120, dur: 0.12, type: 'sine', vol: 0.1 }); },
     hitEnemy() { noise({ dur: 0.06, vol: 0.2, hp: 600 }); tone({ f0: 520, f1: 760, dur: 0.12, type: 'triangle', vol: 0.16 }); },
     out() { tone({ f0: 700, f1: 1400, dur: 0.18, type: 'triangle', vol: 0.18 }); tone({ f0: 1200, f1: 180, dur: 0.6, type: 'sine', vol: 0.14, delay: 0.18 }); },
     hurt() { tone({ f0: 300, f1: 120, dur: 0.22, type: 'square', vol: 0.18 }); noise({ dur: 0.1, vol: 0.2, hp: 300 }); },
