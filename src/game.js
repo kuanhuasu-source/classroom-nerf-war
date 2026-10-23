@@ -528,7 +528,7 @@ export class Game {
     // a box lands near whoever is running dry (in co-op that is often the partner, not the host)
     const who = nearPlayer ? this.players().slice().sort((x, y) => (x.ammo + x.reserve) - (y.ammo + y.reserve))[0] : this.player;
     const pp = who.pos;
-    const ok = this.world.desks.filter(d => { const dd = Math.hypot(d.x - pp.x, d.z - pp.z); return (nearPlayer ? dd > 1.2 && dd < CFG.supply.near : dd > 2) && !this.milks.some(m => m.desk === d); });
+    const ok = this.world.desks.filter(d => { const dd = Math.hypot(d.x - pp.x, d.z - pp.z); return Math.abs((d.floor || 0) - (pp.y || 0)) < 0.5 && (nearPlayer ? dd > 1.2 && dd < CFG.supply.near : dd > 2) && !this.milks.some(m => m.desk === d); });
     const desk = pick(ok.length ? ok : this.world.desks);
     const mk = this.makeMilk(desk.x + rand(-0.12, 0.12), (desk.floor || 0) + (desk.h || DESK.h) + 0.1, desk.z + rand(-0.05, 0.05), 'ammo');
     mk.desk = desk; mk.id = this.nextId(); mk.kind = 'ammo'; this.milks.push(mk);
@@ -591,7 +591,7 @@ export class Game {
   spawnMilk() {
     if (this.milks.length >= CFG.milk.max) return;
     const pp = this.player.pos;
-    const far = this.world.desks.filter(d => Math.hypot(d.x - pp.x, d.z - pp.z) > CFG.milk.minDistFromPlayer && !this.milks.some(m => m.desk === d));
+    const far = this.world.desks.filter(d => Math.abs((d.floor || 0) - (pp.y || 0)) < 0.5 && Math.hypot(d.x - pp.x, d.z - pp.z) > CFG.milk.minDistFromPlayer && Math.hypot(d.x - pp.x, d.z - pp.z) < 9 && !this.milks.some(m => m.desk === d));
     const desk = pick(far.length ? far : this.world.desks);
     const mk = this.makeMilk(desk.x + rand(-0.12, 0.12), (desk.floor || 0) + (desk.h || DESK.h) + 0.1, desk.z + rand(-0.05, 0.05));
     mk.desk = desk; mk.id = this.nextId(); this.milks.push(mk);
@@ -628,14 +628,14 @@ export class Game {
       }
     }
     const pp = this.player.pos;
+    this.hintT = (this.hintT || 0) - dt;
     for (let i = this.milks.length - 1; i >= 0; i--) {
       const m = this.milks[i]; m.t += dt;
       m.mesh.position.y = m.baseY + Math.sin(m.t * 3) * 0.02; m.mesh.rotation.y = m.t * 1.2;
       if (this.state !== 'playing' || !this.isHost) continue;
-      const near = Math.hypot(m.mesh.position.x - pp.x, m.mesh.position.z - pp.z) < CFG.milk.pickupRadius && Math.abs(m.mesh.position.y - pp.y) < 1.6;
-      if (!near) continue;
+      if (!this.canReach(pp, m)) continue;
       if (m.kind === 'ammo') {
-        if (this.player.reserve >= this.player.reserveCap()) continue;
+        if (this.player.reserve >= this.player.reserveCap()) { if (this.hintT <= 0) { this.hintT = 6; this.message('備用彈已經滿了', '先打一些再來撿', 1.4); } continue; }
         this.scene.remove(m.mesh); this.milks.splice(i, 1);
         this.player.reserve = Math.min(this.player.reserveCap(), this.player.reserve + this.supplyAmount()); this.ui.ammo(this.player.ammo, this.player.ammo === 0, this.player.reserve); this.ui.pickFlash();
         Audio.pickup(); this.message('撿到一盒泡棉彈！', `+${this.supplyAmount()} 發`, 1.4);
@@ -643,8 +643,16 @@ export class Game {
         this.scene.remove(m.mesh); this.milks.splice(i, 1);
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + CFG.milk.heal); this.ui.hp(this.player.hp, this.player.maxHp);
         Audio.drink(); this.message('咕嚕咕嚕，喝了鮮奶！', '+1 ♥', 1.6);
-      }
+      } else if (this.hintT <= 0) { this.hintT = 6; this.message('血是滿的', this.coop ? '鮮奶留給隊友' : '受傷再回來喝', 1.4); }
     }
+  }
+  // a carton or pencil case is within reach when the player is close to it, or close to the edge of the table it sits on
+  canReach(pos, m) {
+    const p = m.mesh.position; if (Math.abs(p.y - (pos.y || 0)) >= 1.6) return false;
+    if (Math.hypot(p.x - pos.x, p.z - pos.z) < CFG.milk.pickupRadius) return true;
+    const d = m.desk; if (!d) return false;
+    const rx = Math.max(d.x - d.w / 2 - pos.x, 0, pos.x - (d.x + d.w / 2)), rz = Math.max(d.z - d.d / 2 - pos.z, 0, pos.z - (d.z + d.d / 2));
+    return Math.hypot(rx, rz) < CFG.milk.reach;
   }
   addScore(n, who = this.lastShooter || 'host') { const b = this.buffs[who]; if (b && b.id === 'double') n *= 2; this.score += n; this.ui.score(this.score); }
   // buffs belong to the kid who shot the item (keyed by slot); slow motion is the exception, the whole room slows for everyone
@@ -797,7 +805,7 @@ export class Game {
       if (got > 0) { rp.reserve += got; this.netEvent({ t: 'pickup', n: got }, rp.slot); }
       for (let i = this.milks.length - 1; i >= 0; i--) {
         const m = this.milks[i];
-        if (Math.hypot(m.mesh.position.x - rp.pos.x, m.mesh.position.z - rp.pos.z) >= CFG.milk.pickupRadius || Math.abs(m.mesh.position.y - rp.pos.y) >= 1.6) continue;
+        if (!this.canReach(rp.pos, m)) continue;
         if (m.kind === 'ammo') { if (rp.reserve >= CFG.gun.reserveMax + rp.up.reserveBonus) continue; this.scene.remove(m.mesh); this.milks.splice(i, 1); rp.reserve += this.supplyAmount(); this.netEvent({ t: 'pickup', n: this.supplyAmount() }, rp.slot); break; }
         if (rp.hp < rp.maxHp) { this.scene.remove(m.mesh); this.milks.splice(i, 1); rp.hp = Math.min(rp.maxHp, rp.hp + CFG.milk.heal); this.stat(rp.slot, 'milk'); this.netEvent({ t: 'drink' }, rp.slot); break; }
       }

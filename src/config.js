@@ -6,7 +6,7 @@ import * as THREE from 'three';
 export const CFG = {
   room: { w: 12, d: 9, h: 3.2 },
   player: { eye: 1.25, crouchEye: 0.62, radius: 0.28, walk: 3.2, run: 5.0, crouchSpeed: 1.7, hp: 5 },
-  gun: { restCap: 90, mag: 15, reloadEmpty: 1.3, reloadPartial: 0.85, speed: 32, gravity: 6, fireInterval: 0.18, reserveStart: 90, reserveMax: 150, autoReloadDelay: 0.35, pickupRadius: 1.2, floorLife: 40, dropOnKnockout: 8 },
+  gun: { restCap: 90, mag: 15, reloadEmpty: 1.3, reloadPartial: 0.85, speed: 32, gravity: 6, fireInterval: 0.18, reserveStart: 90, reserveMax: 150, autoReloadDelay: 0.35, pickupRadius: 1.4, floorLife: 40, dropOnKnockout: 8 },
   supply: { interval: 12, amount: 20, lowInterval: 12, lowAt: 40, near: 4 },
   enemy: { hp: 3, speed: 2.6, dartSpeed: 19, spread: 0.13 },
   waves: [3, 4, 5, 6],
@@ -14,7 +14,7 @@ export const CFG = {
   committee: { wpHp: 2, bellEvery: 25, bellWarn: 2.2, collectHold: 3, countdown: 5, stampLife: 7, stampRadius: 1.4 },
   score: { hit: 50, out: 300, wave: 500, weakpoint: 1000, win: 5000, leader: 600 },
   leader: { hpBonus: 3, peekMul: 0.9, panicSeconds: 5, panicSpreadMul: 2.2, drop: 10 },
-  milk: { heal: 1, interval: 18, max: 2, pickupRadius: 0.75, minDistFromPlayer: 2.5 },
+  milk: { heal: 1, interval: 18, max: 2, pickupRadius: 0.9, reach: 0.55, minDistFromPlayer: 2.5 }, // reach: how close to the table's edge counts (player radius 0.28 + slack)
   bully: { windup: 1.0, blastRadius: 1.7, grumble: 1.6, hitRadius: 0.55, deepSleep: 20 },
   ball: { radius: 0.22, launch: 9.5, hurtSpeed: 3.5, start: { x: -0.5, z: 0.55 } },
   monitor: { sight: 8, strokeCooldown: 2.5, reinforcements: 2, rageSeconds: 8, speed: 1.6, rest: 25 },
