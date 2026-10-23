@@ -14,7 +14,7 @@ export class Teacher extends PaperFigure {
     const flags = { mood: 'angry' }; for (const w of def.wp) flags[w.key] = true;
     super(game.scene, () => Draw.teacher(def, flags), 1.15, 2.3);
     this.game = game; this.def = def; this.flags = flags; this.world = game.world;
-    this.group.position.set(spawn.x, 0, spawn.z);
+    this.group.position.set(spawn.x, game.world.heightAt(spawn.x, spawn.z), spawn.z);
     this.remote = !!opts.remote;
     this.L = this.world.layout;
     this.state = 'enter'; this.timer = 0; this.path = this.remote ? [] : this.world.path(this.group.position, { x: 0.9, z: this.L.front });
@@ -43,7 +43,7 @@ export class Teacher extends PaperFigure {
     return { k: this.def.id, x: +p.x.toFixed(2), z: +p.z.toFixed(2), wm: this.wpMax, wp, fl: this.flags, df: this.defeated ? 1 : 0, f: this.flash > 0 ? 1 : 0, ch: this.special && this.special.kind === 'charge' && this.special.phase === 'go' ? 1 : 0 };
   }
   applyState(s) {
-    this.setTarget(s.x, 0, s.z); if (s.wm) this.wpMax = s.wm;
+    this.setTarget(s.x, this.world.heightAt(s.x, s.z), s.z); if (s.wm) this.wpMax = s.wm;
     for (const k in s.wp) if (this.wp[k]) this.wp[k].hp = s.wp[k];
     if (JSON.stringify(s.fl) !== JSON.stringify(this.flags)) {
       const lost = Object.keys(s.fl).some(k => k !== 'mood' && this.flags[k] && !s.fl[k]);
@@ -65,7 +65,7 @@ export class Teacher extends PaperFigure {
     for (const k in this.rings) { const r = this.rings[k]; r.visible = this.wp[k].hp > 0 && !this.defeated; const hot = this.ringFlash && this.ringFlash.k === k; r.scale.setScalar(hot ? 1.5 : 1 + Math.sin(performance.now() / 180) * 0.12); r.material.color.setHex(hot ? 0xffffff : 0xd8432b); }
     for (let i = this.debris.length - 1; i >= 0; i--) {
       const d = this.debris[i]; d.vel.y -= 9 * dt; d.mesh.position.addScaledVector(d.vel, dt); d.mesh.rotation.x += d.spin * dt; d.mesh.rotation.z += d.spin * 0.7 * dt; d.life -= dt;
-      if (d.mesh.position.y < 0.05) { d.mesh.position.y = 0.05; d.vel.y = Math.abs(d.vel.y) * 0.4; d.vel.x *= 0.7; d.vel.z *= 0.7; }
+      const gy = this.world.heightAt(d.mesh.position.x, d.mesh.position.z) + 0.05; if (d.mesh.position.y < gy) { d.mesh.position.y = gy; d.vel.y = Math.abs(d.vel.y) * 0.4; d.vel.x *= 0.7; d.vel.z *= 0.7; }
       if (d.life <= 0) { this.scene.remove(d.mesh); this.debris.splice(i, 1); }
     }
     if (this.remote) { this.remoteUpdate(dt, this.game.camera.position, !this.defeated); if (this.defeated) this.mesh.rotation.z = Math.sin(performance.now() / 120) * 0.05; else if (this.remoteCharging) this.mesh.rotation.z = Math.sin(performance.now() / 40) * 0.1; return; }
@@ -95,6 +95,7 @@ export class Teacher extends PaperFigure {
     if (!this.path.length) return false;
     const t = this.path[0], dx = t.x - p.x, dz = t.z - p.z, dist = Math.hypot(dx, dz), sp = speed * dt;
     if (dist < sp || dist < 0.08) { p.x = t.x; p.z = t.z; this.path.shift(); } else { p.x += dx / dist * sp; p.z += dz / dist * sp; }
+    p.y = this.world.heightAt(p.x, p.z);
     return true;
   }
   updateMove(dt, player) {
@@ -131,6 +132,7 @@ export class Teacher extends PaperFigure {
         return false;
       }
     }
+    this.group.position.y = this.world.heightAt(this.group.position.x, this.group.position.z);
   }
   // ---------- specials ----------
   startSpecial(player, kind) {

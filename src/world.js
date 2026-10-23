@@ -11,7 +11,8 @@ export class World {
     this.scene = scene;
     this.layout = typeof layout === 'string' ? layoutById(layout) : layout;
     this.room = { w: this.layout.w, d: this.layout.d, h: this.layout.h };
-    this.boxes = [];          // {minX,maxX,minZ,maxZ,h}
+    this.boxes = [];          // {minX,maxX,minZ,maxZ,h,y0}  (h = top, y0 = bottom)
+    this.terrain = this.layout.terrain || []; // platforms and stairs: the floor height is a function of (x,z)
     this.desks = [];          // logical cover entries {x,z,w,d,h,seat:{x,z},occupant,covered}
     this.objects = [];        // everything we add to the scene, so the room can be torn down
     this.gradient = Draw.gradientMap();
@@ -23,31 +24,50 @@ export class World {
   dispose() { for (const o of this.objects) this.scene.remove(o); this.objects = []; this.boxes = []; this.desks = []; }
   toon(color) { return new THREE.MeshToonMaterial({ color, gradientMap: this.gradient }); }
   inked(mesh) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 20), this.inkMat); mesh.add(e); return mesh; }
-  collide(x, z, w, d, h) { this.boxes.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h }); }
+  collide(x, z, w, d, h, y0 = 0) { this.boxes.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h, y0 }); }
+  // floor height at a point: 0 on the ground, the platform height on a stage or balcony, in between on stairs
+  heightAt(x, z) {
+    let h = 0;
+    for (const t of this.terrain) {
+      if (x < t.x - t.w / 2 || x > t.x + t.w / 2 || z < t.z - t.d / 2 || z > t.z + t.d / 2) continue;
+      if (t.kind === 'platform') { if (t.h > h) h = t.h; continue; }
+      const along = t.axis === 'x' ? (x - (t.x - t.w / 2)) / t.w : (z - (t.z - t.d / 2)) / t.d;
+      const f = t.dir < 0 ? 1 - along : along, th = t.h0 + (t.h1 - t.h0) * Math.min(1, Math.max(0, f));
+      if (th > h) h = th;
+    }
+    return h;
+  }
+  // move a circle by (dx,dz): a step taller than 0.45 m is a wall (platform edges), the rest slides along boxes
+  walk(pos, dx, dz, r) {
+    const y = pos.y || 0;
+    for (const [ax, v] of [['x', dx], ['z', dz]]) { if (!v) continue; const o = pos[ax]; pos[ax] += v; if (Math.abs(this.heightAt(pos.x, pos.z) - y) > 0.45) pos[ax] = o; }
+    this.collideCircle(pos, r);
+    pos.y = this.heightAt(pos.x, pos.z);
+  }
   box(w, h, d, x, y, z, color, { collide = true, ink = true, shadow = true, parent = null } = {}) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), this.toon(color));
     m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true;
     if (ink) this.inked(m);
     if (parent) parent.add(m); else this.add(m);
-    if (collide) this.collide(x, z, w, d, y + h / 2);
+    if (collide) this.collide(x, z, w, d, y + h / 2, y - h / 2);
     return m;
   }
   cylinder(r, h, x, y, z, color, { collide = true, parent = null, seg = 16 } = {}) {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), this.toon(color));
     m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; this.inked(m);
     if (parent) parent.add(m); else this.add(m);
-    if (collide) this.collide(x, z, r * 2, r * 2, y + h / 2);
+    if (collide) this.collide(x, z, r * 2, r * 2, y + h / 2, y - h / 2);
     return m;
   }
   build() {
     const L = this.layout, { w, d, h } = this.room, s = this.scene, st = L.style;
     // floor / ceiling / walls by style
-    const floorTex = st === 'lab' ? Draw.tex(Draw.tiles(), [w / 2, d / 2]) : Draw.tex(Draw.floor(), [w / 4, d / 4]);
+    const floorTex = st === 'lab' ? Draw.tex(Draw.tiles(), [w / 2, d / 2]) : Draw.tex(Draw.floor(), st === 'gym' ? [w / 2.5, d / 2.5] : [w / 4, d / 4]);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: floorTex, gradientMap: this.gradient }));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; this.add(floor);
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ color: 0xf3eee0, gradientMap: this.gradient }));
     ceil.rotation.x = Math.PI / 2; ceil.position.y = h; this.add(ceil);
-    const wallCanvas = st === 'music' ? Draw.staffWall() : Draw.paperWall(st === 'lab' ? '#eef5e8' : '#fbf6e6');
+    const wallCanvas = st === 'music' ? Draw.staffWall() : Draw.paperWall(st === 'lab' ? '#eef5e8' : st === 'gym' ? '#f6efd9' : '#fbf6e6');
     const wallMat = new THREE.MeshToonMaterial({ map: Draw.tex(wallCanvas, [w / 4, 1]), gradientMap: this.gradient });
     const mk = (pw, px, pz, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, h), wallMat); m.position.set(px, h / 2, pz); m.rotation.y = ry; m.receiveShadow = true; this.add(m); };
     mk(w, 0, -d / 2, 0); mk(w, 0, d / 2, Math.PI); mk(d, -w / 2, 0, Math.PI / 2); mk(d, w / 2, 0, -Math.PI / 2);
@@ -56,36 +76,77 @@ export class World {
     this.boardStyle = L.board.style;
     this.blackboardMat = new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.blackboard(0, this.boardStyle)) });
     const bb = new THREE.Mesh(new THREE.PlaneGeometry(L.board.w, L.board.h), this.blackboardMat);
-    bb.position.set(0, 1.65, -d / 2 + 0.06); this.add(bb);
-    this.box(L.board.w + 0.3, L.board.h + 0.3, 0.05, 0, 1.65, -d / 2 + 0.02, this.boardStyle === 'chalk' ? 0x7a4a22 : 0xb8c0c8, { collide: false, shadow: false });
-    this.box(L.board.w + 0.3, 0.08, 0.14, 0, 0.72, -d / 2 + 0.07, this.boardStyle === 'chalk' ? 0x7a4a22 : 0xb8c0c8, { collide: false });
+    const by = L.boardY || 0;
+    bb.position.set(0, 1.65 + by, -d / 2 + 0.06); this.add(bb);
+    this.box(L.board.w + 0.3, L.board.h + 0.3, 0.05, 0, 1.65 + by, -d / 2 + 0.02, this.boardStyle === 'chalk' ? 0x7a4a22 : 0xb8c0c8, { collide: false, shadow: false });
+    this.box(L.board.w + 0.3, 0.08, 0.14, 0, 0.72 + by, -d / 2 + 0.07, this.boardStyle === 'chalk' ? 0x7a4a22 : 0xb8c0c8, { collide: false });
     // windows (-x wall) and doors (+x wall)
     const winTex = Draw.tex(Draw.window());
     for (const z of L.windows) {
       const win = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.6), new THREE.MeshBasicMaterial({ map: winTex }));
-      win.position.set(-w / 2 + 0.03, 1.7, z); win.rotation.y = Math.PI / 2; this.add(win);
-      const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.06, 1.7, 1.6)), this.inkMat); frame.position.set(-w / 2 + 0.03, 1.7, z); this.add(frame);
+      const wy = L.windowY || 1.7;
+      win.position.set(-w / 2 + 0.03, wy, z); win.rotation.y = Math.PI / 2; this.add(win);
+      const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.06, 1.7, 1.6)), this.inkMat); frame.position.set(-w / 2 + 0.03, wy, z); this.add(frame);
     }
     for (const dr of L.doors) {
-      const door = this.box(0.08, 2.1, 1.0, w / 2 - 0.04, 1.05, dr.z, 0x8fb98a, { collide: false, shadow: false });
+      const door = this.box(0.08, 2.1, 1.0, w / 2 - 0.04, 1.05 + (dr.floor || 0), dr.z, 0x8fb98a, { collide: false, shadow: false });
       const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), this.toon(0xf4e27a)); knob.position.set(-0.06, 0, -0.35); door.add(knob);
     }
     // clock on the front wall
     const clock = new THREE.Mesh(new THREE.CircleGeometry(0.28, 24), this.toon(0xffffff)); clock.position.set(L.board.w / 2 + 0.8, 2.6, -d / 2 + 0.02); this.add(clock);
     clock.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 24 }, (_, i) => new THREE.Vector3(Math.cos(i / 24 * 6.283) * 0.28, Math.sin(i / 24 * 6.283) * 0.28, 0))), this.inkMat));
     clock.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0.01), new THREE.Vector3(0, 0.2, 0.01), new THREE.Vector3(0, 0, 0.01), new THREE.Vector3(0.14, 0.08, 0.01)]), new THREE.LineBasicMaterial({ color: 0x2b2622 })));
+    // platforms and stairs (the floor height comes from heightAt, so these never collide as boxes)
+    for (const t of this.terrain) {
+      if (t.kind === 'platform') { const m = this.box(t.w, t.h, t.d, t.x, t.h / 2, t.z, t.color || 0xd9c39a, { collide: false }); m.receiveShadow = true; continue; }
+      const n = Math.max(2, Math.ceil(Math.abs(t.h1 - t.h0) / 0.2)), along = t.axis === 'x' ? t.w : t.d, across = t.axis === 'x' ? t.d : t.w;
+      for (let i = 0; i < n; i++) { // each step is a slab from the ground up to its own height, so the side reads as a solid staircase
+        const f = (i + 1) / n, top = t.h0 + (t.h1 - t.h0) * f, len = along / n, c = -along / 2 + (i + 0.5) * len;
+        const off = t.dir < 0 ? -c : c;
+        const x = t.axis === 'x' ? t.x + off : t.x, z = t.axis === 'x' ? t.z : t.z + off;
+        this.box(t.axis === 'x' ? len + 0.01 : across, top, t.axis === 'x' ? across : len + 0.01, x, top / 2, z, t.color || 0xc9b48c, { collide: false, ink: i % 2 === 0 });
+      }
+    }
     // furniture
     for (const f of L.furniture) this.furniture(f);
     // logical cover entries
-    for (const dsk of L.desks) this.desks.push({ x: dsk.x, z: dsk.z, w: dsk.w, d: dsk.d, h: dsk.h, seat: { x: dsk.seat.x, z: dsk.seat.z }, occupant: null, covered: null });
+    for (const dsk of L.desks) this.desks.push({ x: dsk.x, z: dsk.z, w: dsk.w, d: dsk.d, h: dsk.h, floor: dsk.floor || 0, seat: { x: dsk.seat.x, z: dsk.seat.z }, occupant: null, covered: null });
     this.bounds = { minX: -w / 2 + 0.3, maxX: w / 2 - 0.3, minZ: -d / 2 + 0.3, maxZ: d / 2 - 0.3 };
   }
   // ---- one piece of furniture ----
   furniture(f) {
-    const d = this.room.d;
+    const d = this.room.d, fl = f.floor || 0;
     switch (f.kind) {
+      case 'rail': { // low wall along a balcony edge: cover for the kids upstairs, a backboard for darts from below
+        this.box(f.w, 0.7, f.d, f.x, fl + 0.35, f.z, 0xe4d7b4); this.box(f.w + 0.1, 0.06, f.d + 0.12, f.x, fl + 0.73, f.z, 0xb98556, { collide: false });
+        return;
+      }
+      case 'gymbench': { // a long wooden bench; knocked-out kids sit on it
+        this.box(f.w, 0.06, f.d, f.x, fl + f.h - 0.03, f.z, 0xdcc39a, { collide: false });
+        for (const sx of [-1, 1]) this.box(0.06, f.h - 0.06, f.d - 0.04, f.x + sx * (f.w / 2 - 0.2), fl + (f.h - 0.06) / 2, f.z, 0x7a8794, { collide: false, ink: false });
+        this.collide(f.x, f.z, f.w, f.d, fl + f.h, fl);
+        return;
+      }
+      case 'vault': { // a vaulting box: stacked layers
+        for (let i = 0; i < 4; i++) this.box(f.w - i * 0.08, f.h / 4, f.d - i * 0.08, f.x, fl + f.h / 8 + i * f.h / 4, f.z, i % 2 ? 0xd9a86c : 0xb98556, { collide: false });
+        this.box(f.w - 0.3, 0.06, f.d - 0.3, f.x, fl + f.h + 0.03, f.z, 0x5d8ad6, { collide: false }); this.collide(f.x, f.z, f.w, f.d, fl + f.h, fl);
+        return;
+      }
+      case 'cart': { // a ball cart
+        this.box(f.w, f.h - 0.2, f.d, f.x, fl + 0.2 + (f.h - 0.2) / 2, f.z, 0x7a8794);
+        for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), this.toon(pick([0xd8432b, 0xf4e27a, 0x5d8ad6]))); b.position.set(f.x + rand(-0.35, 0.35), fl + f.h + 0.05, f.z + rand(-0.2, 0.2)); this.add(b); }
+        return;
+      }
+      case 'mat': { // a stack of gym mats
+        for (let i = 0; i < 3; i++) this.box(f.w, f.h / 3, f.d, f.x, fl + f.h / 6 + i * f.h / 3, f.z, i % 2 ? 0x5d8ad6 : 0x4a6fb3, { collide: false });
+        this.collide(f.x, f.z, f.w, f.d, fl + f.h, fl); return;
+      }
+      case 'speaker': { this.box(f.w, f.h, f.d, f.x, fl + f.h / 2, f.z, 0x2b2622); this.cylinder(0.18, 0.02, f.x, fl + f.h * 0.6, f.z + f.d / 2, 0x7a8794, { collide: false, seg: 14 }).rotation.x = Math.PI / 2; return; }
+      case 'banner': { // a cloth banner hanging on a wall
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(f.w, f.h), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.banner(f.text || '歡迎')) })); m.position.set(f.x, f.y, f.z); m.rotation.y = f.ry || 0; this.add(m); return;
+      }
+      case 'podium': return this.box(f.w, f.h, f.d, f.x, fl + f.h / 2, f.z, 0xb98556);
       case 'desk': return this.deskAndChair(f.x, f.z);
-      case 'podium': return this.box(f.w, f.h, f.d, f.x, f.h / 2, f.z, 0xb98556);
       case 'cupboard': return this.box(f.w, f.h, f.d, f.x, f.h / 2, f.z, 0xa88a68);
       case 'bulletin': {
         this.box(3.4, 1.2, 0.04, f.x, 1.7, f.z, 0xd9a86c, { collide: false, shadow: false });
@@ -159,25 +220,26 @@ export class World {
   buildGrid() {
     this.cell = 0.3;
     this.gw = Math.round(this.room.w / this.cell); this.gh = Math.round(this.room.d / this.cell);
-    this.grid = new Uint8Array(this.gw * this.gh);
+    this.grid = new Uint8Array(this.gw * this.gh); this.gridH = new Float32Array(this.gw * this.gh);
     const pad = 0.2;
     for (let gz = 0; gz < this.gh; gz++) for (let gx = 0; gx < this.gw; gx++) {
-      const { x, z } = this.cellCenter(gx, gz);
+      const { x, z } = this.cellCenter(gx, gz), hc = this.heightAt(x, z); this.gridH[gz * this.gw + gx] = hc;
       let blocked = Math.abs(x) > this.room.w / 2 - 0.35 || Math.abs(z) > this.room.d / 2 - 0.35;
       if (!blocked) for (const b of this.boxes) {
-        if (b.h < 0.3) continue;
+        if (b.h < hc + 0.3 || b.y0 > hc + 1.4) continue; // below the feet or above the head at this floor level
         if (x > b.minX - pad && x < b.maxX + pad && z > b.minZ - pad && z < b.maxZ + pad) { blocked = true; break; }
       }
       this.grid[gz * this.gw + gx] = blocked ? 1 : 0;
     }
     // pockets of free cells that cannot be reached from the door side are useless to the AI: seal them
     const st = this.layout.start, sc = this.nearestFree(st.x, st.z), seen = new Uint8Array(this.gw * this.gh), q = [sc.gz * this.gw + sc.gx]; seen[q[0]] = 1;
-    for (let head = 0; head < q.length; head++) { const c = q[head], cx = c % this.gw, cz = (c / this.gw) | 0; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, nz = cz + dz; if (!this.free(nx, nz)) continue; const ni = nz * this.gw + nx; if (!seen[ni]) { seen[ni] = 1; q.push(ni); } } }
+    for (let head = 0; head < q.length; head++) { const c = q[head], cx = c % this.gw, cz = (c / this.gw) | 0; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = cx + dx, nz = cz + dz; if (!this.free(nx, nz) || !this.stepOk(c, nz * this.gw + nx)) continue; const ni = nz * this.gw + nx; if (!seen[ni]) { seen[ni] = 1; q.push(ni); } } }
     for (let i = 0; i < this.grid.length; i++) if (this.grid[i] === 0 && !seen[i]) this.grid[i] = 1;
   }
   cellOf(x, z) { return { gx: clamp(Math.floor((x + this.room.w / 2) / this.cell), 0, this.gw - 1), gz: clamp(Math.floor((z + this.room.d / 2) / this.cell), 0, this.gh - 1) }; }
   cellCenter(gx, gz) { return { x: -this.room.w / 2 + (gx + 0.5) * this.cell, z: -this.room.d / 2 + (gz + 0.5) * this.cell }; }
   free(gx, gz) { return gx >= 0 && gz >= 0 && gx < this.gw && gz < this.gh && this.grid[gz * this.gw + gx] === 0; }
+  stepOk(i, j) { return Math.abs(this.gridH[i] - this.gridH[j]) <= 0.45; }
   nearestFree(x, z) {
     const c = this.cellOf(x, z);
     if (this.free(c.gx, c.gz)) return c;
@@ -201,7 +263,7 @@ export class World {
         if (!this.free(nx, nz)) continue;
         if (dx && dz && (!this.free(cx + dx, cz) || !this.free(cx, cz + dz))) continue; // no corner cutting
         const ni = nz * this.gw + nx;
-        if (prev[ni] !== -1) continue;
+        if (prev[ni] !== -1 || !this.stepOk(cur, ni)) continue;
         prev[ni] = cur; q.push(ni);
         if (ni === goal) { found = true; break; }
       }
@@ -221,14 +283,16 @@ export class World {
   }
   segmentFree(a, b) {
     const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz), steps = Math.ceil(len / (this.cell * 0.5));
-    for (let i = 0; i <= steps; i++) { const t = i / steps, c = this.cellOf(a.x + dx * t, a.z + dz * t); if (!this.free(c.gx, c.gz)) return false; }
+    let last = -1;
+    for (let i = 0; i <= steps; i++) { const t = i / steps, c = this.cellOf(a.x + dx * t, a.z + dz * t); if (!this.free(c.gx, c.gz)) return false; const ci = c.gz * this.gw + c.gx; if (last >= 0 && !this.stepOk(last, ci)) return false; last = ci; }
     return true;
   }
   // push a circle (x,z,r) out of boxes and bounds
   collideCircle(pos, r, ignoreLow = 0) {
     pos.x = clamp(pos.x, this.bounds.minX, this.bounds.maxX); pos.z = clamp(pos.z, this.bounds.minZ, this.bounds.maxZ);
+    const py = pos.y || 0;
     for (const b of this.boxes) {
-      if (b.h <= ignoreLow) continue;
+      if (b.h <= py + ignoreLow || b.y0 > py + 1.4) continue;
       const cx = clamp(pos.x, b.minX, b.maxX), cz = clamp(pos.z, b.minZ, b.maxZ);
       const dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
       if (d2 < r * r) {
@@ -243,7 +307,8 @@ export class World {
   pointInBox(p) {
     if (Math.abs(p.x) > this.room.w / 2 - 0.05 || Math.abs(p.z) > this.room.d / 2 - 0.05) return 'wall';
     if (p.y > this.room.h - 0.05) return 'wall';
-    for (const b of this.boxes) if (p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ && p.y < b.h) return b;
+    for (const b of this.boxes) if (p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ && p.y < b.h && p.y > b.y0) return b;
+    if (this.terrain.length && p.y < this.heightAt(p.x, p.z) - 0.02) return 'wall';
     return null;
   }
   // march along a ray until something solid; used to converge the dart on the crosshair
@@ -251,15 +316,19 @@ export class World {
     const p = origin.clone(), step = 0.1;
     for (let d = step; d < maxDist; d += step) {
       p.copy(origin).addScaledVector(dir, d);
-      if (p.y < 0 || this.pointInBox(p)) return d;
+      if (p.y < this.heightAt(p.x, p.z) || this.pointInBox(p)) return d;
     }
     return maxDist;
   }
   // 3D segment vs AABB (slab test) — used for line-of-sight
   segmentBlocked(p0, p1) {
+    if (this.terrain.length) { // a stage or a balcony body is solid
+      const n = Math.ceil(p0.distanceTo(p1) / 0.3) || 1;
+      for (let i = 1; i < n; i++) { const t = i / n, x = p0.x + (p1.x - p0.x) * t, y = p0.y + (p1.y - p0.y) * t, z = p0.z + (p1.z - p0.z) * t; if (y < this.heightAt(x, z) - 0.03) return true; }
+    }
     for (const b of this.boxes) {
       let tmin = 0, tmax = 1;
-      const mins = [b.minX, 0, b.minZ], maxs = [b.maxX, b.h, b.maxZ], o = [p0.x, p0.y, p0.z], d = [p1.x - p0.x, p1.y - p0.y, p1.z - p0.z];
+      const mins = [b.minX, b.y0, b.minZ], maxs = [b.maxX, b.h, b.maxZ], o = [p0.x, p0.y, p0.z], d = [p1.x - p0.x, p1.y - p0.y, p1.z - p0.z];
       let hit = true;
       for (let i = 0; i < 3; i++) {
         if (Math.abs(d[i]) < 1e-9) { if (o[i] < mins[i] || o[i] > maxs[i]) { hit = false; break; } continue; }
@@ -275,7 +344,9 @@ export class World {
   freeDesk(preferNear) {
     const free = this.desks.filter(d => !d.covered);
     if (!free.length) return null;
-    free.sort((a, b) => Math.hypot(a.x - preferNear.x, a.z - preferNear.z) - Math.hypot(b.x - preferNear.x, b.z - preferNear.z));
+    // a cover on another floor counts as far away: kids upstairs tend to stay upstairs, kids on the stage stay on the stage
+    const py = preferNear.y || 0, cost = (d) => Math.hypot(d.x - preferNear.x, d.z - preferNear.z) + Math.abs((d.floor || 0) - py) * 4;
+    free.sort((a, b) => cost(a) - cost(b));
     return pick(free.slice(0, Math.min(4, free.length)));
   }
 }

@@ -26,18 +26,19 @@ export class RemotePlayer extends PaperFigure {
     this.group.visible = true; this.offline = false;
     if (s.sh !== undefined) this.shots = s.sh;
     if (s.sit !== undefined) { if (s.sit && !this.sitting) { this.sitting = true; this.setTex('out'); } else if (!s.sit && this.sitting) { this.sitting = false; this.setTex('normal'); } }
-    if (this.sitting) { if (s.sx !== undefined) this.setTarget(s.sx, 0, s.sz); return; }
-    this.setTarget(s.x, 0, s.z); this.yaw = s.yaw; this.eye = s.eye; this.crouch = !!s.c; this.targetSy = this.crouch ? 0.5 : 1;
+    const W = this.game.world;
+    if (this.sitting) { if (s.sx !== undefined) this.setTarget(s.sx, W.heightAt(s.sx, s.sz), s.sz); return; }
+    this.setTarget(s.x, W.heightAt(s.x, s.z), s.z); this.yaw = s.yaw; this.eye = s.eye; this.crouch = !!s.c; this.targetSy = this.crouch ? 0.5 : 1;
     if (s.hp !== undefined) this.hp = s.hp; if (s.ammo !== undefined) this.ammo = s.ammo; if (s.res !== undefined) this.reserve = s.res;
   }
-  eyePos() { return new THREE.Vector3(this.group.position.x, this.sitting ? 0.8 : this.eye, this.group.position.z); }
+  eyePos() { return new THREE.Vector3(this.group.position.x, this.group.position.y + (this.sitting ? 0.8 : this.eye), this.group.position.z); }
   // host side: damage and penalty sitting for the guest
   hurt() {
     if (this.hurtCd > 0 || this.sitting || this.invuln > 0 || this.offline) return;
     this.hurtCd = 0.7; this.hp--; this.flash = 0.15;
     if (this.hp <= 0) this.game.onPlayerDown(this);
   }
-  sitDown(seat, secs = COOP.sitSeconds) { this.sitting = true; this.sitT = secs; this.seat = seat; this.setTarget(seat.x, 0, seat.z); this.group.position.set(seat.x, 0, seat.z); this.setTex('out'); this.targetSy = 0.72; }
+  sitDown(seat, secs = COOP.sitSeconds) { const sy = this.game.world.heightAt(seat.x, seat.z); this.sitting = true; this.sitT = secs; this.seat = seat; this.setTarget(seat.x, sy, seat.z); this.group.position.set(seat.x, sy, seat.z); this.setTex('out'); this.targetSy = 0.72; }
   standUp(hp) { this.sitting = false; this.hp = hp; this.invuln = COOP.invuln; this.setTex('normal'); this.targetSy = this.crouch ? 0.5 : 1; }
   say(text) {
     if (this.bubble) { this.group.remove(this.bubble); this.bubble.material.map.dispose(); this.bubble.material.dispose(); }

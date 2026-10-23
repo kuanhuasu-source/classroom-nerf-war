@@ -13,19 +13,19 @@ export class Prop {
     const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: this.world.gradient });
     const ink = (m) => { m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 25), this.world.inkMat)); return m; };
     if (this.kind === 'trash') {
-      this.pos = new THREE.Vector3(def.x, 0, def.z); this.group.position.copy(this.pos);
+      this.pos = new THREE.Vector3(def.x, this.world.heightAt(def.x, def.z), def.z); this.group.position.copy(this.pos);
       const body = ink(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.55, 12), toon(0x7a8794))); body.position.y = 0.275; body.castShadow = true; this.group.add(body);
       const lid = ink(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 12), toon(0x5a6570))); lid.position.y = 0.57; this.group.add(lid);
       const paper = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.1), toon(0xffffff)); paper.position.set(0.05, 0.62, 0); paper.rotation.z = 0.4; this.group.add(paper);
-      this.world.collide(def.x, def.z, 0.44, 0.44, 0.55); this.world.buildGrid();
+      this.world.collide(def.x, def.z, 0.44, 0.44, this.pos.y + 0.55, this.pos.y); this.world.buildGrid();
     } else {
       const door = this.world.layout.doors[def.door || 0];
-      this.pos = new THREE.Vector3(door.x - 0.45, 2.25, door.z); this.group.position.copy(this.pos);
+      this.pos = new THREE.Vector3(door.x - 0.45, (door.floor || 0) + 2.25, door.z); this.group.position.copy(this.pos);
       const b = ink(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.26, 12), toon(0x2f6fd1))); b.castShadow = true; this.group.add(b);
       const water = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.02, 12), toon(0x9fd3f2)); water.position.y = 0.12; this.group.add(water);
       const handle = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.012, 6, 16, Math.PI), toon(0x2b2622)); handle.position.y = 0.13; this.group.add(handle);
       this.group.rotation.z = 0.25;
-      this.landing = new THREE.Vector3(door.x - 0.7, 0, door.z);
+      this.landing = new THREE.Vector3(door.x - 0.7, door.floor || 0, door.z);
     }
   }
   testDart(d) {

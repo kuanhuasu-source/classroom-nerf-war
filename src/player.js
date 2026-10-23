@@ -10,7 +10,7 @@ import { Draw } from './draw.js';
 export class Player {
   constructor(game) {
     this.game = game; this.camera = game.camera; this.world = game.world;
-    const st = this.world.layout.start; this.pos = new THREE.Vector3(st.x, 0, st.z); this.yaw = st.yaw; this.pitch = 0; this.eye = CFG.player.eye;
+    const st = this.world.layout.start; this.pos = new THREE.Vector3(st.x, this.world ? this.world.heightAt(st.x, st.z) : 0, st.z); this.yaw = st.yaw; this.pitch = 0; this.eye = CFG.player.eye;
     this.up = freshUp(); this.maxHp = CFG.player.hp;
     this.hp = CFG.player.hp; this.ammo = CFG.gun.mag; this.reserve = CFG.gun.reserveStart; this.reloading = 0; this.reloadTotal = 1; this.emptyTime = 0; this.fireCd = 0; this.crouching = false;
     this.keys = {}; this.shots = 0; this.hits = 0; this.hurtCd = 0;
@@ -31,7 +31,7 @@ export class Player {
   }
   magSize() { return CFG.gun.mag + this.up.magBonus; }
   reserveCap() { return CFG.gun.reserveMax + this.up.reserveBonus; }
-  eyePos() { return new THREE.Vector3(this.pos.x, this.eye, this.pos.z); }
+  eyePos() { return new THREE.Vector3(this.pos.x, this.pos.y + this.eye, this.pos.z); }
   look(dx, dy) { this.yaw -= dx * 0.0022; this.pitch = clamp(this.pitch - dy * 0.0022, -1.4, 1.4); }
   update(dt) {
     const k = this.keys;
@@ -53,11 +53,10 @@ export class Player {
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
       // forward is -z in camera space rotated by yaw
       const fx = -sin, fz = -cos, rx = cos, rz = -sin;
-      this.pos.x += (fx * -mz + rx * mx) * speed * dt; this.pos.z += (fz * -mz + rz * mx) * speed * dt;
-      this.world.collideCircle(this.pos, CFG.player.radius);
+      this.world.walk(this.pos, (fx * -mz + rx * mx) * speed * dt, (fz * -mz + rz * mx) * speed * dt, CFG.player.radius);
       this.bob += dt * (run ? 13 : 9);
     }
-    this.camera.position.set(this.pos.x, this.eye + (moving ? Math.sin(this.bob) * 0.025 : 0), this.pos.z);
+    this.camera.position.set(this.pos.x, this.pos.y + this.eye + (moving ? Math.sin(this.bob) * 0.025 : 0), this.pos.z);
     this.camera.rotation.set(0, 0, 0, 'YXZ'); this.camera.rotation.order = 'YXZ'; this.camera.rotation.y = this.yaw; this.camera.rotation.x = this.pitch;
     // gun animation
     this.fireCd -= dt; this.hurtCd -= dt;
@@ -84,7 +83,7 @@ export class Player {
   }
   // --- penalty sitting (co-op): knocked out, waiting for a rescue ---
   sitDown(seat, secs = COOP.sitSeconds) {
-    this.sitting = true; this.sitT = secs; this.seat = seat; this.pos.set(seat.x, 0, seat.z); this.keys = {}; this.firing = false; this.reloading = 0; this.gun.visible = false; this.sitTick = -1;
+    this.sitting = true; this.sitT = secs; this.seat = seat; this.pos.set(seat.x, this.world.heightAt(seat.x, seat.z), seat.z); this.keys = {}; this.firing = false; this.reloading = 0; this.gun.visible = false; this.sitTick = -1;
     Audio.out();
   }
   sitUpdate(dt) {

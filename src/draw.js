@@ -386,6 +386,14 @@ export const Draw = (() => {
     }
     return c;
   }
+  function banner(text) {
+    const c = canvas(1024, 256), ctx = c.getContext('2d');
+    ctx.fillStyle = '#d8432b'; ctx.fillRect(0, 0, 1024, 256);
+    ctx.strokeStyle = '#2b2622'; ctx.lineWidth = 8; ctx.strokeRect(6, 6, 1012, 244);
+    for (let i = 0; i < 14; i++) { ctx.fillStyle = i % 2 ? '#f4e27a' : '#ffffff'; ctx.beginPath(); ctx.moveTo(i * 76, 0); ctx.lineTo(i * 76 + 38, 34); ctx.lineTo(i * 76 + 76, 0); ctx.fill(); }
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 120px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 512, 150);
+    return c;
+  }
   function poster(style) {
     const c = canvas(512, 256), ctx = c.getContext('2d');
     ctx.fillStyle = '#fbf6e6'; ctx.fillRect(0, 0, 512, 256); line(ctx, [[4, 4], [508, 4], [508, 252], [4, 252], [4, 4]], '#2b2622', 6, 2);
@@ -475,5 +483,5 @@ export const Draw = (() => {
     const t = new THREE.DataTexture(data, 4, 1, THREE.RedFormat); t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
     return t;
   }
-  return { kid, kidVariant, teacher, nameTag, noteIcon, alertIcon, planeIcon, speechIcon, tiles, staffWall, poster, skeleton, bully, monitor, ballTex, itemIcon, paperWall, floor, blackboard, window: window_, milkCarton, gradientMap, tex, canvas };
+  return { kid, kidVariant, teacher, nameTag, noteIcon, alertIcon, planeIcon, speechIcon, tiles, staffWall, poster, banner, skeleton, bully, monitor, ballTex, itemIcon, paperWall, floor, blackboard, window: window_, milkCarton, gradientMap, tex, canvas };
 })();

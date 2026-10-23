@@ -5,23 +5,24 @@
 const r2 = (v) => Math.round(v * 100) / 100;
 
 function classroom() {
-  const cols = [-4.5, -2.9, -1.3, 0.3, 1.9, 3.5], rows = [-2.2, -1.1, 0.0, 1.1, 2.2];
+  // 5 columns 1.8 m apart, 4 rows 1.7 m apart: with a desk 0.62 deep plus its chair, every aisle is at least 0.8 m wide
+  const cols = [-3.6, -1.8, 0, 1.8, 3.6], rows = [-2.9, -1.2, 0.5, 2.2];
   const desks = [], furniture = [];
   for (const x of cols) for (const z of rows) { desks.push({ x, z, w: 0.62, d: 0.46, h: 0.72, seat: { x, z: z + 0.48 } }); furniture.push({ kind: 'desk', x, z }); }
-  furniture.push({ kind: 'podium', x: 0, z: -3.45, w: 1.3, d: 0.65, h: 0.78 });
-  furniture.push({ kind: 'cupboard', x: 4.3, z: 4.2, w: 1.4, d: 0.5, h: 1.9 });
-  furniture.push({ kind: 'bulletin', x: -2.5, z: 4.48 });
+  furniture.push({ kind: 'podium', x: 0, z: -4.5, w: 1.3, d: 0.65, h: 0.78 });
+  furniture.push({ kind: 'cupboard', x: 4.9, z: 4.95, w: 1.4, d: 0.5, h: 1.9 });
+  furniture.push({ kind: 'bulletin', x: -2.8, z: 5.23 });
   return {
-    id: 'classroom', name: '三年二班', w: 12, d: 9, h: 3.2, style: 'classroom',
-    doors: [{ x: 5.6, z: -3.3 }, { x: 5.6, z: 3.3 }], windows: [-2.6, 0, 2.6],
-    start: { x: -5.0, z: 3.7, yaw: -0.55 }, front: -2.75, board: { w: 5.2, h: 1.5, style: 'chalk' },
-    desks, furniture, props: [{ kind: 'trash', x: -5.3, z: -3.7 }, { kind: 'trash', x: 5.1, z: 0.3 }, { kind: 'bucket', door: 0 }],
+    id: 'classroom', name: '三年二班', w: 13, d: 10.5, h: 3.2, style: 'classroom',
+    doors: [{ x: 6.1, z: -4.0 }, { x: 6.1, z: 4.0 }], windows: [-3.3, -1.1, 1.1, 3.3],
+    start: { x: -5.6, z: 4.4, yaw: -0.55 }, front: -3.5, board: { w: 5.6, h: 1.5, style: 'chalk' },
+    desks, furniture, props: [{ kind: 'trash', x: -5.8, z: -4.6 }, { kind: 'trash', x: 5.6, z: 0.3 }, { kind: 'bucket', door: 0 }],
     mounts: [
-      { x: -2.0, y: 2.0, z: -4.41, ry: 0 }, { x: -0.6, y: 1.35, z: -4.41, ry: 0 }, { x: 1.6, y: 1.25, z: -4.41, ry: 0 }, { x: 2.3, y: 2.05, z: -4.41, ry: 0 },
-      { x: -3.2, y: 1.85, z: 4.41, ry: Math.PI }, { x: -1.9, y: 1.5, z: 4.41, ry: Math.PI },
-      { x: 4.3, y: 1.55, z: 3.93, ry: Math.PI },
-      { x: -5.96, y: 2.75, z: -1.3, ry: Math.PI / 2 }, { x: -5.96, y: 2.75, z: 1.3, ry: Math.PI / 2 },
-      { x: 5.96, y: 1.7, z: 0, ry: -Math.PI / 2 },
+      { x: -2.4, y: 2.0, z: -5.16, ry: 0 }, { x: -0.8, y: 1.35, z: -5.16, ry: 0 }, { x: 1.8, y: 1.25, z: -5.16, ry: 0 }, { x: 2.6, y: 2.05, z: -5.16, ry: 0 },
+      { x: -3.6, y: 1.85, z: 5.16, ry: Math.PI }, { x: -2.1, y: 1.5, z: 5.16, ry: Math.PI },
+      { x: 4.9, y: 1.55, z: 4.68, ry: Math.PI },
+      { x: -6.46, y: 2.75, z: -1.5, ry: Math.PI / 2 }, { x: -6.46, y: 2.75, z: 1.5, ry: Math.PI / 2 },
+      { x: 6.46, y: 1.7, z: 0, ry: -Math.PI / 2 },
     ],
   };
 }
@@ -96,6 +97,57 @@ function music() {
   };
 }
 
-export const LAYOUTS = { classroom: classroom(), lab: lab(), music: music() };
+
+// 活動中心：禮堂兼體育館。舞台 (+0.9 m) 在前、二樓看台 (+2.6 m) 在後、兩側樓梯。
+// The floor height is a function of (x,z) (see World.heightAt), so a single 2D nav grid still works:
+// the balcony footprint is solid underneath (storage rooms), nothing walks beneath it.
+function hall() {
+  const desks = [], furniture = [], W = 16, D = 14;
+  const STAGE = 0.9, BALC = 2.6;
+  const terrain = [
+    { kind: 'platform', x: 0, z: -5.5, w: 10, d: 3, h: STAGE, color: 0xc9a06a },                        // stage, z -7..-4
+    { kind: 'ramp', x: 5.6, z: -5.5, w: 1.2, d: 1.6, h0: 0, h1: STAGE, axis: 'x', dir: -1, color: 0xb98556 }, // steps up on the right (rising toward -x)
+    { kind: 'ramp', x: -5.6, z: -5.5, w: 1.2, d: 1.6, h0: 0, h1: STAGE, axis: 'x', dir: 1, color: 0xb98556 }, // and on the left
+    { kind: 'ramp', x: 0, z: -3.6, w: 1.6, d: 0.8, h0: 0, h1: STAGE, axis: 'z', dir: -1, color: 0xb98556 },   // centre front steps
+    { kind: 'platform', x: 0, z: 5.5, w: W, d: 3, h: BALC, color: 0xe4d7b4 },                            // balcony, z 4..7
+    { kind: 'ramp', x: 7.3, z: 2.0, w: 1.4, d: 4, h0: 0, h1: BALC, axis: 'z', dir: 1, color: 0xd9c39a },  // staircase along the right wall, z 0..4
+    { kind: 'ramp', x: -7.3, z: 2.0, w: 1.4, d: 4, h0: 0, h1: BALC, axis: 'z', dir: 1, color: 0xd9c39a }, // and the left wall
+  ];
+  // floor: two blocks of long benches facing the stage; each bench gives two cover entries and is its own seat
+  for (const bx of [-3, 3]) for (const z of [-1.5, -0.2, 1.1, 2.4]) {
+    furniture.push({ kind: 'gymbench', x: bx, z, w: 3.6, d: 0.4, h: 0.45 });
+    for (const dx of [-0.9, 0.9]) desks.push({ x: bx + dx, z, w: 1.8, d: 0.4, h: 0.45, seat: { x: bx + dx, z: z + 0.02 } });
+  }
+  // bulky cover on the floor
+  for (const [x, z] of [[-6.0, -2.4], [6.0, -2.4]]) { furniture.push({ kind: 'vault', x, z, w: 0.9, d: 0.9, h: 1.1 }); desks.push({ x, z, w: 0.9, d: 0.9, h: 1.1, seat: { x: x + (x < 0 ? 0.9 : -0.9), z } }); }
+  furniture.push({ kind: 'cart', x: 0, z: -2.0, w: 1.2, d: 0.8, h: 0.9 }); desks.push({ x: 0, z: -2.0, w: 1.2, d: 0.8, h: 0.9, seat: { x: 0, z: -1.1 } });
+  for (const x of [-5.2, 5.2]) { furniture.push({ kind: 'mat', x, z: 1.5, w: 1.8, d: 0.9, h: 0.5 }); desks.push({ x, z: 1.5, w: 1.8, d: 0.9, h: 0.5, seat: { x, z: 2.3 } }); }
+  // on the stage: a lectern and two speakers
+  furniture.push({ kind: 'podium', x: 0, z: -5.6, w: 1.3, d: 0.65, h: 0.78, floor: STAGE }); desks.push({ x: 0, z: -5.6, w: 1.3, d: 0.65, h: 0.78, floor: STAGE, seat: { x: 0, z: -6.4 } });
+  for (const x of [-3.5, 3.5]) { furniture.push({ kind: 'speaker', x, z: -5.2, w: 0.7, d: 0.6, h: 1.0, floor: STAGE }); desks.push({ x, z: -5.2, w: 0.7, d: 0.6, h: 1.0, floor: STAGE, seat: { x, z: -6.2 } }); }
+  // upstairs: a low wall along the edge and benches behind it
+  furniture.push({ kind: 'rail', x: 0, z: 4.15, w: 12.8, d: 0.14, floor: BALC }); // leaves the stair tops (|x| > 6.4) open
+  for (const x of [-6, -2, 2, 6]) {
+    furniture.push({ kind: 'gymbench', x, z: 5.4, w: 2.4, d: 0.4, h: 0.45, floor: BALC });
+    for (const dx of [-0.6, 0.6]) desks.push({ x: x + dx, z: 5.4, w: 1.2, d: 0.4, h: 0.45, floor: BALC, seat: { x: x + dx, z: 5.42 } });
+  }
+  furniture.push({ kind: 'banner', x: 0, y: STAGE + 3.9, z: -D / 2 + 0.03, w: 7, h: 1.6, text: '全校躲避球大賽' });
+  furniture.push({ kind: 'banner', x: 0, y: 1.6, z: 4.02, w: 5, h: 1.1, text: '器材室', ry: 0 });
+  return {
+    id: 'hall', name: '活動中心', w: W, d: D, h: 6, style: 'gym',
+    doors: [{ x: 7.6, z: -4.5 }, { x: 7.6, z: 5.5, floor: BALC }], windows: [-4.5, -1.5, 1.5, 4.5], windowY: 3.8,
+    start: { x: -5.8, z: 3.2, yaw: -0.5 }, front: -3.0, board: { w: 5.0, h: 1.4, style: 'chalk' }, boardY: STAGE + 0.3,
+    terrain, desks, furniture, props: [{ kind: 'trash', x: -7.2, z: -6.3 }, { kind: 'trash', x: 5.6, z: 3.4 }, { kind: 'bucket', door: 0 }],
+    mounts: [
+      { x: -3.2, y: STAGE + 2.4, z: -6.96, ry: 0 }, { x: 3.6, y: STAGE + 2.1, z: -6.96, ry: 0 },
+      { x: -7.96, y: 2.0, z: -2.5, ry: Math.PI / 2 }, { x: -7.96, y: 2.3, z: -5.5, ry: Math.PI / 2 },
+      { x: 7.96, y: 2.1, z: -1.0, ry: -Math.PI / 2 }, { x: 7.96, y: 1.9, z: 1.5, ry: -Math.PI / 2 },
+      { x: -2.6, y: 1.5, z: 4.03, ry: 0 }, { x: 2.8, y: 1.9, z: 4.03, ry: 0 },
+      { x: -4, y: BALC + 2.0, z: 6.96, ry: Math.PI }, { x: 4, y: BALC + 1.7, z: 6.96, ry: Math.PI },
+    ],
+  };
+}
+
+export const LAYOUTS = { classroom: classroom(), lab: lab(), music: music(), hall: hall() };
 export const LAYOUT_IDS = Object.keys(LAYOUTS);
 export const layoutById = (id) => LAYOUTS[id] || LAYOUTS.classroom;

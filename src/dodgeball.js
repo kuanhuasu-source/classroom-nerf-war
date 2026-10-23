@@ -30,11 +30,13 @@ export class Dodgeball {
     if (this.remote) { p.addScaledVector(v, dt); this.mesh.rotation.x += v.z / r * dt; this.mesh.rotation.z -= v.x / r * dt; return; }
     this.bounceCd -= dt; this.hitCd -= dt;
     const speed = Math.hypot(v.x, v.z);
-    if (speed < 0.05 && p.y <= r + 0.005 && Math.abs(v.y) < 0.2) { v.set(0, 0, 0); p.y = r; return; }
-    v.y -= 9.8 * dt; p.addScaledVector(v, dt);
+    if (speed < 0.05 && p.y <= this.world.heightAt(p.x, p.z) + r + 0.005 && Math.abs(v.y) < 0.2) { v.set(0, 0, 0); p.y = this.world.heightAt(p.x, p.z) + r; return; }
+    v.y -= 9.8 * dt; const g0 = this.world.heightAt(p.x, p.z); p.addScaledVector(v, dt);
+    const g1 = this.world.heightAt(p.x, p.z); if (g1 - g0 > 0.4 && p.y < g1) { p.addScaledVector(v, -dt); v.x = -v.x * 0.6; v.z = -v.z * 0.6; } // bounced off the side of a stage
     this.mesh.rotation.x += v.z / r * dt; this.mesh.rotation.z -= v.x / r * dt;
-    if (p.y < r) { p.y = r; if (v.y < -0.5) { v.y = -v.y * 0.5; v.x *= 0.85; v.z *= 0.85; if (this.bounceCd <= 0) { Audio.bounce(); this.bounceCd = 0.2; } } else v.y = 0; }
-    if (p.y <= r + 0.01) { const f = Math.max(0, 1 - 1.6 * dt); v.x *= f; v.z *= f; }
+    const gr = this.world.heightAt(p.x, p.z) + r;
+    if (p.y < gr) { p.y = gr; if (v.y < -0.5) { v.y = -v.y * 0.5; v.x *= 0.85; v.z *= 0.85; if (this.bounceCd <= 0) { Audio.bounce(); this.bounceCd = 0.2; } } else v.y = 0; }
+    if (p.y <= gr + 0.01) { const f = Math.max(0, 1 - 1.6 * dt); v.x *= f; v.z *= f; }
     const W = this.world.room.w / 2 - r, D = this.world.room.d / 2 - r;
     if (p.x < -W) { p.x = -W; v.x = Math.abs(v.x) * 0.7; } if (p.x > W) { p.x = W; v.x = -Math.abs(v.x) * 0.7; }
     if (p.z < -D) { p.z = -D; v.z = Math.abs(v.z) * 0.7; } if (p.z > D) { p.z = D; v.z = -Math.abs(v.z) * 0.7; }

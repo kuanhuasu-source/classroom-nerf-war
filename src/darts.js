@@ -73,15 +73,20 @@ export class Darts {
         const consumed = hooks(d, prev);
         if (consumed) { this.remove(i); done = true; break; }
         // floor
-        const floorY = 0.03 + d.r;
+        const ground = this.world.heightAt(p.x, p.z), floorY = ground + 0.03 + d.r;
         if (p.y < floorY) {
+          if (p.y < ground - 0.25) { // came in from the side of a stage or balcony: sticks to the wall like any other wall
+            this.settle(d); d.mesh.position.copy(prev);
+            if (d.kind !== 'dart') { d.stuck = false; Audio.thud(); this.remove(i); hooks({ kind: d.kind + 'Break', pos: prev }); done = true; break; }
+            Audio.thud(); break;
+          }
           if (d.kind !== 'dart') { Audio.thud(); this.remove(i); hooks({ kind: d.kind + 'Break', pos: p.clone() }); done = true; break; }
-          p.y = 0.03; this.settle(d); d.mesh.rotation.set(0, Math.random() * 6.28, 0); if (d.owner === 'player') Audio.thud(); break;
+          p.y = ground + 0.03; this.settle(d); d.mesh.rotation.set(0, Math.random() * 6.28, 0); if (d.owner === 'player') Audio.thud(); break;
         }
         const hit = this.world.pointInBox(p);
         if (hit || (d.life <= 0 && k === n - 1)) {
           this.settle(d); d.mesh.position.copy(prev);
-          if (hit === 'wall' || (hit && hit.h > 0.5)) { /* stays stuck where it hit */ } else { d.mesh.position.y = Math.max(0.03, prev.y); }
+          if (hit === 'wall' || (hit && hit.h - hit.y0 > 0.5)) { /* stays stuck where it hit */ } else { d.mesh.position.y = Math.max(this.world.heightAt(prev.x, prev.z) + 0.03, prev.y); }
           if (d.kind !== 'dart') { d.stuck = false; Audio.thud(); this.remove(i); hooks({ kind: d.kind + 'Break', pos: prev }); done = true; break; }
           Audio.thud(); break;
         }
@@ -153,8 +158,8 @@ export class Darts {
   drop(pos, n) {
     for (let k = 0; k < n; k++) {
       const a = Math.random() * Math.PI * 2, r = rand(0.25, 0.7);
-      const p = new THREE.Vector3(pos.x + Math.cos(a) * r, 0.03, pos.z + Math.sin(a) * r);
-      if (this.world.pointInBox(p)) continue;
+      const p = new THREE.Vector3(pos.x + Math.cos(a) * r, 0, pos.z + Math.sin(a) * r); p.y = this.world.heightAt(p.x, p.z) + 0.03;
+      if (Math.abs(p.y - 0.03 - (pos.y || 0)) > 0.5 || this.world.pointInBox(p)) continue; // not over the edge of a balcony
       const d = this.fire(p, new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), 0.01, 'enemy');
       this.settle(d); d.vel.set(0, 0, 0); d.mesh.rotation.set(0, Math.random() * 6.28, 0);
     }
@@ -166,7 +171,7 @@ export class Darts {
       const d = this.list[i];
       if (!d.stuck || d.kind !== 'dart') continue;
       const p = d.mesh.position;
-      if (p.y < 1.7 && Math.hypot(p.x - pos.x, p.z - pos.z) < radius) { this.remove(i); n++; }
+      if (p.y - (pos.y || 0) < 1.7 && p.y > (pos.y || 0) - 0.6 && Math.hypot(p.x - pos.x, p.z - pos.z) < radius) { this.remove(i); n++; }
     }
     return n;
   }

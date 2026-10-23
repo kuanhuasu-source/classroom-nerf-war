@@ -18,7 +18,7 @@ export class Bully extends PaperFigure {
     const d = opts.di !== undefined ? this.world.desks[opts.di] : pick(back.length ? back : this.world.desks);
     this.di = this.world.desks.indexOf(d); this.texState = 'sleep'; this.targetSy = 0.58;
     this.desk = d; d.covered = this; d.occupant = this;
-    this.group.position.set(d.seat.x, 0, d.seat.z);
+    this.group.position.set(d.seat.x, this.world.heightAt(d.seat.x, d.seat.z), d.seat.z);
     this.state = 'sleep'; this.timer = 0; this.target = null; this.pack = null; this.snoreT = 0; this.deep = 0; this.deepMsgCd = 0;
     this.group.scale.set(1.2, 0.58, 1.2);
     const c = Draw.canvas(128, 96), ctx = c.getContext('2d');
@@ -103,11 +103,11 @@ export class Bully extends PaperFigure {
       g.spawnDebris(at, pick([0xf7a8c4, 0x9fd3f2, 0xb7e3a1, 0xf4e27a, 0xffffff]), [0.2, 0.03, 0.26], new THREE.Vector3(Math.cos(a) * rand(2, 4), rand(3, 5.5), Math.sin(a) * rand(2, 4)), 2.5);
     }
     g.spawnRing(at, R, 0xd8432b);
-    for (const pl of g.activeTargets()) if (Math.hypot(pl.pos.x - at.x, pl.pos.z - at.z) < R && g.state === 'playing') { pl.hurtCd = 0; pl.hurt(); g.message('被書包砸到了！', '惡霸的書包有十公斤', 1.6); }
+    for (const pl of g.activeTargets()) if (Math.hypot(pl.pos.x - at.x, pl.pos.z - at.z) < R && Math.abs(pl.pos.y - at.y) < 1.6 && g.state === 'playing') { pl.hurtCd = 0; pl.hurt(); g.message('被書包砸到了！', '惡霸的書包有十公斤', 1.6); }
     let n = 0;
     for (const s of g.students) {
       if (!s.alive) continue;
-      if (Math.hypot(s.group.position.x - at.x, s.group.position.z - at.z) < R) { s.hp = 1; s.hit(); n++; g.kills++; g.addScore(150); }
+      if (Math.hypot(s.group.position.x - at.x, s.group.position.z - at.z) < R && Math.abs(s.group.position.y - at.y) < 1.6) { s.hp = 1; s.hit(); n++; g.kills++; g.addScore(150); }
     }
     if (n) g.message(`書包砸倒了 ${n} 個同學`, '惡霸不分敵我', 1.6);
     g.darts.drop(at, 3);

@@ -15,7 +15,7 @@ export class Student extends PaperFigure {
     this.game = game; this.v = v; this.world = game.world;
     this.leader = leader;
     this.hp = (game.diff ? game.diff.enemyHp : CFG.enemy.hp) + (leader ? CFG.leader.hpBonus : 0); this.state = 'enter'; this.timer = 0; this.path = []; this.crouch = 0; this.alive = true;
-    this.group.position.set(spawn.x, 0, spawn.z);
+    this.group.position.set(spawn.x, game.world.heightAt(spawn.x, spawn.z), spawn.z);
     this.desk = null; this.shotsLeft = 0; this.shotTimer = 0; this.speedMul = rand(0.85, 1.15);
     this.id = opts.id ?? game.nextId(); this.texState = 'normal'; this.remote = !!opts.remote; this.age = 0; this.shotsFired = 0;
     // the "!" that warns you she is about to fire
@@ -83,7 +83,7 @@ export class Student extends PaperFigure {
           const sp = CFG.enemy.speed * this.speedMul * dt;
           if (dist < sp || dist < 0.08) { p.x = t.x; p.z = t.z; this.path.shift(); }
           else { p.x += dx / dist * sp; p.z += dz / dist * sp; }
-          moving = true;
+          p.y = this.world.heightAt(p.x, p.z); moving = true;
         } else if (this.state === 'seekCover') { this.state = 'hide'; this.timer = rand(1.2, 2.6) * this.game.diff.hideMul; }
         else { this.chooseDesk(); }
         break;
@@ -119,9 +119,10 @@ export class Student extends PaperFigure {
       case 'flyOut': {
         this.flyT += dt;
         const t = clamp(this.flyT / 1.3, 0, 1), s = this.flyStart, e = this.desk.seat;
-        p.x = s.x + (e.x - s.x) * t; p.z = s.z + (e.z - s.z) * t; p.y = Math.sin(t * Math.PI) * 2.2;
+        const ey = this.world.heightAt(e.x, e.z);
+        p.x = s.x + (e.x - s.x) * t; p.z = s.z + (e.z - s.z) * t; p.y = s.y + (ey - s.y) * t + Math.sin(t * Math.PI) * 2.2;
         this.mesh.rotation.z = t * Math.PI * 2;
-        if (t >= 1) { this.state = 'sitting'; p.y = 0; this.mesh.rotation.z = 0; this.group.scale.set(0.85, 0.72, 0.85); if (this.tag) this.tag.visible = true; }
+        if (t >= 1) { this.state = 'sitting'; p.y = ey; this.mesh.rotation.z = 0; this.group.scale.set(0.85, 0.72, 0.85); if (this.tag) this.tag.visible = true; }
         return;
       }
       case 'sitting': return;
@@ -132,7 +133,7 @@ export class Student extends PaperFigure {
     this.face(this.game.camera.position);
     this.tick(dt, moving);
   }
-  eye() { return new THREE.Vector3(this.group.position.x, 1.1 * this.group.scale.y, this.group.position.z); }
+  eye() { return new THREE.Vector3(this.group.position.x, this.group.position.y + 1.1 * this.group.scale.y, this.group.position.z); }
   canSee(player) {
     const from = this.eye(), to = player.eyePos();
     if (from.distanceTo(to) > 11) return false;
@@ -162,7 +163,7 @@ export class Student extends PaperFigure {
     // stumble back away from player
     const pp = this.pickTarget().pos, dx = this.group.position.x - pp.x, dz = this.group.position.z - pp.z, l = Math.hypot(dx, dz) || 1;
     const np = this.group.position.clone(); np.x += dx / l * 0.35; np.z += dz / l * 0.35;
-    this.world.collideCircle(np, 0.2); this.group.position.x = np.x; this.group.position.z = np.z;
+    if (Math.abs(this.world.heightAt(np.x, np.z) - np.y) < 0.45) { this.world.collideCircle(np, 0.2); this.group.position.x = np.x; this.group.position.z = np.z; this.group.position.y = this.world.heightAt(np.x, np.z); }
     return false;
   }
   knockOut() {

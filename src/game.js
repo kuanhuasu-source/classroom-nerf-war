@@ -95,7 +95,7 @@ export class Game {
   spawnWave(at, radius, dur, color) {
     this.netEvent({ t: 'wave', p: [+at.x.toFixed(2), +at.z.toFixed(2)], r: radius, d: dur, c: color });
     const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.0, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2; m.position.set(at.x, 0.05, at.z); this.scene.add(m); this.rings.push({ mesh: m, t: 0, radius, slow: dur });
+    m.rotation.x = -Math.PI / 2; m.position.set(at.x, this.world.heightAt(at.x, at.z) + 0.05, at.z); this.scene.add(m); this.rings.push({ mesh: m, t: 0, radius, slow: dur });
   }
   setDifficulty(level) { if (DIFFICULTY[level]) { this.level = level; this.diff = DIFFICULTY[level]; } }
   // how many students are currently firing; the difficulty caps this
@@ -392,7 +392,7 @@ export class Game {
     const pp = who.pos;
     const ok = this.world.desks.filter(d => { const dd = Math.hypot(d.x - pp.x, d.z - pp.z); return (nearPlayer ? dd > 1.2 && dd < CFG.supply.near : dd > 2) && !this.milks.some(m => m.desk === d); });
     const desk = pick(ok.length ? ok : this.world.desks);
-    const mk = this.makeMilk(desk.x + rand(-0.12, 0.12), (desk.h || DESK.h) + 0.1, desk.z + rand(-0.05, 0.05), 'ammo');
+    const mk = this.makeMilk(desk.x + rand(-0.12, 0.12), (desk.floor || 0) + (desk.h || DESK.h) + 0.1, desk.z + rand(-0.05, 0.05), 'ammo');
     mk.desk = desk; mk.id = this.nextId(); mk.kind = 'ammo'; this.milks.push(mk);
     Audio.itemSpawn(); this.message('有人放了一盒泡棉彈在課桌上', `走過去撿 +${this.supplyAmount()} 發`, 2);
   }
@@ -402,7 +402,7 @@ export class Game {
     this.netEvent({ t: 'zone', p: [+at.x.toFixed(2), +at.z.toFixed(2)], r, l: life, k: kind });
     const color = kind === 'stink' ? 0x9aa88a : kind === 'water' ? 0x6fb7ef : 0x5fcf7a;
     const m = new THREE.Mesh(new THREE.CircleGeometry(r, 28), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: kind === 'water' ? 0.6 : 0.5, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2; m.position.set(at.x, 0.025, at.z); this.scene.add(m);
+    m.rotation.x = -Math.PI / 2; m.position.set(at.x, this.world.heightAt(at.x, at.z) + 0.025, at.z); this.scene.add(m);
     const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 28 }, (_, i) => new THREE.Vector3(Math.cos(i / 28 * 6.283) * r, Math.sin(i / 28 * 6.283) * r, 0.001))), this.world.inkMat); m.add(edge);
     const z = { mesh: m, x: at.x, z: at.z, r, t: life, life, kind, puffs: [] };
     if (kind === 'stink') for (let i = 0; i < 5; i++) { const p = new THREE.Mesh(new THREE.SphereGeometry(0.3 + Math.random() * 0.25, 10, 8), new THREE.MeshBasicMaterial({ color: 0xb5c2a6, transparent: true, opacity: 0.45, depthWrite: false })); p.position.set(at.x + (Math.random() - 0.5) * r, 0.4 + Math.random() * 0.8, at.z + (Math.random() - 0.5) * r); p.userData.v = 0.25 + Math.random() * 0.3; this.scene.add(p); z.puffs.push(p); }
@@ -415,7 +415,7 @@ export class Game {
       for (const p of z.puffs) { p.position.y += p.userData.v * dt; p.material.opacity = 0.45 * Math.min(1, z.t / 0.8); if (p.position.y > 2.2) p.position.y = 0.3; }
       if (z.t <= 0) { this.scene.remove(z.mesh); z.puffs.forEach(p => this.scene.remove(p)); this.zones.splice(i, 1); continue; }
       if (!this.isHost || this.state !== 'playing') continue;
-      if (z.kind === 'acid') { for (const pl of this.activeTargets()) if (Math.hypot(pl.pos.x - z.x, pl.pos.z - z.z) < z.r) { if (pl.hurtCd <= 0) { pl.hurt(); this.message('踩到藥水了！', '快離開綠色的地方', 1); } } }
+      if (z.kind === 'acid') { for (const pl of this.activeTargets()) if (Math.hypot(pl.pos.x - z.x, pl.pos.z - z.z) < z.r && Math.abs(pl.pos.y - this.world.heightAt(z.x, z.z)) < 0.6) { if (pl.hurtCd <= 0) { pl.hurt(); this.message('踩到藥水了！', '快離開綠色的地方', 1); } } }
       else if (z.kind === 'stink') { for (const s of this.students) if (s.alive && !s.remote && Math.hypot(s.group.position.x - z.x, s.group.position.z - z.z) < z.r && s.state !== 'hide' && s.state !== 'hurt') { s.state = 'hide'; s.timer = 0.6; s.alert.visible = false; } }
       else if (z.kind === 'water') { for (const s of this.students) if (s.alive && Math.hypot(s.group.position.x - z.x, s.group.position.z - z.z) < z.r) { this.lastShooter = z.who || 'host'; s.hp = 1; if (s.hit()) { this.kills++; this.stat(z.who || 'host', 'kills'); this.message('同學踩進水坑，滑倒出局！', '', 1.2); } this.lastShooter = null; } }
     }
@@ -430,7 +430,7 @@ export class Game {
   spawnRing(at, radius, color) {
     this.netEvent({ t: 'ring', p: [+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)], r: radius, c: color });
     const m = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.3, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
-    m.rotation.x = -Math.PI / 2; m.position.set(at.x, 0.03, at.z); this.scene.add(m); this.rings.push({ mesh: m, t: 0, radius });
+    m.rotation.x = -Math.PI / 2; m.position.set(at.x, this.world.heightAt(at.x, at.z) + 0.03, at.z); this.scene.add(m); this.rings.push({ mesh: m, t: 0, radius });
   }
   updateProps(dt) {
     this.updateDebris(dt);
@@ -455,7 +455,7 @@ export class Game {
     const pp = this.player.pos;
     const far = this.world.desks.filter(d => Math.hypot(d.x - pp.x, d.z - pp.z) > CFG.milk.minDistFromPlayer && !this.milks.some(m => m.desk === d));
     const desk = pick(far.length ? far : this.world.desks);
-    const mk = this.makeMilk(desk.x + rand(-0.12, 0.12), (desk.h || DESK.h) + 0.1, desk.z + rand(-0.05, 0.05));
+    const mk = this.makeMilk(desk.x + rand(-0.12, 0.12), (desk.floor || 0) + (desk.h || DESK.h) + 0.1, desk.z + rand(-0.05, 0.05));
     mk.desk = desk; mk.id = this.nextId(); this.milks.push(mk);
     Audio.milkSpawn();
     this.message('有人把鮮奶放在課桌上', '走過去喝一口回血', 2.2);
@@ -494,7 +494,7 @@ export class Game {
       const m = this.milks[i]; m.t += dt;
       m.mesh.position.y = m.baseY + Math.sin(m.t * 3) * 0.02; m.mesh.rotation.y = m.t * 1.2;
       if (this.state !== 'playing' || !this.isHost) continue;
-      const near = Math.hypot(m.mesh.position.x - pp.x, m.mesh.position.z - pp.z) < CFG.milk.pickupRadius;
+      const near = Math.hypot(m.mesh.position.x - pp.x, m.mesh.position.z - pp.z) < CFG.milk.pickupRadius && Math.abs(m.mesh.position.y - pp.y) < 1.6;
       if (!near) continue;
       if (m.kind === 'ammo') {
         if (this.player.reserve >= this.player.reserveCap()) continue;
@@ -627,7 +627,7 @@ export class Game {
           if (!s.alive) continue;
           const dx = p.x - s.group.position.x, dz = p.z - s.group.position.z;
           const h = 1.35 * s.group.scale.y;
-          if (dx * dx + dz * dz < 0.36 * 0.36 && p.y > 0 && p.y < h) { this.lastShooter = d.who; if (s.hit()) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null; return true; }
+          if (dx * dx + dz * dz < 0.36 * 0.36 && p.y > s.group.position.y && p.y < s.group.position.y + h) { this.lastShooter = d.who; if (s.hit()) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null; return true; }
         }
         if (this.teacher) {
           this.lastShooter = d.who; const r = this.teacher.testHit(p, prev); this.lastShooter = null;
@@ -638,7 +638,7 @@ export class Game {
         for (const pl of this.activeTargets()) {
           const dx = p.x - pl.pos.x, dz = p.z - pl.pos.z;
           const hr = 0.28 * (1 - (pl.up ? pl.up.dodge : 0));
-          if (dx * dx + dz * dz < hr * hr && p.y > 0 && p.y < pl.eye + 0.2) { pl.hurt(); return true; }
+          if (dx * dx + dz * dz < hr * hr && p.y > pl.pos.y && p.y < pl.pos.y + pl.eye + 0.2) { pl.hurt(); return true; }
         }
       }
       return false;
@@ -649,7 +649,7 @@ export class Game {
       if (got > 0) { this.remote.reserve += got; this.netEvent({ t: 'pickup', n: got }); }
       for (let i = this.milks.length - 1; i >= 0; i--) {
         const m = this.milks[i];
-        if (Math.hypot(m.mesh.position.x - this.remote.pos.x, m.mesh.position.z - this.remote.pos.z) >= CFG.milk.pickupRadius) continue;
+        if (Math.hypot(m.mesh.position.x - this.remote.pos.x, m.mesh.position.z - this.remote.pos.z) >= CFG.milk.pickupRadius || Math.abs(m.mesh.position.y - this.remote.pos.y) >= 1.6) continue;
         if (m.kind === 'ammo') { if (this.remote.reserve >= CFG.gun.reserveMax + this.remote.up.reserveBonus) continue; this.scene.remove(m.mesh); this.milks.splice(i, 1); this.remote.reserve += this.supplyAmount(); this.netEvent({ t: 'pickup', n: this.supplyAmount() }); break; }
         if (this.remote.hp < this.remote.maxHp) { this.scene.remove(m.mesh); this.milks.splice(i, 1); this.remote.hp = Math.min(this.remote.maxHp, this.remote.hp + CFG.milk.heal); this.stat('guest', 'milk'); this.netEvent({ t: 'drink' }); break; }
       }
