@@ -13,7 +13,9 @@ import { SpecialItem } from './item.js';
 import { Player } from './player.js';
 import { UI, $ } from './ui.js';
 import { RemotePlayer } from './remoteplayer.js';
-import { serializeSnapshot, applySnapshot } from './net/snapshot.js';
+import { serializeSnapshot, applySnapshot, applyDelta } from './net/snapshot.js';
+import { NetStats } from './net/stats.js';
+import { PaperFigure } from './paperfigure.js';
 import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, COOP, EMOTES, DIFFICULTY } from './config.js';
 import { TEACHERS, BOSSES, COMMITTEE } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
@@ -34,6 +36,8 @@ export class Game {
     // guest side: the host's figure plus the other guests
     this.others = new Map(); this.mySlot = 'host'; this.buffs = {};
     this.pid = opts.pid || Game.persistentId();
+    this.net = new NetStats(); this.showNet = true; this.pvSeq = 0; this.snapSeq = 0; this.pingT = 0; this.acc = 0;
+    PaperFigure.renderTime = () => performance.now() - (this.isHost ? 100 : this.net.delay); // guests from inputs: 100 ms behind; snapshots: adaptive
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -68,8 +72,9 @@ export class Game {
   }
   attachTransport(role, transport) {
     this.role = role; this.isHost = role !== 'guest'; this.transport = transport;
-    this.mySlot = 'host'; this.darts.localWho = 'host';
-    transport.onMessage((str, from) => this.onNet(str, from));
+    this.mySlot = 'host'; this.darts.localWho = 'host'; this.net.reset();
+    const raw = transport.send.bind(transport); transport.send = (str, to, fast) => { this.net.bytesOut += str.length; raw(str, to, fast); };
+    transport.onMessage((str, from) => { this.net.bytesIn += str.length; this.onNet(str, from); });
     if (!this.isHost) this.sendHello();
   }
   detachTransport() {
@@ -189,9 +194,10 @@ export class Game {
     let m; try { m = JSON.parse(str); } catch (e) { return; }
     if (this.isHost) {
       if (m.t === 'hello') { this.onHello(from, m.pid); return; }
+      if (m.t === 'ping') { this.transport.send(JSON.stringify({ t: 'pong', ts: m.ts }), from); return; }
       const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
-      if (m.t === 'input') r.applyInput(m);
-      else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; if (this.monitor) this.monitor.noticeShot(r); }
+      if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
+      else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (this.monitor) this.monitor.noticeShot(r); }
       else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = CFG.player.hp + r.up.maxHpBonus; r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
       else if (m.t === 'revive') {
         if (r.sitting) return; const t = this.reviveNear(r.pos, r);
@@ -211,7 +217,9 @@ export class Game {
         this.message('歡迎回來，升級和彈藥都還在', '', 2);
       }
       else if (m.t === 'offer') this.showOfferFromHost(m.ids);
-      else if (m.t === 'snap') { this.pending.push(m); if (this.pending.length > 30) this.pending.shift(); }
+      else if (m.t === 'snap') { if (this.net.onSnapshot(m.seq, m.ts, performance.now())) { this.pending.push(m); if (this.pending.length > 30) this.pending.shift(); } }
+      else if (m.t === 'delta') { this.pending.push(m); }
+      else if (m.t === 'pong') this.net.onPong(m.ts, performance.now());
     }
   }
   startGuest() {
@@ -238,7 +246,8 @@ export class Game {
   guestStep(dt) {
     this.player.update(dt);
     // apply every snapshot that arrived since the last frame, in order: the deltas inside depend on it
-    if (this.pending.length) { const list = this.pending; this.pending = []; for (const m of list) applySnapshot(this, m); }
+    if (this.pending.length) { const list = this.pending; this.pending = []; for (const m of list) { if (m.t === 'delta') applyDelta(this, m); else applySnapshot(this, m); } }
+    this.pingT -= dt; if (this.pingT <= 0 && this.transport) { this.pingT = 1; this.transport.send(JSON.stringify({ t: 'ping', ts: Math.round(performance.now()) })); }
     for (const s of this.students) s.update(dt);
     for (const t of this.teachers) t.update(dt);
     if (this.bully) this.bully.update(dt); if (this.monitor) this.monitor.update(dt); if (this.ball) this.ball.update(dt);
@@ -248,11 +257,12 @@ export class Game {
     if (this.myBuff) { this.myBuff.t -= dt; if (this.myBuff.t <= 0) { this.myBuff = null; this.ui.buff(null); } else this.ui.buff(this.myBuff); }
     for (const m of this.milks) { m.t += dt; m.mesh.position.y = m.baseY + Math.sin(m.t * 3) * 0.02; m.mesh.rotation.y = m.t * 1.2; }
     this.updateDebris(dt); this.updateZones(dt); for (const p of this.props) p.update(dt);
-    this.darts.remoteUpdate(dt);
+    // our own preview darts stop at the kids they visibly reach; the host decides whether it counted
+    this.darts.remoteUpdate(dt, (p) => this.students.some(s => s.alive && Math.abs(p.x - s.group.position.x) < 0.36 && Math.abs(p.z - s.group.position.z) < 0.36 && p.y > s.group.position.y && p.y < s.group.position.y + 1.45 * s.group.scale.y));
     this.inputTimer -= dt;
     if (this.transport && this.inputTimer <= 0) {
       this.inputTimer = 1 / NET.inputHz; const p = this.player;
-      this.transport.send(JSON.stringify({ t: 'input', x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), yaw: +p.yaw.toFixed(2), eye: +p.eye.toFixed(2), c: p.crouching ? 1 : 0, ammo: p.ammo, res: p.reserve, sh: p.shots }));
+      this.transport.send(JSON.stringify({ t: 'input', x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), yaw: +p.yaw.toFixed(2), eye: +p.eye.toFixed(2), c: p.crouching ? 1 : 0, ammo: p.ammo, res: p.reserve, sh: p.shots, rtt: Math.round(this.net.rtt) }), undefined, true);
     }
   }
   resize() { const w = innerWidth, h = innerHeight; this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
@@ -267,6 +277,7 @@ export class Game {
       this.player.keys[e.code] = true;
       if (e.code === 'KeyR') this.player.reload();
       if (e.code === 'KeyE') this.tryRevive();
+      if (e.code === 'KeyN') { this.showNet = !this.showNet; if (!this.showNet) this.ui.net(''); }
       if (/^Digit[1-4]$/.test(e.code)) this.emote(+e.code[5]);
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ControlLeft', 'ShiftLeft'].includes(e.code)) e.preventDefault();
       // Ctrl is crouch, so Ctrl+S / Ctrl+D / Ctrl+A... must not reach the browser's own shortcuts
@@ -378,7 +389,7 @@ export class Game {
     this.props.forEach(p => p.dispose()); this.props = (this.world.layout.props || []).map((d, i) => new Prop(this, d, i));
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
-    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0;
+    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null;
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = CFG.player.hp; }
   }
@@ -664,7 +675,7 @@ export class Game {
   hitmark() { const who = this.lastShooter || 'host'; this.stat(who, 'hits'); if (who !== 'host') { const r = this.remotes.get(who); if (r) r.hits++; this.netEvent({ t: 'hitmark' }, who); } else { this.ui.hitmark(); this.player.hits++; } }
   onLose() {
     this.state = 'over'; Audio.lose();
-    this.netEvent({ t: 'over', win: 0, title: this.coop ? '全部的人都被罰坐了' : '你被罰坐了！', sub: '沒有人能來救，全班歡呼。', stats: this.coopStats() });
+    this.overInfo = { win: 0, title: this.coop ? '全部的人都被罰坐了' : '你被罰坐了！', sub: '沒有人能來救，全班歡呼。', stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
     if (document.pointerLockElement) document.exitPointerLock();
     if (this.coop) this.showOver('全部的人都被罰坐了', '沒有人能來救，全班歡呼。', false);
     else this.showOver('你被罰坐了！', pick(['泡棉彈打到五次，乖乖回座位。', '同學們歡呼，你默默舉起白旗。', '下次記得蹲在課桌後面。']), false);
@@ -674,7 +685,7 @@ export class Game {
     const tn = this.bossName || '老師', trio = this.teachers.length > 1;
     const sub = trio ? '三位監考官同時崩潰，會考取消。你是全校的傳說。' : '三個道具全掉，全班自由。你是三年二班的傳說。';
     this.message('下課！！！', `${tn}崩潰，宣布今天不用上課`, 4);
-    this.netEvent({ t: 'over', win: 1, title: `下課！${tn}${trio ? '全員' : ''}投降了`, sub, stats: this.coopStats() });
+    this.overInfo = { win: 1, title: `下課！${tn}${trio ? '全員' : ''}投降了`, sub, stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
     setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); this.showOver(`下課！${tn}${trio ? '全員' : ''}投降了`, sub, true); }, 3200);
   }
   showOver(title, sub, win, remoteStats = null) {
@@ -701,8 +712,11 @@ export class Game {
   }
   // ---------- loop ----------
   frame() {
-    const dt = Math.min(0.05, this.clock.getDelta());
-    if (this.state === 'playing' || this.state === 'won') this.step(dt);
+    const dt = Math.min(0.1, this.clock.getDelta());
+    // the simulation runs in fixed 1/60 s steps however fast the screen refreshes, so a slow host does not slow the room
+    if (this.state === 'playing' || this.state === 'won') { this.acc += dt; let n = 0; while (this.acc >= 1 / 60 && n < 6) { this.step(1 / 60); this.acc -= 1 / 60; n++; } if (n === 6) this.acc = 0; }
+    else this.acc = 0;
+    if (this.net.tick(dt) && this.transport) this.ui.net(this.showNet ? (this.isHost ? this.net.hostText(Object.fromEntries([...this.remotes.values()].map(r => [r.slot, r.skin.name]))) : this.net.guestText()) : '');
     if (this.state === 'upgrade' && this.offer) { this.offer.t -= dt; if (this.offer.t <= 0) { if (!this.offer.picked.host) this.pickUpgrade($('upgrade-cards').children[0].dataset.id); else this.closeOffer(); } }
     this.tickLiveOffer(dt);
     this.ui.tick(dt); this.touchCtl.update();
@@ -790,7 +804,7 @@ export class Game {
     }
     if (this.transport) {
       this.snapTimer -= realDt;
-      if (this.snapTimer <= 0) { this.snapTimer = 1 / NET.snapHz; this.transport.send(JSON.stringify(serializeSnapshot(this))); }
+      if (this.snapTimer <= 0) { this.snapTimer = 1 / NET.snapHz; const { snap, delta } = serializeSnapshot(this); this.transport.send(JSON.stringify(snap), undefined, true); if (delta) this.transport.send(JSON.stringify(delta)); }
     }
   }
 }

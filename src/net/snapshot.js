@@ -8,14 +8,17 @@ import { Dodgeball } from '../dodgeball.js';
 import { Monitor } from '../monitor.js';
 import { SpecialItem } from '../item.js';
 import { RemotePlayer } from '../remoteplayer.js';
+import { PaperFigure } from '../paperfigure.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 
-// Host side: everything the guest needs to draw the classroom this tick.
+// Host side: everything the guest needs to draw the classroom this tick, in two parts.
+//   snap  — positions and the like; goes on the fast lane, a lost or late one does no harm
+//   delta — events and what landed on / vanished from the floor; goes on the ordered lane, only when there is something
 export function serializeSnapshot(g) {
   const p = g.player;
   const snap = {
-    t: 'snap', st: g.state, wave: g.wave, score: g.score, kills: g.kills, boss: g.bossPhase ? 1 : 0,
+    t: 'snap', seq: ++g.snapSeq, ts: Math.round(performance.now()), st: g.state, wave: g.wave, score: g.score, kills: g.kills, boss: g.bossPhase ? 1 : 0, ov: g.overInfo || undefined,
     left: g.teachers.length ? '老師' : g.students.filter(s => s.alive).length + g.spawnQueue.length,
     slow: g.worldSlow() ? 1 : 0,
     host: { x: r2(p.pos.x), z: r2(p.pos.z), yaw: r2(p.yaw), eye: r2(p.eye), c: p.crouching ? 1 : 0, hp: p.hp, sit: p.sitting ? 1 : 0, sx: p.seat ? r2(p.seat.x) : 0, sz: p.seat ? r2(p.seat.z) : 0 },
@@ -29,16 +32,25 @@ export function serializeSnapshot(g) {
     props: g.props.map(p => p.state === 'up' ? 0 : 1),
     milks: g.milks.map(m => ({ id: m.id, k: m.kind || 'milk', x: r2(m.mesh.position.x), y: r2(m.kind === 'ammo' ? m.baseY + 0.05 : m.baseY), z: r2(m.mesh.position.z) })),
     dm: g.darts.serializeMoving(),
-    ev: g.events,
   };
-  const dl = g.darts.takeDeltas();
-  if (g.fullSnapNext) snap.dr = g.darts.serializeResting(); else { if (dl.settled.length) snap.ds = dl.settled; if (dl.removed.length) snap.dx = dl.removed; }
+  const dl = g.darts.takeDeltas(), delta = { t: 'delta', seq: g.snapSeq };
+  let any = false;
+  if (g.events.length) { delta.ev = g.events; any = true; }
+  if (g.fullSnapNext) { delta.dr = g.darts.serializeResting(); any = true; }
+  else { if (dl.settled.length) { delta.ds = dl.settled; any = true; } if (dl.removed.length) { delta.dx = dl.removed; any = true; } }
   g.events = []; g.fullSnapNext = false;
-  return snap;
+  return { snap, delta: any ? delta : null };
+}
+
+// Guest side: the ordered part
+export function applyDelta(g, d) {
+  g.darts.applyFloor(d.ds, d.dx, d.dr);
+  for (const e of d.ev || []) if (!e.to || e.to === g.mySlot) applyEvent(g, e);
 }
 
 // Guest side: create, update and remove local stand-ins so they match the host.
 export function applySnapshot(g, s) {
+  PaperFigure.stamp = s.ts !== undefined ? g.net.toLocal(s.ts) : undefined; // every figure sample below carries this moment
   g.wave = s.wave; g.score = s.score; g.kills = s.kills; g.bossPhase = !!s.boss;
   g.ui.wave(s.wave); g.ui.score(s.score); g.ui.left(s.left);
   g.remoteSlow = !!s.slow;
@@ -80,10 +92,10 @@ export function applySnapshot(g, s) {
   if (s.props) s.props.forEach((st, i) => { const p = g.props[i]; if (p) p.applyState(st ? 'down' : 'up'); });
   sync(g, 'items', s.items, (it) => new SpecialItem(g, BUFFS.find(b => b.id === it.b), g.world.layout.mounts[it.mi], { remote: true, id: it.id }));
   syncMilks(g, s.milks);
-  g.darts.applyState(s.dm, s.ds, s.dx, s.dr);
-  for (const e of s.ev || []) if (!e.to || e.to === g.mySlot) applyEvent(g, e);
+  g.darts.applyMoving(s.dm);
+  PaperFigure.stamp = undefined;
   if ((s.st === 'over' || s.st === 'won') && g.state === 'playing') {
-    g.state = s.st; const ov = g.pendingOver; if (s.st === 'won') { Audio.bellOut(); setTimeout(() => Audio.win(), 1800); } else Audio.lose();
+    g.state = s.st; const ov = s.ov || g.pendingOver; if (s.st === 'won') { Audio.bellOut(); setTimeout(() => Audio.win(), 1800); } else Audio.lose();
     setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); g.showOver(ov ? ov.title : (s.st === 'won' ? '下課！老師投降了' : '全班被罰坐了'), ov ? ov.sub : '', s.st === 'won', ov ? ov.stats : null); }, s.st === 'won' ? 3200 : 0);
   }
 }

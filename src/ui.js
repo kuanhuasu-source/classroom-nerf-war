@@ -40,6 +40,7 @@ export class UI {
   tick(dt) { if (this.msgTimer > 0) { this.msgTimer -= dt; if (this.msgTimer <= 0) this.msgEl.classList.remove('show'); } }
   hitmark() { const h = $('hitmark'); h.classList.add('show'); clearTimeout(this._hm); this._hm = setTimeout(() => h.classList.remove('show'), 60); }
   vignette() { const v = $('vignette'); v.classList.add('hit'); clearTimeout(this._vg); this._vg = setTimeout(() => v.classList.remove('hit'), 80); }
+  net(text) { const el = $('hud-net'); if (!text) { el.classList.remove('on'); return; } el.classList.add('on'); el.textContent = text; }
   boss(on) { $('hud-boss').classList.toggle('on', on); }
   buff(b) { const el = $('hud-buff'); if (!b) { el.classList.remove('on'); return; } el.classList.add('on'); $('buff-name').textContent = b.name; $('buff-effect').textContent = b.effect; $('buff-time').textContent = Math.ceil(b.t); }
   // groups: [{ name, entries: [{label, hp}], max, defeated }] — one boss gives three stickers, the committee one sticker per examiner

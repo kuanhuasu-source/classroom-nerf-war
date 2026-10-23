@@ -93,7 +93,7 @@ export class Darts {
       }
     }
   }
-  remove(i) { const d = this.list[i]; if (d.stuck) { this.restVersion++; this.removedQ.push(d.id); } this.scene.remove(d.mesh); this.byId.delete(d.id); this.list.splice(i, 1); }
+  remove(i) { const d = this.list[i]; if (d.stuck && !d.preview) { this.restVersion++; this.removedQ.push(d.id); } this.scene.remove(d.mesh); if (this.byId.get(d.id) === d) this.byId.delete(d.id); this.list.splice(i, 1); }
   // a dart comes to rest; keep the floor from filling up forever
   settle(d) {
     d.stuck = true; d.restTime = 0; if (d.kind !== 'dart') return; this.restVersion++; this.settledQ.push(d);
@@ -103,7 +103,7 @@ export class Darts {
   // [id, x, y, z, vx, vy, vz, owner, kind, who] for darts in flight
   serializeMoving() {
     const out = [];
-    for (const d of this.list) if (!d.stuck) { const p = d.mesh.position, v = d.vel; out.push([d.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +v.x.toFixed(1), +v.y.toFixed(1), +v.z.toFixed(1), d.owner, d.kind, d.who]); }
+    for (const d of this.list) if (!d.stuck) { const p = d.mesh.position, v = d.vel; out.push([d.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +v.x.toFixed(1), +v.y.toFixed(1), +v.z.toFixed(1), d.owner, d.kind, d.who, d.pv || 0]); }
     return out;
   }
   // [id, x, y, z, rotY, owner] for a dart lying around
@@ -118,21 +118,27 @@ export class Darts {
   }
   // guest side: mirror the host's darts by id.
   //   moving: every dart in flight, every tick; settled/removed: deltas of the floor; full: the whole floor (on connect)
-  applyState(moving, settled, removed, full) {
+  applyState(moving, settled, removed, full) { this.applyFloor(settled, removed, full); this.applyMoving(moving); }
+  // the floor: deltas (settled / removed) ride the reliable channel, the full list only on connect
+  applyFloor(settled, removed, full) {
     const rest = (a) => {
       let d = this.byId.get(a[0]);
       if (!d) { d = this.fire(new THREE.Vector3(a[1], a[2], a[3]), new THREE.Vector3(0, 0, 1), 0.01, a[5], 'dart'); d.id = a[0]; this.byId.set(a[0], d); d.restTime = 0; }
       else if (!d.stuck) d.restTime = 0;
-      d.stuck = true; d.vel.set(0, 0, 0); d.mesh.position.set(a[1], a[2], a[3]); d.mesh.rotation.set(0, a[4], 0); d.mesh.visible = true;
+      d.stuck = true; d.vel.set(0, 0, 0); d.mesh.position.set(a[1], a[2], a[3]); d.mesh.rotation.set(0, a[4], 0); d.mesh.visible = true; d.hiddenByPreview = false;
+      this.dropPreview(a[0]); // our own dart landed for real: the preview has done its job
       return d;
     };
     if (full) {
       const keep = new Set(full.map(a => a[0]));
       for (const a of full) rest(a);
-      for (let i = this.list.length - 1; i >= 0; i--) if (this.list[i].stuck && !keep.has(this.list[i].id)) this.remove(i);
+      for (let i = this.list.length - 1; i >= 0; i--) if (this.list[i].stuck && !this.list[i].preview && !keep.has(this.list[i].id)) this.remove(i);
     }
     if (settled) for (const a of settled) rest(a);
     if (removed) for (const id of removed) { const d = this.byId.get(id); if (d) { const i = this.list.indexOf(d); if (i >= 0) this.remove(i); } }
+  }
+  // every dart in flight, every snapshot (fast channel)
+  applyMoving(moving) {
     const seen = new Set();
     for (const a of moving) {
       seen.add(a[0]);
@@ -141,15 +147,46 @@ export class Darts {
         const vel = new THREE.Vector3(a[4], a[5], a[6]), sp = vel.length() || 0.01;
         d = this.fire(new THREE.Vector3(a[1], a[2], a[3]), sp > 0.02 ? vel : new THREE.Vector3(0, 0, 1), sp, a[7], a[8]);
         d.id = a[0]; d.who = a[9]; this.byId.set(a[0], d);
+        if (a[10] && a[9] === this.localWho) { // the host's copy of a dart we already drew: keep showing ours until it lands
+          const pre = this.list.find(x => x.preview === a[10]); if (pre) { pre.hostId = a[0]; d.hiddenByPreview = true; }
+        }
         if (a[8] === 'chalk') Audio.chalkThrow(); else if (a[7] === 'player') { if (a[9] !== this.localWho) Audio.pew(); } else Audio.enemyPew();
       }
-      d.stuck = false; d.mesh.visible = true; d.mesh.position.set(a[1], a[2], a[3]); d.vel.set(a[4], a[5], a[6]); this.orient(d);
+      d.stuck = false; d.mesh.visible = !d.hiddenByPreview; d.mesh.position.set(a[1], a[2], a[3]); d.vel.set(a[4], a[5], a[6]); this.orient(d);
     }
-    // a dart in flight that vanished either came to rest (handled above) or was consumed
-    for (let i = this.list.length - 1; i >= 0; i--) { const d = this.list[i]; if (!d.stuck && !seen.has(d.id)) { this.scene.remove(d.mesh); this.byId.delete(d.id); this.list.splice(i, 1); } }
+    // a dart in flight that vanished either came to rest (floor delta) or was consumed; previews follow their host copy
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const d = this.list[i];
+      if (d.preview) { if (d.hostId && !seen.has(d.hostId)) this.remove(i); continue; }
+      if (!d.stuck && !seen.has(d.id)) { this.scene.remove(d.mesh); if (this.byId.get(d.id) === d) this.byId.delete(d.id); this.list.splice(i, 1); }
+    }
   }
-  remoteUpdate(dt) {
-    for (const d of this.list) {
+  dropPreview(hostId) { const i = this.list.findIndex(x => x.preview && x.hostId === hostId); if (i >= 0) this.remove(i); }
+  // guest: a dart drawn the instant the trigger is pulled, flown with the same physics, swapped for the host's copy when that lands
+  firePreview(pos, dir, speed, who, pv) {
+    const d = this.fire(pos, dir, speed, 'player'); d.who = who; d.preview = pv; d.id = -(++this.seq); d.born = performance.now(); d.hostId = 0;
+    return d;
+  }
+  stepPreview(d, dt, hitTest) {
+    const p = d.mesh.position, n = Math.max(1, Math.ceil(d.vel.length() * dt / 0.15)), sdt = dt / n;
+    for (let k = 0; k < n; k++) {
+      d.vel.y -= d.g * sdt; const prev = p.clone(); p.addScaledVector(d.vel, sdt); this.orient(d);
+      if (hitTest && hitTest(p)) return 'hit';
+      const ground = this.world.heightAt(p.x, p.z);
+      if (p.y < ground + 0.03) { if (p.y < ground - 0.25) p.copy(prev); else p.y = ground + 0.03; d.stuck = true; d.restTime = 0; return 'rest'; }
+      if (this.world.pointInBox(p)) { p.copy(prev); d.stuck = true; d.restTime = 0; return 'rest'; }
+    }
+    return null;
+  }
+  remoteUpdate(dt, previewHit = null) {
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const d = this.list[i];
+      if (d.preview) {
+        if (!d.hostId && performance.now() - d.born > 2500) { this.remove(i); continue; } // never acknowledged: the fire message was lost
+        if (d.stuck) { d.restTime += dt; if (d.restTime > 3) this.remove(i); continue; } // a resting preview waits briefly for the host's copy
+        if (this.stepPreview(d, dt, previewHit) === 'hit') this.remove(i);
+        continue;
+      }
       if (d.stuck) { d.restTime += dt; const limit = CFG.gun.floorLife; d.mesh.visible = d.restTime < limit - 2 || Math.floor(d.restTime * 6) % 2 === 0; }
       else { d.vel.y -= d.g * dt; d.mesh.position.addScaledVector(d.vel, dt); this.orient(d); }
     }

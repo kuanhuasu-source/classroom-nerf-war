@@ -119,7 +119,7 @@ export class Player {
     const dirs = [dir]; if (this.up.twin) { const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion); dirs.push(dir.clone().addScaledVector(side, 0.035).normalize()); dirs[0] = dir.clone().addScaledVector(side, -0.035).normalize(); }
     for (const dd of dirs) {
       if (this.game.isHost) { const d = this.game.darts.fire(muzzle, dd, speed, 'player'); d.who = 'host'; }
-      else if (this.game.transport) this.game.transport.send(JSON.stringify({ t: 'fire', p: [+muzzle.x.toFixed(3), +muzzle.y.toFixed(3), +muzzle.z.toFixed(3)], d: [+dd.x.toFixed(4), +dd.y.toFixed(4), +dd.z.toFixed(4)], s: +speed.toFixed(1) }));
+      else if (this.game.transport) { const pv = ++this.game.pvSeq; this.game.darts.firePreview(muzzle, dd, speed, this.game.mySlot, pv); this.game.transport.send(JSON.stringify({ t: 'fire', p: [+muzzle.x.toFixed(3), +muzzle.y.toFixed(3), +muzzle.z.toFixed(3)], d: [+dd.x.toFixed(4), +dd.y.toFixed(4), +dd.z.toFixed(4)], s: +speed.toFixed(1), pv })); }
     }
     Audio.pew();
     if (this.game.monitor && this.game.isHost) this.game.monitor.noticeShot();

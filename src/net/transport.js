@@ -5,7 +5,7 @@ export class QueueTransport {
   constructor(id = 'peer') { this.id = id; this.outbox = []; this.handlers = []; this.closed = false; }
   get open() { return !this.closed; }
   get count() { return 1; }
-  send(str, to) { if (!this.closed) this.outbox.push({ to: to || null, from: this.id, str }); }
+  send(str, to, fast = false) { if (!this.closed) this.outbox.push({ to: to || null, from: this.id, str, fast }); }
   onMessage(fn) { this.handlers.push(fn); }
   receive(str, from = 'peer') { for (const h of this.handlers) h(str, from); }
   drain() { const o = this.outbox; this.outbox = []; return o; }

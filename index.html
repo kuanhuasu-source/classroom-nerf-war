@@ -149,6 +149,9 @@ body.touch #hud-ammo small kbd { display: none; }
 #tc-emote { position: absolute; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); display: none; gap: 8px; }
 body.touch.coop #tc-emote { display: flex; }
 #tc-emote .mini { touch-action: none; }
+#hud-net { top: calc(16px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); display: none; font-size: 12px; padding: 3px 9px; color: var(--pencil); background: #fff; font-variant-numeric: tabular-nums; }
+#hud-net.on { display: block; }
+body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
 #hud-up { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: none; font-size: 14px; color: var(--pencil); background: #fff; }
 #hud-up.on { display: block; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 6px 0 14px; }
@@ -189,6 +192,7 @@ body.touch.coop #tc-emote { display: flex; }
   <div id="hud-boss"></div>
   <div class="sticker" id="hud-buff"><b id="buff-name">滿分考卷</b> <span id="buff-effect">分數雙倍</span> <span id="buff-time">12</span></div>
   <div class="sticker" id="hud-up"></div>
+  <div class="sticker" id="hud-net"></div>
   <div class="sticker" id="hud-hp">♥♥♥♥♥</div>
   <div class="sticker" id="hud-ammo"><span id="ammo">15</span><span class="reserve">/ <span id="reserve">30</span></span><small>彈匣 / 備用　<kbd style="font-size:12px">R</kbd> 重裝</small><div class="bar"><i id="reload-bar"></i></div></div>
   <div id="crosshair"><div class="dot"></div></div>
