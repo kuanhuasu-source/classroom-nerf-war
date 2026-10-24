@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="課桌大戰">
 </head>
 <body>
 <title>課桌大戰</title>
@@ -146,7 +150,7 @@ body.touch #hud-ammo small kbd { display: none; }
 .tc-btn.active, .tc-btn.held { background: var(--nerf-orange); transform: scale(.94) rotate(-3deg); }
 #tc-fire { right: calc(22px + env(safe-area-inset-right, 0px)); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); width: 96px; height: 96px; font-size: 22px; }
 #tc-reload { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(108px + env(safe-area-inset-bottom, 0px)); }
-#tc-crouch { right: calc(232px + env(safe-area-inset-right, 0px)); bottom: calc(108px + env(safe-area-inset-bottom, 0px)); }
+#tc-crouch { right: calc(37px + env(safe-area-inset-right, 0px)); bottom: calc(204px + env(safe-area-inset-bottom, 0px)); }
 #tc-revive { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(190px + env(safe-area-inset-bottom, 0px)); display: none; background: #cfe6ff; }
 #tc-pause { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 44px; height: 44px; font-size: 18px; }
 #tc-gyro { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(62px + env(safe-area-inset-right, 0px)); width: 58px; height: 44px; font-size: 13px; border-radius: 22px; }
@@ -189,6 +193,42 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
 #btn-begin[hidden] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { #msg, #vignette, #hitmark, .btn { transition: none; } }
 @media (max-width: 480px) { .sticker { font-size: 16px; padding: 4px 10px; } #hud-ammo { font-size: 24px; } .keys { font-size: 15px; } }
+/* phones in landscape are short: everything on screen shrinks, the fire cluster tucks into the corner */
+@media (max-height: 520px) {
+  .sticker { font-size: 14px; padding: 3px 9px; border-width: 2px; box-shadow: 2px 2px 0 var(--pencil); }
+  #hud-top { top: calc(8px + env(safe-area-inset-top, 0px)); left: max(8px, env(safe-area-inset-left, 0px)); gap: 6px; }
+  #hud-top b { font-size: 11px; margin-right: 4px; }
+  #hud-hp { font-size: 17px; letter-spacing: 2px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); left: max(8px, env(safe-area-inset-left, 0px)); }
+  #hud-ammo { font-size: 20px; min-width: 76px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); }
+  #hud-ammo small { font-size: 10px; } #hud-ammo .reserve { font-size: 13px; }
+  #hud-boss { top: calc(8px + env(safe-area-inset-top, 0px)); } #hud-boss .sticker { font-size: 12px; padding: 2px 8px; } #hud-boss.many { top: calc(40px + env(safe-area-inset-top, 0px)); } #hud-boss.many .sticker { font-size: 11px; }
+  #hud-buff, #hud-up { font-size: 11px; } #hud-net { font-size: 9px; padding: 2px 6px; }
+  #msg { font-size: clamp(16px, 3.2vw, 24px); top: 18%; padding: 3px 12px; border-width: 2px; box-shadow: 2px 2px 0 var(--pencil); }
+  #crosshair { width: 18px; height: 18px; }
+  #upgrade.compact .card-up b { font-size: 14px; } #upgrade.compact .card-up span { font-size: 11px; } #upgrade.compact h2 { font-size: 16px; } #upgrade.compact { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+  .tc-btn { width: 46px; height: 46px; font-size: 13px; border-width: 2px; box-shadow: 2px 2px 0 var(--pencil); }
+  #tc-fire { width: 64px; height: 64px; font-size: 15px; right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+  #tc-reload { right: calc(86px + env(safe-area-inset-right, 0px)); bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
+  #tc-crouch { right: calc(23px + env(safe-area-inset-right, 0px)); bottom: calc(130px + env(safe-area-inset-bottom, 0px)); }
+  #tc-revive { right: calc(86px + env(safe-area-inset-right, 0px)); bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
+  #tc-pause { width: 34px; height: 34px; font-size: 14px; top: calc(6px + env(safe-area-inset-top, 0px)); right: calc(6px + env(safe-area-inset-right, 0px)); }
+  #tc-gyro { width: 46px; height: 34px; font-size: 11px; top: calc(6px + env(safe-area-inset-top, 0px)); right: calc(46px + env(safe-area-inset-right, 0px)); }
+  body.touch #hud-ammo { right: calc(200px + env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  body.touch #hud-net { top: calc(44px + env(safe-area-inset-top, 0px)); }
+  #tc-stick { width: 96px; height: 96px; margin: -48px 0 0 -48px; } #tc-stick .knob { width: 40px; height: 40px; }
+  #tc-emote .mini { font-size: 11px; padding: 2px 6px; }
+  .overlay { padding-block: 10px; align-items: flex-start; }
+  .card { padding: 14px 16px; transform: none; } .card::before { display: none; }
+  .card h1 { font-size: 32px; } .card h2 { font-size: 24px; } .card .sub { font-size: 14px; margin-bottom: 8px; }
+  .keys { font-size: 13px; gap: 3px 10px; margin-bottom: 10px; } .keys kbd { font-size: 12px; padding: 0 5px; }
+  .seg-btn { font-size: 14px; padding: 3px 10px; } .btn { font-size: 18px; padding: 8px 18px; }
+  #difficulty-row, #map-row, #profile-row { margin-bottom: 8px; gap: 6px; } .look-btn { width: 32px; height: 42px; } .look-btn canvas { width: 24px; height: 48px; }
+  .stats b { font-size: 22px; } .stats { font-size: 15px; margin: 6px 0 12px; }
+}
+/* on a touch device the keyboard help is noise: the menu note explains the touch controls instead */
+body.touch .keys { display: none; }
+#rotate-hint { display: none; position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: var(--paper); border: 2px solid var(--ink); border-radius: 12px; padding: 4px 12px; font-size: 14px; color: var(--ink); pointer-events: none; }
+@media (orientation: portrait) { body.touch #rotate-hint { display: block; } }
 </style>
 
 <div id="game"></div>
@@ -210,6 +250,7 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
   <div id="msg"></div>
   <div id="vignette"></div>
   <div id="dust"></div>
+  <div id="rotate-hint">把手機橫放，畫面會好很多</div>
 </div>
 
 <div class="overlay" id="menu">

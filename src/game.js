@@ -65,6 +65,9 @@ export class Game {
     this.clock = new THREE.Clock(); this.hasLock = false; this.lockSupported = 'requestPointerLock' in document.body;
     this.touchCtl = new TouchControls(this); this.touch = this.touchCtl.on;
     this.bindInput(); this.resize(); window.addEventListener('resize', () => this.resize());
+    // iOS reports the new size a moment after rotating or hiding the toolbar
+    window.addEventListener('orientationchange', () => { this.resize(); setTimeout(() => this.resize(), 350); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', () => this.resize());
     if (this.transport) this.attachTransport(this.role, this.transport); else this.darts.localWho = 'host';
     this.renderer.setAnimationLoop(() => this.frame());
   }
@@ -275,7 +278,16 @@ export class Game {
       this.transport.send(JSON.stringify({ t: 'input', x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), yaw: +p.yaw.toFixed(2), eye: +p.eye.toFixed(2), c: p.crouching ? 1 : 0, ammo: p.ammo, res: p.reserve, sh: p.shots, rtt: Math.round(this.net.rtt) }), undefined, true);
     }
   }
-  resize() { const w = innerWidth, h = innerHeight; this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
+  resize() {
+    const vv = window.visualViewport, w = Math.round(vv ? vv.width : innerWidth), h = Math.round(vv ? vv.height : innerHeight);
+    if (!w || !h) return;
+    this.renderer.setSize(w, h, false); this.camera.aspect = w / h;
+    // phones are much wider than 16:9: keep the horizontal field of view of a 16:9 screen (vertical 75°) instead of
+    // letting the vertical 75° turn into a fisheye that is mostly ceiling and floor
+    const base = 75, wideAspect = 16 / 9;
+    this.camera.fov = this.camera.aspect <= wideAspect ? base : THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(base / 2)) * wideAspect / this.camera.aspect));
+    this.camera.updateProjectionMatrix();
+  }
   // ---------- input ----------
   bindInput() {
     const canvas = this.renderer.domElement;
