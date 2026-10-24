@@ -118,10 +118,11 @@ export class Student extends PaperFigure {
       }
       case 'flyOut': {
         this.flyT += dt;
-        const t = clamp(this.flyT / 1.3, 0, 1), s = this.flyStart, e = this.desk.seat;
-        const ey = this.world.heightAt(e.x, e.z);
+        const t = clamp(this.flyT / 1.3, 0, 1), s = this.flyStart, e = this.leaving ? this.exit : this.desk.seat;
+        const ey = this.leaving ? this.exit.y : this.world.heightAt(e.x, e.z);
         p.x = s.x + (e.x - s.x) * t; p.z = s.z + (e.z - s.z) * t; p.y = s.y + (ey - s.y) * t + Math.sin(t * Math.PI) * 2.2;
         this.mesh.rotation.z = t * Math.PI * 2;
+        if (t >= 1 && this.leaving) { this.gone = true; return; }
         if (t >= 1) { this.state = 'sitting'; p.y = ey; this.mesh.rotation.z = 0; this.group.scale.set(0.85, 0.72, 0.85); if (this.tag) this.tag.visible = true; }
         return;
       }
@@ -170,7 +171,14 @@ export class Student extends PaperFigure {
     this.alive = false; Audio.out(); this.alert.visible = false;
     this.game.darts.drop(this.group.position, this.leader ? CFG.leader.drop : CFG.gun.dropOnKnockout);
     if (this.tag) this.tag.visible = false;
-    if (this.leader) this.game.onLeaderDown(this);
+    if (this.leader) { // the wave leader is sent to the office instead of a seat: she leaves through the nearest door
+      this.game.onLeaderDown(this);
+      const L = this.world.layout, p = this.group.position, door = L.doors.slice().sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+      this.leaving = true; this.exit = { x: door.x + 0.9, z: door.z, y: door.floor || 0 };
+      if (this.desk && this.desk.covered === this) this.desk.covered = null;
+      this.setTex('out'); this.state = 'flyOut'; this.flyT = 0; this.flyStart = this.group.position.clone(); this.crouch = 0; this.group.scale.y = 1;
+      return;
+    }
     if (!this.desk) { this.desk = this.world.desks.find(d => !d.occupant) || this.world.desks[0]; }
     if (this.desk.occupant !== this) { const free = this.world.desks.find(d => !d.occupant); if (free) { this.desk.covered = this.desk.covered === this ? null : this.desk.covered; this.desk = free; } }
     this.desk.occupant = this; this.desk.covered = this.desk.covered === this ? null : this.desk.covered;

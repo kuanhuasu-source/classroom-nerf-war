@@ -150,7 +150,7 @@ export class Game {
   onLeaderDown(s) {
     this.addScore(CFG.score.leader); this.panicT = CFG.leader.panicSeconds;
     for (const o of this.students) if (o.alive && o !== s && o.state !== 'flyOut') { o.state = 'hide'; o.timer = rand(1.5, 2.5); o.alert.visible = false; }
-    this.message('班長出局了！', '其他人慌了，趁現在', 2);
+    this.message('班長出局了！', '被叫去辦公室，其他人慌了，趁現在', 2);
   }
   // everyone the enemies can go after (host side); the guest counts once connected and not sitting
   players() { return this.isHost ? [this.player, ...this.remoteList()] : [this.player]; }
@@ -250,6 +250,7 @@ export class Game {
     if (this.pending.length) { const list = this.pending; this.pending = []; for (const m of list) { if (m.t === 'delta') applyDelta(this, m); else applySnapshot(this, m); } }
     this.pingT -= dt; if (this.pingT <= 0 && this.transport) { this.pingT = 1; this.transport.send(JSON.stringify({ t: 'ping', ts: Math.round(performance.now()) })); }
     for (const s of this.students) s.update(dt);
+    for (let i = this.students.length - 1; i >= 0; i--) if (this.students[i].gone) { this.students[i].dispose(); this.students.splice(i, 1); } // leaders who left for the office
     for (const t of this.teachers) t.update(dt);
     if (this.bully) this.bully.update(dt); if (this.monitor) this.monitor.update(dt); if (this.ball) this.ball.update(dt);
     if (this.hostFigure) this.hostFigure.update(dt);
@@ -795,6 +796,7 @@ export class Game {
     this.panicT = Math.max(0, (this.panicT || 0) - dt);
     this.updateMilk(dt); this.updateProps(dt); this.updateZones(dt); for (const p of this.props) p.update(dt); this.world.tick(dt);
     for (const s of this.students) s.update(dt);
+    for (let i = this.students.length - 1; i >= 0; i--) if (this.students[i].gone) { this.students[i].dispose(); this.students.splice(i, 1); } // leaders who left for the office
     for (const t of this.teachers) t.update(dt);
     if (this.isHost) this.updateBell(dt);
     else { const left = this.students.filter(s => s.alive).length + this.spawnQueue.length; if (left !== this._left) { this._left = left; this.ui.left(left); } }
