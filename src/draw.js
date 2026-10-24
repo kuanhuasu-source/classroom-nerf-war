@@ -464,6 +464,13 @@ export const Draw = (() => {
     }
     return c;
   }
+  function grass() {
+    const c = canvas(512, 512), ctx = c.getContext('2d');
+    ctx.fillStyle = '#9fcf7a'; ctx.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 1400; i++) { const x = Math.random() * 512, y = Math.random() * 512, l = 4 + Math.random() * 8; line(ctx, [[x, y], [x + (Math.random() - 0.5) * 4, y - l]], Math.random() < 0.5 ? 'rgba(70,130,50,0.55)' : 'rgba(190,225,140,0.6)', 2, 1); }
+    for (let i = 0; i < 18; i++) { const x = Math.random() * 512, y = Math.random() * 512; ctx.fillStyle = Math.random() < 0.5 ? '#ffffff' : '#f4e27a'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 6.283); ctx.fill(); }
+    return c;
+  }
   function window_() {
     const c = canvas(256, 384), ctx = c.getContext('2d');
     const g = ctx.createLinearGradient(0, 0, 0, 384); g.addColorStop(0, '#8fc7f3'); g.addColorStop(1, '#dff0fb');
@@ -488,5 +495,5 @@ export const Draw = (() => {
     const t = new THREE.DataTexture(data, 4, 1, THREE.RedFormat); t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
     return t;
   }
-  return { kid, kidVariant, teacher, nameTag, noteIcon, alertIcon, planeIcon, speechIcon, tiles, staffWall, poster, banner, skeleton, bully, monitor, ballTex, itemIcon, paperWall, floor, blackboard, window: window_, milkCarton, gradientMap, tex, canvas };
+  return { kid, kidVariant, teacher, nameTag, noteIcon, alertIcon, planeIcon, speechIcon, tiles, staffWall, poster, banner, skeleton, grass, bully, monitor, ballTex, itemIcon, paperWall, floor, blackboard, window: window_, milkCarton, gradientMap, tex, canvas };
 })();

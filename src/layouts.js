@@ -149,6 +149,41 @@ function hall() {
   };
 }
 
-export const LAYOUTS = { classroom: classroom(), lab: lab(), music: music(), hall: hall() };
+// 操場：戶外。溜滑梯（有高台）、盪鞦韆、生態池（走不過去）、輪胎、沙坑、長椅、升旗台、跑道、樹。
+function yard() {
+  const desks = [], furniture = [], W = 20, D = 16, TOWER = 1.6;
+  const terrain = [
+    { kind: 'platform', x: -4, z: -2, w: 1.4, d: 1.4, h: TOWER, color: 0x2f6fd1 },                                   // slide tower
+    { kind: 'ramp', x: -5.3, z: -2, w: 1.2, d: 1.0, h0: 0, h1: TOWER, axis: 'x', dir: 1, color: 0x2f6fd1 },             // steps up from the west
+    { kind: 'ramp', x: -1.8, z: -2, w: 3.0, d: 0.9, h0: 0, h1: TOWER, axis: 'x', dir: -1, smooth: true, color: 0xf4c542 }, // the slide down to the east
+    { kind: 'platform', x: 7.5, z: -6.3, w: 2.2, d: 2.2, h: 0.5, color: 0xd9d2c0 },                                    // flag platform
+    { kind: 'ramp', x: 7.5, z: -4.8, w: 1.2, d: 0.8, h0: 0, h1: 0.5, axis: 'z', dir: -1, color: 0xd9d2c0 },
+  ];
+  furniture.push({ kind: 'rail', x: -4, z: -2.68, w: 1.4, d: 0.08, floor: TOWER }); furniture.push({ kind: 'rail', x: -4, z: -1.32, w: 1.4, d: 0.08, floor: TOWER });
+  desks.push({ x: -4, z: -2, w: 1.4, d: 1.4, h: TOWER, seat: { x: -4, z: -0.6 } }); desks.push({ x: -4, z: -2, w: 1.4, d: 1.4, h: TOWER, seat: { x: -4, z: -3.4 } });
+  furniture.push({ kind: 'swing', x: 4, z: -3 });
+  for (const sx of [-1, 1]) desks.push({ x: 4 + sx * 1.4, z: -3, w: 0.5, d: 1.2, h: 2.4, seat: { x: 4 + sx * 0.5, z: -3 } });
+  furniture.push({ kind: 'pond', x: 0.5, z: 3.5, w: 5, d: 3.4 });
+  for (let i = 0; i < 5; i++) { const x = -7.5 + i * 0.95; furniture.push({ kind: 'tire', x, z: 2.6 }); desks.push({ x, z: 2.6, w: 0.9, d: 0.34, h: 0.55, seat: { x, z: 2.6 } }); }
+  furniture.push({ kind: 'sandbox', x: 6.5, z: 2.8, w: 3, d: 3 });
+  furniture.push({ kind: 'flag', x: 7.5, z: -6.3, floor: 0.5 });
+  for (const x of [-6.5, -2.5, 2.5, 6.5]) { furniture.push({ kind: 'gymbench', x, z: 5.2, w: 1.8, d: 0.4, h: 0.45 }); desks.push({ x, z: 5.2, w: 1.8, d: 0.4, h: 0.45, seat: { x, z: 5.22 } }); }
+  furniture.push({ kind: 'track', x: 0, z: 7.0, w: W - 1, d: 1.6 });
+  for (const [x, z] of [[-8.6, -6.4], [8.8, 6.4], [-8.6, 6.4], [2.2, -6.6]]) { furniture.push({ kind: 'tree', x, z }); desks.push({ x, z, w: 0.5, d: 0.5, h: 2.4, seat: { x: x + 0.6, z } }); }
+  furniture.push({ kind: 'bulletin', x: 5.5, z: -D / 2 + 0.02 });
+  return {
+    id: 'yard', name: '操場', w: W, d: D, h: 7, style: 'yard',
+    doors: [{ x: 9.6, z: -3.5 }, { x: 9.6, z: 4.5 }], windows: [],
+    start: { x: -8.6, z: 4.8, yaw: -0.8 }, front: -6.0, board: { w: 4.4, h: 1.5, style: 'chalk' }, boardY: 0.2,
+    terrain, desks, furniture, props: [{ kind: 'trash', x: -9.0, z: -7.0 }, { kind: 'trash', x: 9.0, z: 1.0 }, { kind: 'bucket', door: 0 }],
+    mounts: [
+      { x: -6.5, y: 1.6, z: -7.96, ry: 0 }, { x: -3.2, y: 2.1, z: -7.96, ry: 0 }, { x: 3.0, y: 1.5, z: -7.96, ry: 0 }, { x: 8.2, y: 2.0, z: -7.96, ry: 0 },
+      { x: 9.96, y: 1.0, z: 0.5, ry: -Math.PI / 2 }, { x: -9.96, y: 1.0, z: -2.5, ry: Math.PI / 2 }, { x: -9.96, y: 1.0, z: 1.0, ry: Math.PI / 2 },
+      { x: 0, y: 1.0, z: 7.96, ry: Math.PI }, { x: 4.5, y: 1.0, z: 7.96, ry: Math.PI },
+    ],
+  };
+}
+
+export const LAYOUTS = { classroom: classroom(), lab: lab(), music: music(), hall: hall(), yard: yard() };
 export const LAYOUT_IDS = Object.keys(LAYOUTS);
 export const layoutById = (id) => LAYOUTS[id] || LAYOUTS.classroom;

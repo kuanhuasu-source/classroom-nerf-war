@@ -257,7 +257,7 @@ export class Game {
     for (const i of this.items) i.update(dt);
     if (this.myBuff) { this.myBuff.t -= dt; if (this.myBuff.t <= 0) { this.myBuff = null; this.ui.buff(null); } else this.ui.buff(this.myBuff); }
     for (const m of this.milks) { m.t += dt; m.mesh.position.y = m.baseY + Math.sin(m.t * 3) * 0.02; m.mesh.rotation.y = m.t * 1.2; }
-    this.updateDebris(dt); this.updateZones(dt); for (const p of this.props) p.update(dt);
+    this.updateDebris(dt); this.updateZones(dt); for (const p of this.props) p.update(dt); this.world.tick(dt);
     // our own preview darts stop at the kids they visibly reach; the host decides whether it counted
     this.darts.remoteUpdate(dt, (p) => this.students.some(s => s.alive && Math.abs(p.x - s.group.position.x) < 0.36 && Math.abs(p.z - s.group.position.z) < 0.36 && p.y > s.group.position.y && p.y < s.group.position.y + 1.45 * s.group.scale.y));
     this.inputTimer -= dt;
@@ -428,6 +428,12 @@ export class Game {
     this.message('上課鐘響了……', '走廊傳來腳步聲，拿好你的槍', 4);
     setTimeout(() => Audio.footsteps(), 3200); this.netEvent({ t: 'sfx', n: 'footstepsLater' });
     this.bossTimer = 6.0;
+    // everyone sneaks a bite of chocolate before the teacher walks in
+    setTimeout(() => { if (this.state !== 'playing' || !this.bossPhase) return;
+      const p = this.player; p.hp = Math.min(p.maxHp, p.hp + CFG.choco.heal); p.reserve = Math.min(p.reserveCap(), p.reserve + CFG.choco.ammo); this.ui.hp(p.hp, p.maxHp); this.ui.ammo(p.ammo, p.ammo === 0, p.reserve); this.ui.pickFlash();
+      for (const r of this.remoteList()) { r.hp = Math.min(r.maxHp, r.hp + CFG.choco.heal); r.reserve = Math.min(CFG.gun.reserveMax + r.up.reserveBonus, r.reserve + CFG.choco.ammo); this.netEvent({ t: 'pickup', n: CFG.choco.ammo }, r.slot); }
+      Audio.drink(); this.netEvent({ t: 'sfx', n: 'drink' }); this.message('趁老師還沒進來偷吃巧克力！', `回血 +${CFG.choco.heal}、補彈 +${CFG.choco.ammo}`, 3);
+    }, 1500);
   }
   get teacher() { return this.teachers[0] || null; } // the first boss; the committee has three
   // the committee only comes to the hall (it needs a stage), and only for hard rounds or a pair
@@ -787,7 +793,7 @@ export class Game {
     }
     if (this.offerTimer > 0) { this.offerTimer -= dt; if (this.offerTimer <= 0) this.openOffer(); }
     this.panicT = Math.max(0, (this.panicT || 0) - dt);
-    this.updateMilk(dt); this.updateProps(dt); this.updateZones(dt); for (const p of this.props) p.update(dt);
+    this.updateMilk(dt); this.updateProps(dt); this.updateZones(dt); for (const p of this.props) p.update(dt); this.world.tick(dt);
     for (const s of this.students) s.update(dt);
     for (const t of this.teachers) t.update(dt);
     if (this.isHost) this.updateBell(dt);

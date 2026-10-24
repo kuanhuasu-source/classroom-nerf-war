@@ -17,9 +17,11 @@ export class World {
     this.objects = [];        // everything we add to the scene, so the room can be torn down
     this.gradient = Draw.gradientMap();
     this.inkMat = new THREE.LineBasicMaterial({ color: 0x3a2e2a });
+    this.animated = [];
     this.build();
     this.buildGrid();
   }
+  tick(dt) { for (const a of this.animated) a(dt); }
   add(o) { this.scene.add(o); this.objects.push(o); return o; }
   dispose() { for (const o of this.objects) this.scene.remove(o); this.objects = []; this.boxes = []; this.desks = []; }
   toon(color) { return new THREE.MeshToonMaterial({ color, gradientMap: this.gradient }); }
@@ -60,18 +62,28 @@ export class World {
     return m;
   }
   build() {
-    const L = this.layout, { w, d, h } = this.room, s = this.scene, st = L.style;
+    const L = this.layout, { w, d, h } = this.room, s = this.scene, st = L.style, outdoor = st === 'yard';
+    if (!World.indoorBg && s.background) World.indoorBg = s.background.clone();
+    s.background = outdoor ? new THREE.Color(0xc9e6ff) : (World.indoorBg || new THREE.Color(0xfbf6e6));
     // floor / ceiling / walls by style
-    const floorTex = st === 'lab' ? Draw.tex(Draw.tiles(), [w / 2, d / 2]) : Draw.tex(Draw.floor(), st === 'gym' ? [w / 2.5, d / 2.5] : [w / 4, d / 4]);
+    const floorTex = outdoor ? Draw.tex(Draw.grass(), [w / 3, d / 3]) : st === 'lab' ? Draw.tex(Draw.tiles(), [w / 2, d / 2]) : Draw.tex(Draw.floor(), st === 'gym' ? [w / 2.5, d / 2.5] : [w / 4, d / 4]);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: floorTex, gradientMap: this.gradient }));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; this.add(floor);
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ color: 0xf3eee0, gradientMap: this.gradient }));
-    ceil.rotation.x = Math.PI / 2; ceil.position.y = h; this.add(ceil);
-    const wallCanvas = st === 'music' ? Draw.staffWall() : Draw.paperWall(st === 'lab' ? '#eef5e8' : st === 'gym' ? '#f6efd9' : '#fbf6e6');
+    if (!outdoor) { const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ color: 0xf3eee0, gradientMap: this.gradient })); ceil.rotation.x = Math.PI / 2; ceil.position.y = h; this.add(ceil); }
+    const wallCanvas = st === 'music' ? Draw.staffWall() : Draw.paperWall(st === 'lab' ? '#eef5e8' : st === 'gym' ? '#f6efd9' : outdoor ? '#f3e2c8' : '#fbf6e6');
     const wallMat = new THREE.MeshToonMaterial({ map: Draw.tex(wallCanvas, [w / 4, 1]), gradientMap: this.gradient });
-    const mk = (pw, px, pz, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, h), wallMat); m.position.set(px, h / 2, pz); m.rotation.y = ry; m.receiveShadow = true; this.add(m); };
-    mk(w, 0, -d / 2, 0); mk(w, 0, d / 2, Math.PI); mk(d, -w / 2, 0, Math.PI / 2); mk(d, w / 2, 0, -Math.PI / 2);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), this.inkMat); edges.position.y = h / 2; this.add(edges);
+    const wallH = outdoor ? 4.2 : h;
+    const mk = (pw, px, pz, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, wallH), wallMat); m.position.set(px, wallH / 2, pz); m.rotation.y = ry; m.receiveShadow = true; this.add(m); };
+    if (outdoor) { // the school building along the front, a low fence around the rest, sky everywhere else
+      mk(w, 0, -d / 2, 0);
+      const winTexB = Draw.tex(Draw.window());
+      for (let x = -w / 2 + 2.5; x < w / 2 - 1; x += 3.2) { if (Math.abs(x) < L.board.w / 2 + 1) continue; const win = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.5), new THREE.MeshBasicMaterial({ map: winTexB })); win.position.set(x, 2.3, -d / 2 + 0.03); this.add(win); const fr = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.4, 1.6, 0.06)), this.inkMat); fr.position.set(x, 2.3, -d / 2 + 0.03); this.add(fr); }
+      this.box(w, 0.25, 0.3, 0, wallH + 0.12, -d / 2 + 0.1, 0xd8432b, { collide: false }); // roof edge
+      this.fence(d, w / 2, 0, Math.PI / 2); this.fence(d, -w / 2, 0, Math.PI / 2); this.fence(w, 0, d / 2, 0);
+    } else {
+      mk(w, 0, -d / 2, 0); mk(w, 0, d / 2, Math.PI); mk(d, -w / 2, 0, Math.PI / 2); mk(d, w / 2, 0, -Math.PI / 2);
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), this.inkMat); edges.position.y = h / 2; this.add(edges);
+    }
     // the board on the front wall (chalkboard or whiteboard)
     this.boardStyle = L.board.style;
     this.blackboardMat = new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.blackboard(0, this.boardStyle)) });
@@ -89,6 +101,7 @@ export class World {
       const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.06, 1.7, 1.6)), this.inkMat); frame.position.set(-w / 2 + 0.03, wy, z); this.add(frame);
     }
     for (const dr of L.doors) {
+      if (outdoor) { for (const sz of [-1, 1]) this.box(0.3, 1.6, 0.3, w / 2 - 0.15, 0.8, dr.z + sz * 0.9, 0xb98556, { collide: false }); this.box(0.1, 0.4, 2.1, w / 2 - 0.15, 1.75, dr.z, 0x2f6fd1, { collide: false }); continue; }
       const door = this.box(0.08, 2.1, 1.0, w / 2 - 0.04, 1.05 + (dr.floor || 0), dr.z, 0x8fb98a, { collide: false, shadow: false });
       const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), this.toon(0xf4e27a)); knob.position.set(-0.06, 0, -0.35); door.add(knob);
     }
@@ -99,7 +112,15 @@ export class World {
     // platforms and stairs (the floor height comes from heightAt, so these never collide as boxes)
     for (const t of this.terrain) {
       if (t.kind === 'platform') { const m = this.box(t.w, t.h, t.d, t.x, t.h / 2, t.z, t.color || 0xd9c39a, { collide: false }); m.receiveShadow = true; continue; }
-      const n = Math.max(2, Math.ceil(Math.abs(t.h1 - t.h0) / 0.2)), along = t.axis === 'x' ? t.w : t.d, across = t.axis === 'x' ? t.d : t.w;
+      const along = t.axis === 'x' ? t.w : t.d, across = t.axis === 'x' ? t.d : t.w;
+      if (t.smooth) { // a slide: one tilted slab with low side rails
+        const dh = t.h1 - t.h0, len = Math.hypot(along, dh), ang = Math.atan2(dh, along) * t.dir;
+        const slab = this.box(t.axis === 'x' ? len : across, 0.08, t.axis === 'x' ? across : len, t.x, (t.h0 + t.h1) / 2 - 0.02, t.z, t.color || 0xf4c542, { collide: false });
+        if (t.axis === 'x') slab.rotation.z = ang; else slab.rotation.x = -ang;
+        for (const side of [-1, 1]) { const rail = this.box(t.axis === 'x' ? len : 0.06, 0.22, t.axis === 'x' ? 0.06 : len, t.x + (t.axis === 'x' ? 0 : side * (across / 2 - 0.03)), (t.h0 + t.h1) / 2 + 0.1, t.z + (t.axis === 'x' ? side * (across / 2 - 0.03) : 0), t.railColor || 0xd8432b, { collide: false }); if (t.axis === 'x') rail.rotation.z = ang; else rail.rotation.x = -ang; }
+        continue;
+      }
+      const n = Math.max(2, Math.ceil(Math.abs(t.h1 - t.h0) / 0.2));
       for (let i = 0; i < n; i++) { // each step is a slab from the ground up to its own height, so the side reads as a solid staircase
         const f = (i + 1) / n, top = t.h0 + (t.h1 - t.h0) * f, len = along / n, c = -along / 2 + (i + 0.5) * len;
         const off = t.dir < 0 ? -c : c;
@@ -113,10 +134,62 @@ export class World {
     for (const dsk of L.desks) this.desks.push({ x: dsk.x, z: dsk.z, w: dsk.w, d: dsk.d, h: dsk.h, floor: dsk.floor || 0, seat: { x: dsk.seat.x, z: dsk.seat.z }, occupant: null, covered: null });
     this.bounds = { minX: -w / 2 + 0.3, maxX: w / 2 - 0.3, minZ: -d / 2 + 0.3, maxZ: d / 2 - 0.3 };
   }
+  // a low fence: posts every 2 m and two rails; visual only, the room bounds do the stopping
+  fence(len, x, z, ry) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; this.add(g);
+    for (let p = -len / 2; p <= len / 2 + 0.01; p += 2) this.box(0.1, 1.1, 0.1, p, 0.55, 0, 0xffffff, { collide: false, parent: g });
+    this.box(len, 0.06, 0.05, 0, 0.95, 0, 0xffffff, { collide: false, parent: g }); this.box(len, 0.06, 0.05, 0, 0.5, 0, 0xffffff, { collide: false, parent: g });
+  }
   // ---- one piece of furniture ----
   furniture(f) {
     const d = this.room.d, fl = f.floor || 0;
     switch (f.kind) {
+      case 'swing': { // an A-frame with two seats that sway
+        const g = new THREE.Group(); g.position.set(f.x, 0, f.z); this.add(g);
+        for (const sx of [-1, 1]) { for (const sz of [-1, 1]) { const leg = this.cylinder(0.05, 2.5, sx * 1.4, 1.25, sz * 0.5, 0x2f6fd1, { collide: false, parent: g, seg: 8 }); leg.rotation.x = sz * 0.2; } this.collide(f.x + sx * 1.4, f.z, 0.4, 1.2, 2.5); }
+        const bar = this.cylinder(0.05, 3.0, 0, 2.45, 0, 0x2f6fd1, { collide: false, parent: g, seg: 8 }); bar.rotation.z = Math.PI / 2;
+        [-0.5, 0.5].forEach((sx, i) => {
+          const pivot = new THREE.Group(); pivot.position.set(sx, 2.45, 0); g.add(pivot);
+          for (const rx of [-0.22, 0.22]) this.cylinder(0.012, 1.9, rx, -0.95, 0, 0x5a4e47, { collide: false, parent: pivot, seg: 6 });
+          this.box(0.5, 0.05, 0.22, 0, -1.9, 0, 0xd8432b, { collide: false, parent: pivot });
+          const phase = i * 1.3; this.animated.push((dt) => { pivot.userData.t = (pivot.userData.t || 0) + dt; pivot.rotation.x = Math.sin(pivot.userData.t * 1.4 + phase) * 0.35; });
+        });
+        return;
+      }
+      case 'pond': { // an oval pond: water, rim, lily pads, reeds; three boxes keep feet dry
+        const water = new THREE.Mesh(new THREE.CircleGeometry(1, 36), new THREE.MeshToonMaterial({ color: 0x6fb7ef, transparent: true, opacity: 0.85, gradientMap: this.gradient })); water.rotation.x = -Math.PI / 2; water.scale.set(f.w / 2, f.d / 2, 1); water.position.set(f.x, 0.02, f.z); this.add(water);
+        const rim = new THREE.Mesh(new THREE.RingGeometry(0.98, 1.08, 36), this.toon(0x8a7a66)); rim.rotation.x = -Math.PI / 2; rim.scale.set(f.w / 2, f.d / 2, 1); rim.position.set(f.x, 0.03, f.z); this.add(rim);
+        for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283 + 0.4, pad = new THREE.Mesh(new THREE.CircleGeometry(0.18 + Math.random() * 0.1, 12), this.toon(0x4f9a3f)); pad.rotation.x = -Math.PI / 2; pad.position.set(f.x + Math.cos(a) * f.w * 0.3, 0.04, f.z + Math.sin(a) * f.d * 0.3); this.add(pad); }
+        for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283, rx = f.x + Math.cos(a) * (f.w / 2 + 0.15), rz = f.z + Math.sin(a) * (f.d / 2 + 0.15); this.cylinder(0.02, 0.9 + Math.random() * 0.4, rx, 0.5, rz, 0x6b8f3a, { collide: false, seg: 6 }); }
+        this.collide(f.x, f.z, f.w, f.d * 0.5, 0.35); this.collide(f.x, f.z, f.w * 0.7, f.d * 0.85, 0.35); this.collide(f.x, f.z, f.w * 0.4, f.d, 0.35);
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.3), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.nameTag('生態池', '#fbf6e6', '#2b2622')), transparent: true })); sign.position.set(f.x + f.w / 2 + 0.5, 0.9, f.z - f.d / 2 - 0.2); this.add(sign); this.cylinder(0.03, 0.8, f.x + f.w / 2 + 0.5, 0.4, f.z - f.d / 2 - 0.22, 0xb98556, { collide: false, seg: 6 });
+        return;
+      }
+      case 'tire': { // a half-buried tyre
+        const t = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.14, 10, 20), this.toon(0x2b2622)); t.position.set(f.x, 0.1, f.z); t.rotation.y = f.ry || 0; t.castShadow = true; this.inked(t); this.add(t);
+        this.collide(f.x, f.z, 0.9, 0.34, 0.55); return;
+      }
+      case 'sandbox': { // a square of sand with a wooden border and a bucket
+        const sand = new THREE.Mesh(new THREE.PlaneGeometry(f.w, f.d), this.toon(0xf0dca8)); sand.rotation.x = -Math.PI / 2; sand.position.set(f.x, 0.015, f.z); this.add(sand);
+        for (const [dx, dz, bw, bd] of [[0, f.d / 2, f.w, 0.12], [0, -f.d / 2, f.w, 0.12], [f.w / 2, 0, 0.12, f.d], [-f.w / 2, 0, 0.12, f.d]]) this.box(bw, 0.18, bd, f.x + dx, 0.09, f.z + dz, 0xb98556, { collide: false });
+        this.cylinder(0.14, 0.18, f.x + 0.6, 0.09, f.z - 0.4, 0xd8432b, { collide: false, seg: 10 }); return;
+      }
+      case 'tree': { // a trunk you can hide behind and a round canopy
+        this.cylinder(0.22, 2.4, f.x, 1.2, f.z, 0x8a5a2b, { seg: 10 });
+        for (const [dx, dy, dz, r] of [[0, 3.0, 0, 1.3], [0.8, 2.6, 0.4, 0.9], [-0.7, 2.7, -0.5, 0.95], [0.2, 3.6, -0.6, 0.8]]) { const c = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), this.toon(f.color || 0x5fa84a)); c.position.set(f.x + dx, dy, f.z + dz); c.castShadow = true; this.add(c); }
+        return;
+      }
+      case 'flag': { // a flagpole on its little platform (the platform itself is terrain)
+        this.cylinder(0.05, 5.0, f.x, (f.floor || 0) + 2.5, f.z, 0xe8e8e8, { seg: 8 });
+        const flag = this.box(0.9, 0.6, 0.02, f.x + 0.47, (f.floor || 0) + 4.6, f.z, 0xd8432b, { collide: false }); this.box(0.6, 0.3, 0.025, f.x + 0.47, (f.floor || 0) + 4.6, f.z, 0xffffff, { collide: false, ink: false });
+        this.animated.push((dt) => { flag.userData.t = (flag.userData.t || 0) + dt; flag.rotation.y = Math.sin(flag.userData.t * 2.2) * 0.25; });
+        return;
+      }
+      case 'track': { // a strip of running track with lane lines
+        const tr = new THREE.Mesh(new THREE.PlaneGeometry(f.w, f.d), this.toon(0xd8714a)); tr.rotation.x = -Math.PI / 2; tr.position.set(f.x, 0.012, f.z); tr.receiveShadow = true; this.add(tr);
+        for (let i = 0; i <= 4; i++) { const ln = new THREE.Mesh(new THREE.PlaneGeometry(f.w, 0.05), new THREE.MeshBasicMaterial({ color: 0xffffff })); ln.rotation.x = -Math.PI / 2; ln.position.set(f.x, 0.016, f.z - f.d / 2 + i * f.d / 4); this.add(ln); }
+        return;
+      }
       case 'rail': { // low wall along a balcony edge: cover for the kids upstairs, a backboard for darts from below
         this.box(f.w, 0.7, f.d, f.x, fl + 0.35, f.z, 0xe4d7b4); this.box(f.w + 0.1, 0.06, f.d + 0.12, f.x, fl + 0.73, f.z, 0xb98556, { collide: false });
         return;
@@ -351,3 +424,4 @@ export class World {
     return pick(free.slice(0, Math.min(4, free.length)));
   }
 }
+World.indoorBg = null;
