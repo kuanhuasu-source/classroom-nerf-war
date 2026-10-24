@@ -145,9 +145,9 @@ export class Student extends PaperFigure {
     const from = this.eye(); from.y -= 0.15;
     const target = player.eyePos(); target.y -= 0.25;
     const dir = target.clone().sub(from); const dist = dir.length();
-    const speed = this.game.diff.dartSpeed || CFG.enemy.dartSpeed;
+    const speed = (this.game.diff.dartSpeed || CFG.enemy.dartSpeed) * (player.touch ? CFG.assist.enemyDartMul : 1);
     dir.y += dist * dist * CFG.gun.gravity / (2 * speed * speed);
-    const spread = CFG.enemy.spread * this.game.difficultySpread * (this.shotsFired === 0 ? this.game.diff.firstShotMul : 1) * (this.leader ? 0.6 : 1) * (this.game.panicT > 0 ? CFG.leader.panicSpreadMul : 1); this.shotsFired++;
+    const spread = CFG.enemy.spread * this.game.difficultySpread * (this.shotsFired === 0 ? this.game.diff.firstShotMul : 1) * (this.leader ? 0.6 : 1) * (this.game.panicT > 0 ? CFG.leader.panicSpreadMul : 1) * (player.touch ? CFG.assist.enemySpreadMul : 1); this.shotsFired++;
     dir.normalize().add(new THREE.Vector3(rand(-spread, spread), rand(-spread, spread), rand(-spread, spread))).normalize();
     // move dart start a little toward the target so it clears own body/desk
     from.addScaledVector(dir, 0.5);

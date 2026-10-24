@@ -7,7 +7,9 @@ export const CFG = {
   room: { w: 12, d: 9, h: 3.2 },
   player: { eye: 1.25, crouchEye: 0.62, radius: 0.28, walk: 3.2, run: 5.0, crouchSpeed: 1.7, hp: 5 },
   gun: { restCap: 90, mag: 15, reloadEmpty: 1.3, reloadPartial: 0.85, speed: 32, gravity: 6, fireInterval: 0.18, reserveStart: 90, reserveMax: 150, autoReloadDelay: 0.35, pickupRadius: 1.4, floorLife: 40, dropOnKnockout: 8 },
-  choco: { heal: 3, ammo: 20 }, // a sneaky bite of chocolate when the bell rings for the boss: hearts and darts back
+  choco: { heal: 3, ammo: 20 },
+  // touch (phone / tablet) help: a magnet near targets, bigger hit circles for that player's darts, enemies a little kinder, one more heart. Per player, never advertised.
+  assist: { cone: 0.12, friction: 0.55, pull: 4.5, hitMul: 1.3, enemySpreadMul: 1.3, enemyDartMul: 0.9, extraHp: 1, gyroSens: 1.0 }, // a sneaky bite of chocolate when the bell rings for the boss: hearts and darts back
   supply: { interval: 12, amount: 20, lowInterval: 12, lowAt: 40, near: 4 },
   enemy: { hp: 3, speed: 2.6, dartSpeed: 19, spread: 0.13 },
   waves: [3, 4, 5, 6],

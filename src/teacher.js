@@ -311,6 +311,7 @@ export class Teacher extends PaperFigure {
   // ---------- ranged attacks ----------
   nextTarget() { const list = this.game.activeTargets(); return list[this.throwIdx % list.length] || this.game.player; }
   aimAt(fromKey, player, speed, gravity, spread) {
+    if (player && player.touch) spread *= CFG.assist.enemySpreadMul;
     const from = this.has(fromKey) ? this.wpWorld(fromKey) : new THREE.Vector3(this.group.position.x, 1.6, this.group.position.z); from.y -= 0.1;
     const target = player.eyePos(); target.y -= 0.2;
     const dir = target.clone().sub(from); const dist = dir.length();
@@ -366,7 +367,7 @@ export class Teacher extends PaperFigure {
   }
   // returns 'weak' | 'body' | null. The teacher is a sheet of paper, so we find where the dart's
   // path (prev -> pos) crosses that sheet and compare the crossing point with the items drawn on it.
-  testHit(pos, prev) {
+  testHit(pos, prev, mul = 1) {
     if (this.defeated) return null;
     this.group.updateMatrixWorld(true);
     const lp = this.mesh.worldToLocal(pos.clone()), lq = prev ? this.mesh.worldToLocal(prev.clone()) : lp.clone();
@@ -376,7 +377,7 @@ export class Teacher extends PaperFigure {
     if (!c) return null;
     for (const k in this.wp) {
       const w = this.wp[k]; if (w.hp <= 0) continue;
-      if (Math.hypot(c.x - w.local.x, c.y - w.local.y) < w.r) { this.hitWeak(k); return 'weak'; }
+      if (Math.hypot(c.x - w.local.x, c.y - w.local.y) < w.r * mul) { this.hitWeak(k); return 'weak'; }
     }
     if (Math.abs(c.x) < 0.55 && c.y > 0 && c.y < 2.3) return 'body';
     return null;

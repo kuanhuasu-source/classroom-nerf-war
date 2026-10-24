@@ -1,4 +1,4 @@
-import { EMOTES } from './config.js';
+import { EMOTES, CFG } from './config.js';
 import { $ } from './ui.js';
 
 // Touch controls for phones and tablets. Left half of the screen: a floating stick for walking.
@@ -19,6 +19,7 @@ export class TouchControls {
       <button class="tc-btn" id="tc-crouch" type="button">蹲</button>
       <button class="tc-btn" id="tc-revive" type="button">救！</button>
       <button class="tc-btn" id="tc-pause" type="button">Ⅱ</button>
+      <button class="tc-btn" id="tc-gyro" type="button">陀螺儀</button>
       <div id="tc-emote">${[1, 2, 3, 4].map(i => `<button class="mini" type="button" data-n="${i}">${EMOTES[i].replace('！', '')}</button>`).join('')}</div>`;
     $('hud').appendChild(layer);
     this.layer = layer; this.stickEl = $('tc-stick'); this.knob = this.stickEl.firstElementChild;
@@ -29,6 +30,26 @@ export class TouchControls {
     hold('tc-crouch', () => { this.crouch = !this.crouch; $('tc-crouch').classList.toggle('held', this.crouch); });
     hold('tc-revive', () => g.tryRevive());
     hold('tc-pause', () => g.pause());
+    // gyroscope: small turns of the device fine-tune the aim; drags still do the big turns. iOS asks for permission on a tap.
+    this.gyro = false; try { this.gyro = localStorage.getItem('cnw-gyro') === '1'; } catch (e) { /* ignore */ }
+    const gyroBtn = $('tc-gyro'); const showGyro = () => gyroBtn.classList.toggle('held', this.gyro);
+    const enableGyro = async () => {
+      try { if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') { const r = await DeviceMotionEvent.requestPermission(); if (r !== 'granted') { g.ui.message('沒有感測器權限', '陀螺儀瞄準開不了', 2); return; } } } catch (e) { g.ui.message('沒有感測器權限', '陀螺儀瞄準開不了', 2); return; }
+      this.gyro = true; showGyro(); try { localStorage.setItem('cnw-gyro', '1'); } catch (e) { /* ignore */ } g.ui.message('陀螺儀瞄準開了', '小幅轉動手機微調準心', 1.6);
+    };
+    gyroBtn.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (this.gyro) { this.gyro = false; showGyro(); try { localStorage.setItem('cnw-gyro', '0'); } catch (err) { /* ignore */ } g.ui.message('陀螺儀瞄準關了', '', 1.2); } else enableGyro(); });
+    showGyro();
+    this.lastMotion = 0;
+    window.addEventListener('devicemotion', e => {
+      if (!this.gyro || g.state !== 'playing' || !e.rotationRate) return;
+      const now = performance.now(), dt = this.lastMotion ? Math.min(0.05, (now - this.lastMotion) / 1000) : 0.016; this.lastMotion = now;
+      const rr = e.rotationRate, ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0, flip = ang === 270 || ang === -90 ? -1 : 1;
+      // landscape: turning the phone about its short axis (beta) looks left/right, about its long axis (gamma) looks up/down
+      let yawRate = (rr.beta || 0) * flip, pitchRate = (rr.gamma || 0) * flip;
+      if (ang === 0 || ang === 180) { yawRate = (rr.alpha || 0); pitchRate = (rr.beta || 0); } // portrait fallback
+      const dz = (v) => Math.abs(v) < 0.6 ? 0 : v, k = CFG.assist.gyroSens * Math.PI / 180 * dt * (g.aimFriction || 1);
+      g.player.yaw += dz(yawRate) * k; g.player.pitch = Math.max(-1.4, Math.min(1.4, g.player.pitch - dz(pitchRate) * k));
+    });
     $('tc-emote').addEventListener('pointerdown', e => { const b = e.target.closest('button'); if (b) { e.preventDefault(); e.stopPropagation(); g.emote(+b.dataset.n); } });
     // free areas: stick on the left, look on the right
     layer.addEventListener('pointerdown', e => {
@@ -45,7 +66,7 @@ export class TouchControls {
         this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
       } else if (this.look && e.pointerId === this.look.id) {
         const dx = e.clientX - this.look.x, dy = e.clientY - this.look.y; this.look.x = e.clientX; this.look.y = e.clientY; this.look.moved += Math.abs(dx) + Math.abs(dy);
-        if (g.state === 'playing') g.player.look(dx * 2.4, dy * 2.4);
+        if (g.state === 'playing') { const f = g.aimFriction || 1; g.player.look(dx * 2.4 * f, dy * 2.4 * f); }
       }
     });
     const end = e => {

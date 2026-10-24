@@ -91,10 +91,13 @@ export class Game {
   remoteList() { return [...this.remotes.values()].filter(r => r.group.visible && !r.offline); }
   connOf(slot) { for (const [c, s] of this.conns) if (s === slot) return c; return null; }
   sendTo(slot, msg) { const c = this.connOf(slot); if (c && this.transport) this.transport.send(JSON.stringify(msg), c); }
-  lobbyNames() { return [...this.remotes.values()].filter(r => !r.offline && this.connOf(r.slot)).map(r => r.skin.name); }
-  sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid })); }
+  lobbyNames() { return [...this.remotes.values()].filter(r => !r.offline && this.connOf(r.slot)).map(r => r.skin.name + (r.touch ? '📱' : '')); }
+  sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid, touch: this.touch ? 1 : 0 })); }
+  touchOf(who) { if (!who || who === 'host') return !!this.touch; const r = this.remotes.get(who); return !!(r && r.touch); }
+  hitMul(who) { return this.touchOf(who) ? CFG.assist.hitMul : 1; }
+  baseHp(pl) { return CFG.player.hp + (pl && pl.touch ? CFG.assist.extraHp : 0); }
   // a guest said hello on a connection: give it its slot (the same one if it came back) and catch it up
-  onHello(from, pid) {
+  onHello(from, pid, touch = false) {
     let slot = this.pids.get(pid);
     if (!slot) {
       const used = new Set(this.pids.values());
@@ -106,7 +109,7 @@ export class Game {
     this.conns.set(from, slot);
     let r = this.remotes.get(slot); const back = !!r;
     if (!r) { r = new RemotePlayer(this, skinOf(slot)); this.remotes.set(slot, r); }
-    r.offline = false; r.group.visible = true;
+    r.offline = false; r.group.visible = true; r.touch = touch; if (!back) { r.maxHp = this.baseHp(r); r.hp = r.maxHp; }
     if (this.goneTimers.has(slot)) { clearTimeout(this.goneTimers.get(slot)); this.goneTimers.delete(slot); }
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
     this.fullSnapNext = true;
@@ -193,12 +196,12 @@ export class Game {
   onNet(str, from = 'peer') {
     let m; try { m = JSON.parse(str); } catch (e) { return; }
     if (this.isHost) {
-      if (m.t === 'hello') { this.onHello(from, m.pid); return; }
+      if (m.t === 'hello') { this.onHello(from, m.pid, !!m.touch); return; }
       if (m.t === 'ping') { this.transport.send(JSON.stringify({ t: 'pong', ts: m.ts }), from); return; }
       const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
       if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
       else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (this.monitor) this.monitor.noticeShot(r); }
-      else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = CFG.player.hp + r.up.maxHpBonus; r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
+      else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = this.baseHp(r) + r.up.maxHpBonus; r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
       else if (m.t === 'revive') {
         if (r.sitting) return; const t = this.reviveNear(r.pos, r);
         if (t) { this.stat(slot, 'revives'); this.addScore(200); this.message(`${r.skin.name}把${t === this.player ? '你' : t.skin.name}拉起來了！`, '+200', 1.6); this.netEvent({ t: 'sfx', n: 'wave' }); }
@@ -211,7 +214,7 @@ export class Game {
       else if (m.t === 'restore') { // back after a disconnect: the host remembers what we had
         const p = this.player;
         for (const [id, n] of Object.entries(m.taken || {})) for (let i = 0; i < n; i++) { const u = takeUpgrade(p.up, id); if (u) { p.up.refill = 0; p.up.healFull = false; p.applyUpgrade(u); } }
-        if (m.ammo !== undefined) { p.ammo = m.ammo; p.reserve = m.res; } p.hp = m.hp; p.maxHp = CFG.player.hp + p.up.maxHpBonus; this.ui.hp(p.hp, p.maxHp); this.ui.ammo(p.ammo, p.ammo === 0, p.reserve);
+        if (m.ammo !== undefined) { p.ammo = m.ammo; p.reserve = m.res; } p.hp = m.hp; p.maxHp = this.baseHp(p) + p.up.maxHpBonus; this.ui.hp(p.hp, p.maxHp); this.ui.ammo(p.ammo, p.ammo === 0, p.reserve);
         this.ui.upgrades(Object.entries(p.up.taken).map(([k, n]) => upgradeById(k).name + (n > 1 ? '×' + n : '')));
         if (m.buff) { this.myBuff = m.buff; this.ui.buff(m.buff); }
         this.message('歡迎回來，升級和彈藥都還在', '', 2);
@@ -224,7 +227,7 @@ export class Game {
   }
   startGuest() {
     Audio.init(); Audio.resume();
-    this.guestReset();
+    this.guestReset(); this.markTouchPlayer();
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
     this.ui.hp(this.player.hp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(1); this.ui.left(0); this.ui.boss(false); this.ui.buff(null);
@@ -232,6 +235,7 @@ export class Game {
     Audio.bellOut();
     this.clock.getDelta();
   }
+  markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.maxHp = this.baseHp(p) + p.up.maxHpBonus; p.hp = p.maxHp; }
   guestReset() {
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
     this.students.forEach(s => s.dispose()); this.students = [];
@@ -241,11 +245,11 @@ export class Game {
     this.debris.forEach(d => this.scene.remove(d.mesh)); this.debris = []; this.rings.forEach(r => this.scene.remove(r.mesh)); this.rings = [];
     this.darts.clear(); this.world.setTally(0); this.zones.forEach(z => { this.scene.remove(z.mesh); (z.puffs || []).forEach(p => this.scene.remove(p)); }); this.zones = [];
     this.props.forEach(p => p.dispose()); this.props = (this.world.layout.props || []).map((d, i) => new Prop(this, d, i));
-    this.camera.remove(this.player.gun); this.player = new Player(this);
+    this.camera.remove(this.player.gun); this.player = new Player(this); this.markTouchPlayer();
     this.wave = 0; this.score = 0; this.kills = 0; this.buffs = {}; this.bossPhase = false; this.pending = []; this.ui.closeOffer(); this.ui.upgrades([]); this.ui.buff(null);
   }
   guestStep(dt) {
-    this.player.update(dt);
+    this.player.update(dt); this.aimAssist(dt);
     // apply every snapshot that arrived since the last frame, in order: the deltas inside depend on it
     if (this.pending.length) { const list = this.pending; this.pending = []; for (const m of list) { if (m.t === 'delta') applyDelta(this, m); else applySnapshot(this, m); } }
     this.pingT -= dt; if (this.pingT <= 0 && this.transport) { this.pingT = 1; this.transport.send(JSON.stringify({ t: 'ping', ts: Math.round(performance.now()) })); }
@@ -356,7 +360,7 @@ export class Game {
     if (!this.isHost) return this.startGuest();
     Audio.init(); Audio.resume();
     this.setLayout(this.pickLayout());
-    this.reset();
+    this.reset(); this.markTouchPlayer();
     this.coop = this.isHost && this.remoteList().length > 0; this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
@@ -394,7 +398,7 @@ export class Game {
     this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null;
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
-    for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = CFG.player.hp; }
+    for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = this.baseHp(r); }
   }
   pause() {
     if (this.state !== 'playing') return;
@@ -550,6 +554,23 @@ export class Game {
     Audio.itemSpawn(); this.message('有人放了一盒泡棉彈在課桌上', `走過去撿 +${this.supplyAmount()} 發`, 2);
   }
   supplyAmount() { return this.coop ? COOP.supplyAmount : CFG.supply.amount; }
+  // ---------- touch aim assist ----------
+  // Near a kid or a weak point the view turns slower (friction) and drifts a little toward it (pull); the drift fades
+  // with distance from the crosshair so it never fights a deliberate turn. Only for a touch device, only while playing.
+  aimAssist(dt) {
+    this.aimFriction = 1; if (!this.touch || this.state !== 'playing' || this.player.sitting) return;
+    const p = this.player, eye = p.eyePos(), view = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    let best = null, bestAng = CFG.assist.cone;
+    const consider = (pt) => { const d = pt.clone().sub(eye); const dist = d.length(); if (dist < 0.8 || dist > 18) return; d.divideScalar(dist); const ang = Math.acos(Math.max(-1, Math.min(1, d.dot(view)))); if (ang < bestAng && !this.world.segmentBlocked(eye, pt)) { bestAng = ang; best = pt; } };
+    for (const s of this.students) if (s.alive && s.state !== 'flyOut' && s.state !== 'sitting') consider(new THREE.Vector3(s.group.position.x, s.group.position.y + 0.95 * s.group.scale.y, s.group.position.z));
+    for (const t of this.teachers) if (!t.defeated) { t.group.updateMatrixWorld(true); for (const k in t.wp) if (t.wp[k].hp > 0) consider(t.wpWorld(k)); }
+    if (!best) return;
+    this.aimFriction = CFG.assist.friction;
+    const d = best.clone().sub(eye), wantYaw = Math.atan2(-d.x, -d.z), wantPitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
+    let dy = wantYaw - p.yaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI;
+    const dp = wantPitch - p.pitch, strength = (1 - bestAng / CFG.assist.cone) * Math.min(1, CFG.assist.pull * dt);
+    p.yaw += dy * strength; p.pitch += dp * strength;
+  }
   // ---------- chalk dust (the eraser) ----------
   dustBurst(at) {
     this.addZone(at, CFG.teacher.dustRadius, CFG.teacher.dustLife, 'dust');
@@ -764,7 +785,7 @@ export class Game {
   }
   step(realDt) {
     if (!this.isHost) return this.guestStep(realDt);
-    this.player.update(realDt);
+    this.player.update(realDt); this.aimAssist(realDt);
     for (const r of this.remotes.values()) r.update(realDt);
     const dt = realDt * (this.worldSlow() ? CFG.items.slowScale : 1); // the world slows down, the players do not
     this.updateItems(dt, realDt);
@@ -815,10 +836,11 @@ export class Game {
           if (!s.alive) continue;
           const dx = p.x - s.group.position.x, dz = p.z - s.group.position.z;
           const h = 1.35 * s.group.scale.y;
-          if (dx * dx + dz * dz < 0.36 * 0.36 && p.y > s.group.position.y && p.y < s.group.position.y + h) { this.lastShooter = d.who; if (s.hit()) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null; return true; }
+          const hrr = 0.36 * this.hitMul(d.who);
+          if (dx * dx + dz * dz < hrr * hrr && p.y > s.group.position.y && p.y < s.group.position.y + h) { this.lastShooter = d.who; if (s.hit()) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null; return true; }
         }
         for (const t of this.teachers) {
-          this.lastShooter = d.who; const r = t.testHit(p, prev); this.lastShooter = null;
+          this.lastShooter = d.who; const r = t.testHit(p, prev, this.hitMul(d.who)); this.lastShooter = null;
           if (r === 'weak') return true;
           if (r === 'body') { if (!this.bodyHintShown) { this.bodyHintShown = true; this.message('打身體沒用！', '瞄準紅圈：眼鏡、粉筆、教案', 2.5); } Audio.thud(); return true; }
         }
