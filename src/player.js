@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COOP, CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, rand, pick, clamp } from './config.js';
+import { COOP, TOILET, CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { freshUp } from './upgrades.js';
 import { Draw } from './draw.js';
@@ -11,7 +11,7 @@ export class Player {
   constructor(game) {
     this.game = game; this.camera = game.camera; this.world = game.world;
     const st = this.world.layout.start; this.pos = new THREE.Vector3(st.x, this.world ? this.world.heightAt(st.x, st.z) : 0, st.z); this.yaw = st.yaw; this.pitch = 0; this.eye = CFG.player.eye;
-    this.up = freshUp(); this.maxHp = CFG.player.hp;
+    this.up = freshUp(); this.maxHp = CFG.player.hp; this.wet = 0;
     this.hp = CFG.player.hp; this.ammo = CFG.gun.mag; this.reserve = CFG.gun.reserveStart; this.reloading = 0; this.reloadTotal = 1; this.emptyTime = 0; this.fireCd = 0; this.crouching = false;
     this.keys = {}; this.shots = 0; this.hits = 0; this.hurtCd = 0;
     this.sitting = false; this.sitT = 0; this.invuln = 0; this.seat = null; this.sitTick = -1;
@@ -42,7 +42,8 @@ export class Player {
     if (this.sitting) this.sitUpdate(dt);
     this.eye += (targetEye - this.eye) * Math.min(1, dt * 10);
     const run = (k['ShiftLeft'] || k['ShiftRight']) && !this.crouching;
-    const speed = (this.crouching ? CFG.player.crouchSpeed : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1);
+    if (this.wet > 0) { this.wet -= dt; if (this.wet <= 0) { this.wet = 0; this.game.ui.wet(false); } }
+    const speed = (this.crouching ? CFG.player.crouchSpeed : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1) * (this.wet > 0 ? TOILET.wetSpeed : 1);
     let mx = 0, mz = 0;
     if (k['KeyW'] || k['ArrowUp']) mz -= 1; if (k['KeyS'] || k['ArrowDown']) mz += 1;
     if (k['KeyA'] || k['ArrowLeft']) mx -= 1; if (k['KeyD'] || k['ArrowRight']) mx += 1;

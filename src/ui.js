@@ -12,6 +12,9 @@ export class UI {
     this.msgTimer = 0; this.msgEl = $('msg');
   }
   wave(n) { $('wave').textContent = n; }
+  timer(t) { const el = $('hud-time'); if (t === null || t === undefined) { el.hidden = true; return; } el.hidden = false; $('time').textContent = Math.max(0, Math.ceil(t)); el.classList.toggle('low', t <= 10); }
+  leftLabel(text) { $('left').previousElementSibling.textContent = text; }
+  wet(on) { $('wet').classList.toggle('on', !!on); }
   score(n) { $('score').textContent = n; }
   left(n) { $('left').textContent = n; }
   hp(n, max = CFG.player.hp) { let s = ''; for (let i = 0; i < max; i++) s += i < n ? '♥' : '<span class="lost">♥</span>'; $('hud-hp').innerHTML = s; }

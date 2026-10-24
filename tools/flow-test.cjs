@@ -3,10 +3,10 @@ const { chromium } = require('playwright');
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const out = {};
-  for (const map of ['classroom', 'lab', 'music', 'hall', 'yard']) {
+  for (const map of (process.env.MAPS ? process.env.MAPS.split(',') : ['classroom', 'lab', 'music', 'hall', 'yard'])) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
-    await page.goto('http://localhost:8766/index.html?map=' + map, { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:8766/index.html?map=' + map + (map === 'toilet' ? '&mode=toilet' : ''), { waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
     await page.evaluate(() => { window.__game.renderer.setAnimationLoop(null); window.__game.start(); });
     const r = await page.evaluate(() => {

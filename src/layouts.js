@@ -188,6 +188,31 @@ function yard() {
   };
 }
 
-export const LAYOUTS = { classroom: classroom(), lab: lab(), music: music(), hall: hall(), yard: yard() };
-export const LAYOUT_IDS = Object.keys(LAYOUTS);
+// 廁所（搶廁所模式專用）：長形，-x 側四間隔間、+x 側洗手台，中間拖把桶當矮掩體，最裡面是大型小便斗，靶心在裡面。
+function toilet() {
+  const desks = [], furniture = [], W = 10, D = 16;
+  for (const z of [-4.5, -2.5, -0.5, 1.5]) { furniture.push({ kind: 'stall', x: -4.2, z, w: 1.6, d: 1.9, h: 2.0 }); desks.push({ x: -4.2, z, w: 1.6, d: 1.9, h: 1.0, seat: { x: -4.3, z } }); }
+  for (const z of [-3.2, 0.6, 4.2]) { furniture.push({ kind: 'sinkrow', x: 4.6, z, w: 0.6, d: 2.6, h: 0.9 }); desks.push({ x: 4.6, z, w: 0.6, d: 2.6, h: 0.9, seat: { x: 3.9, z } }); }
+  for (const [x, z] of [[0.6, 3.2], [-1.4, -0.8], [1.8, -3.6], [-0.6, -5.4]]) { furniture.push({ kind: 'mopcart', x, z, w: 0.7, d: 0.7, h: 0.95 }); desks.push({ x, z, w: 0.7, d: 0.7, h: 0.95, seat: { x: x + 0.9, z } }); }
+  for (const [x, z] of [[1.2, 0.8], [-2.2, 2.6], [2.6, -1.6], [-2.4, -4.2]]) furniture.push({ kind: 'wetsign', x, z });
+  furniture.push({ kind: 'urinal', x: 0, z: -7.3, w: 3.2, d: 1.1, h: 2.4 });
+  furniture.push({ kind: 'cabinet', x: 3.8, z: -7.6, w: 1.6, d: 0.5, h: 2.0 });
+  furniture.push({ kind: 'banner', x: 0, y: 2.6, z: D / 2 - 0.03, w: 4, h: 0.9, text: '洗手 20 秒', ry: Math.PI });
+  return {
+    id: 'toilet', name: '廁所', w: W, d: D, h: 3.4, style: 'toilet', modeOnly: true,
+    doors: [{ x: 5.1, z: 6.3 }, { x: 5.1, z: -5.8 }], windows: [-5, -1, 3], windowY: 2.5,
+    start: { x: 2.6, z: 6.8, yaw: 0.25 }, front: -6.0, board: { w: 2.8, h: 0.9, style: 'toilet' }, boardY: 1.2,
+    target: { x: 0, y: 1.25, z: -7.72 }, crewSpots: [[-3.0, -4.5], [3.6, -3.2], [-0.4, -2.6], [2.2, 1.6], [-3.0, 1.5], [3.4, 4.2], [-1.6, 4.4]],
+    desks, furniture, props: [{ kind: 'trash', x: -4.6, z: 7.3 }, { kind: 'trash', x: 4.6, z: 2.2 }, { kind: 'bucket', door: 0 }],
+    mounts: [
+      { x: -3.2, y: 2.4, z: -7.96, ry: 0 }, { x: 2.6, y: 2.6, z: -7.96, ry: 0 },
+      { x: -4.96, y: 1.9, z: 3.6, ry: Math.PI / 2 }, { x: -4.96, y: 2.6, z: -6.5, ry: Math.PI / 2 },
+      { x: 4.96, y: 2.3, z: -1.3, ry: -Math.PI / 2 }, { x: 4.96, y: 2.4, z: 2.8, ry: -Math.PI / 2 },
+      { x: -2.6, y: 1.8, z: 7.96, ry: Math.PI }, { x: 2.4, y: 1.5, z: 7.96, ry: Math.PI },
+    ],
+  };
+}
+
+export const LAYOUTS = { classroom: classroom(), lab: lab(), music: music(), hall: hall(), yard: yard(), toilet: toilet() };
+export const LAYOUT_IDS = Object.keys(LAYOUTS).filter(id => !LAYOUTS[id].modeOnly); // the random pick never lands on a mode-only room
 export const layoutById = (id) => LAYOUTS[id] || LAYOUTS.classroom;

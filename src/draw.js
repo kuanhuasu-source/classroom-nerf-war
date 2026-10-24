@@ -95,6 +95,11 @@ export const Draw = (() => {
     } else { // spiky
       shape(ctx, [[cx - 64, headY - 12], [cx - 70, headY - 60], [cx - 36, headY - 42], [cx - 24, headY - 92], [cx, headY - 50], [cx + 20, headY - 96], [cx + 34, headY - 44], [cx + 72, headY - 64], [cx + 64, headY - 12], [cx, headY - 34]], v.hairColor);
     }
+    if (v.cleaner) { // the cleaning crew: a white apron over the shirt and a blue cap
+      shape(ctx, [[96, 206], [160, 206], [172, 336], [84, 336]], '#ffffff', '#2b2622', 3);
+      line(ctx, [[104, 206], [96, 190], [160, 190], [152, 206]], '#2b2622', 3);
+      shape(ctx, [[cx - 62, headY - 30], [cx - 50, headY - 74], [cx, headY - 86], [cx + 50, headY - 74], [cx + 62, headY - 30], [cx + 88, headY - 24], [cx + 86, headY - 10], [cx - 64, headY - 14]], '#2f6fd1', '#2b2622', 3);
+    }
     if (v.bully) { // the gang's red bandana, knotted at the side
       shape(ctx, [[cx - 66, headY - 16], [cx + 66, headY - 16], [cx + 64, headY + 2], [cx - 64, headY + 2]], '#d8432b', '#2b2622', 2);
       shape(ctx, [[cx + 60, headY - 10], [cx + 92, headY - 22], [cx + 88, headY + 4], [cx + 62, headY + 2]], '#d8432b', '#2b2622', 2);
@@ -210,6 +215,13 @@ export const Draw = (() => {
     const c = canvas(64, 96), ctx = c.getContext('2d');
     ctx.font = 'bold 84px "Patrick Hand", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 10; ctx.strokeStyle = '#fbf6e6'; ctx.strokeText('!', 32, 50); ctx.fillStyle = '#d8432b'; ctx.fillText('!', 32, 50);
+    return c;
+  }
+  // the bullseye inside the urinal: red centre, white and red rings
+  function bullseye() {
+    const c = canvas(256, 256), ctx = c.getContext('2d'), cx = 128;
+    [[124, '#2b2622'], [116, '#ffffff'], [92, '#d8432b'], [68, '#ffffff'], [44, '#d8432b'], [22, '#2b2622']].forEach(([r, col]) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, cx, r, 0, 6.283); ctx.fill(); });
+    ctx.strokeStyle = '#2b2622'; ctx.lineWidth = 3; [116, 92, 68, 44].forEach(r => { ctx.beginPath(); ctx.arc(cx, cx, r, 0, 6.283); ctx.stroke(); });
     return c;
   }
   function nameTag(text, bg = '#fbf6e6', fg = '#2b2622') {
@@ -379,6 +391,11 @@ export const Draw = (() => {
       // a flask doodle
       line(ctx, [[760, 160], [760, 210], [720, 290], [840, 290], [800, 210], [800, 160]], ink3, 5, 2); shape(ctx, [[728, 262], [832, 262], [840, 290], [720, 290]], 'rgba(47,125,79,0.5)', null);
       [[770, 240], [800, 225], [785, 205]].forEach(([x, y]) => line(ctx, ellipsePts(x, y, 6, 6, 8).concat([ellipsePts(x, y, 6, 6, 8)[0]]), ink3, 3, 1));
+    } else if (style === 'toilet') { // the cleaning crew's sign above the urinal
+      ctx.fillStyle = ink2; ctx.font = '64px Iansui, "Noto Sans TC", sans-serif'; ctx.fillText('清潔中，請勿進入', 60, 110);
+      ctx.fillStyle = '#2b2622'; ctx.font = '34px Iansui, "Noto Sans TC", sans-serif'; ctx.fillText('值班：清潔隊全員　　拖把 4 支　水桶 3 桶', 60, 180);
+      ctx.fillStyle = ink; ctx.font = '40px Iansui, "Noto Sans TC", sans-serif'; ctx.fillText('射中紅心者優先使用', 60, 250);
+      line(ctx, [[720, 60], [720, 280]], ink, 4, 2); shape(ctx, ellipsePts(860, 170, 70, 70, 24), '#f4e27a', '#2b2622', 4); shape(ctx, ellipsePts(860, 170, 40, 40, 20), '#d8432b', '#2b2622', 3); shape(ctx, ellipsePts(860, 170, 14, 14, 12), '#2b2622', null);
     } else {
       for (let i = 0; i < 5; i++) line(ctx, [[40, 70 + i * 22], [980, 70 + i * 22]], '#2b2622', 2, 1);
       ctx.fillStyle = '#2b2622'; ctx.font = 'bold 70px "Patrick Hand", sans-serif'; ctx.fillText('𝄞', 50, 150);
@@ -499,5 +516,5 @@ export const Draw = (() => {
     const t = new THREE.DataTexture(data, 4, 1, THREE.RedFormat); t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
     return t;
   }
-  return { kid, kidVariant, teacher, nameTag, noteIcon, alertIcon, planeIcon, speechIcon, tiles, staffWall, poster, banner, skeleton, grass, bully, monitor, ballTex, itemIcon, paperWall, floor, blackboard, window: window_, milkCarton, gradientMap, tex, canvas };
+  return { kid, kidVariant, teacher, nameTag, bullseye, noteIcon, alertIcon, planeIcon, speechIcon, tiles, staffWall, poster, banner, skeleton, grass, bully, monitor, ballTex, itemIcon, paperWall, floor, blackboard, window: window_, milkCarton, gradientMap, tex, canvas };
 })();

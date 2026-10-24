@@ -16,7 +16,7 @@ import { RemotePlayer } from './remoteplayer.js';
 import { serializeSnapshot, applySnapshot, applyDelta } from './net/snapshot.js';
 import { NetStats } from './net/stats.js';
 import { PaperFigure } from './paperfigure.js';
-import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE } from './config.js';
+import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE, TOILET } from './config.js';
 import { TEACHERS, BOSSES, COMMITTEE, GANG } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
@@ -62,6 +62,7 @@ export class Game {
     this.state = 'menu'; this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.spawnTimer = 0; this.waveTimer = 0; this.difficultySpread = 1;
     this.level = 'normal'; this.diff = DIFFICULTY.normal; this.offer = null; this.offerTimer = 0; this.supplyTimer = 0;
     this.mode = 'class'; this.siege = false; this.bossDue = 0; this.bossDef = null; // 守校門模式
+    this.toilet = false; this.timeLeft = 0; this.refillT = 0; // 搶廁所模式
     this.forceTeacher = new URLSearchParams(location.search).get('teacher'); // debug: ?teacher=pe
     this.clock = new THREE.Clock(); this.hasLock = false; this.lockSupported = 'requestPointerLock' in document.body;
     this.touchCtl = new TouchControls(this); this.touch = this.touchCtl.on;
@@ -102,7 +103,7 @@ export class Game {
   mySkin() { return skinFor(this.mySlot, this.profile.name, this.profile.look); }
   touchOf(who) { if (!who || who === 'host') return !!this.touch; const r = this.remotes.get(who); return !!(r && r.touch); }
   hitMul(who) { return this.touchOf(who) ? CFG.assist.hitMul : 1; }
-  baseHp(pl) { return CFG.player.hp + (pl && pl.touch ? CFG.assist.extraHp : 0); }
+  baseHp(pl) { return (this.toilet ? TOILET.hp : CFG.player.hp) + (pl && pl.touch ? CFG.assist.extraHp : 0); }
   // a guest said hello on a connection: give it its slot (the same one if it came back) and catch it up
   onHello(from, pid, touch = false, name = '', look = '') {
     let slot = this.pids.get(pid);
@@ -122,7 +123,7 @@ export class Game {
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
     this.fullSnapNext = true;
     if (this.state === 'playing' || this.state === 'paused') {
-      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0 }), from);
+      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0 }), from);
       this.transport.send(JSON.stringify({ t: 'restore', taken: r.up.taken, ammo: r.ammo, res: r.reserve, hp: r.hp, buff: this.buffs[slot] || null }), from);
       if (!this.stats[slot]) this.stats[slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 };
       this.message(back ? `${r.skin.name}回來了！` : `${r.skin.name}中途加入了！`, '', 1.5);
@@ -146,7 +147,7 @@ export class Game {
     if (this.world.layout.id === id && !!this.world.siege === !!siege) return;
     this.world.dispose(); this.world = new World(this.scene, id, { siege }); this.darts.world = this.world;
   }
-  waveLabel(n) { return this.siege ? `${n}/${SIEGE.waves.length}` : n; }
+  waveLabel(n) { return this.toilet ? '搶廁所' : this.siege ? `${n}/${SIEGE.waves.length}` : n; }
   // 守校門：第 i 個惡霸從哪裡進來。帶頭的一定走校門；其他人輪流校門、爬牆、水溝蓋
   siegeEntry(i, leader) {
     const L = this.world.layout, S = L.siege || { drains: [], climbs: [] }, kind = leader ? 'gate' : SIEGE.entries[i % SIEGE.entries.length];
@@ -226,7 +227,7 @@ export class Game {
     } else {
       if (m.t === 'welcome') { this.mySlot = m.slot; this.darts.localWho = m.slot; if (this.onWelcome) this.onWelcome(m); }
       else if (m.t === 'full') { if (this.onFull) this.onFull(); }
-      else if (m.t === 'start') { this.siege = !!m.siege; if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
+      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
       else if (m.t === 'restore') { // back after a disconnect: the host remembers what we had
         const p = this.player;
         for (const [id, n] of Object.entries(m.taken || {})) for (let i = 0; i < n; i++) { const u = takeUpgrade(p.up, id); if (u) { p.up.refill = 0; p.up.healFull = false; p.applyUpgrade(u); } }
@@ -246,8 +247,8 @@ export class Game {
     this.guestReset(); this.markTouchPlayer();
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
-    this.ui.infinite = this.siege;
-    this.ui.hp(this.player.hp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.buff(null);
+    this.ui.infinite = this.siege; this.ui.timer(this.toilet ? TOILET.time : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.siege ? '惡霸' : '同學'); this.ui.wet(false);
+    this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.buff(null);
     if (this.lockSupported && !this.touch) this.requestLock();
     Audio.bellOut();
     this.clock.getDelta();
@@ -385,23 +386,31 @@ export class Game {
   start() {
     if (!this.isHost) return this.startGuest();
     Audio.init(); Audio.resume();
-    this.siege = this.mode === 'siege'; this.ui.infinite = this.siege;
+    this.siege = this.mode === 'siege'; this.toilet = this.mode === 'toilet'; this.ui.infinite = this.siege;
     this.diff = this.siege ? { ...DIFFICULTY[this.level], waves: SIEGE.waves } : DIFFICULTY[this.level]; // 守校門：十波，其餘照難度
-    this.setLayout(this.siege ? 'yard' : this.pickLayout(), this.siege);
+    this.setLayout(this.toilet ? 'toilet' : this.siege ? 'yard' : this.pickLayout(), this.siege);
     this.reset(); this.markTouchPlayer();
     this.coop = this.isHost && this.remoteList().length > 0; this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
-    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0 }));
+    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0 }));
     if (this.coop) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
     this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false);
     if (this.lockSupported && !this.touch) this.requestLock();
     Audio.bellOut();
-    if (this.siege) this.message('隔壁學校的惡霸軍團來了！', `守住${this.world.layout.name}十波，彈藥無限`, 3.5);
-    else this.message('叮咚叮咚，下課了！', `${this.world.layout.name}變成戰場`, 3.5);
-    this.waveTimer = 4.6; this.nextWavePending = true;
+    this.ui.timer(this.toilet ? TOILET.time : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.siege ? '惡霸' : '同學'); this.ui.wet(false);
+    if (this.toilet) { // 搶廁所：清潔隊已經在裡面打掃；倒數開始
+      this.message('下課了，快去廁所！', `清潔隊在打掃……射中小便斗裡的紅心就贏，${TOILET.time} 秒`, 3.5);
+      this.timeLeft = TOILET.time; this.refillT = TOILET.refill;
+      const spots = (this.world.layout.crewSpots || []).slice(); for (let i = 0; i < TOILET.crew && spots.length; i++) { const [x, z] = spots.splice(Math.floor(Math.random() * spots.length), 1)[0]; this.students.push(new Student(this, { x, z })); }
+      this.ui.left(this.students.length); this.nextWavePending = false;
+    } else {
+      if (this.siege) this.message('隔壁學校的惡霸軍團來了！', `守住${this.world.layout.name}十波，彈藥無限`, 3.5);
+      else this.message('叮咚叮咚，下課了！', `${this.world.layout.name}變成戰場`, 3.5);
+      this.waveTimer = 4.6; this.nextWavePending = true;
+    }
     this.clock.getDelta();
   }
   reset() {
@@ -412,8 +421,8 @@ export class Game {
     this.debris.forEach(d => this.scene.remove(d.mesh)); this.debris = []; this.rings.forEach(r => this.scene.remove(r.mesh)); this.rings = [];
     if (this.bully) this.bully.dispose(); if (this.monitor) this.monitor.dispose(); if (this.ball) this.ball.dispose();
     this.bully = null; this.monitor = null; this.ball = null;
-    const f = this.siege ? { bully: false, ball: Math.random() < CFG.features.ball, monitor: false } : { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
-    const enabled = this.siege ? [] : Object.keys(f).filter(k => CFG.features[k] > 0);
+    const f = this.toilet ? { bully: false, ball: false, monitor: false } : this.siege ? { bully: false, ball: Math.random() < CFG.features.ball, monitor: false } : { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
+    const enabled = this.siege || this.toilet ? [] : Object.keys(f).filter(k => CFG.features[k] > 0);
     if (enabled.length && !enabled.some(k => f[k])) f[pick(enabled)] = true; // at least one surprise per game, but never a switched-off one
     this.features = f;
     if (f.bully) this.bully = new Bully(this);
@@ -424,7 +433,7 @@ export class Game {
     this.props.forEach(p => p.dispose()); this.props = (this.world.layout.props || []).map((d, i) => new Prop(this, d, i));
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
-    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null;
+    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null; this.timeLeft = 0; this.refillT = 0; this.ui.wet(false);
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
     for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = this.baseHp(r); }
@@ -781,6 +790,12 @@ export class Game {
   hitmark() { const who = this.lastShooter || 'host'; this.stat(who, 'hits'); if (who !== 'host') { const r = this.remotes.get(who); if (r) r.hits++; this.netEvent({ t: 'hitmark' }, who); } else { this.ui.hitmark(); this.player.hits++; } }
   onLose() {
     this.state = 'over'; Audio.lose();
+    if (this.toilet) { // 搶廁所：時間到，或被趕出去
+      const timeUp = this.timeLeft <= 0, title = timeUp ? '時間到，憋不住了……' : '被清潔隊趕出廁所了！', sub = timeUp ? '清潔隊還在拖地，紅心沒射中。' : '三滴血用完，先去保健室。';
+      this.overInfo = { win: 0, title, sub, stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
+      if (document.pointerLockElement) document.exitPointerLock();
+      this.showOver(title, sub, false); return;
+    }
     this.overInfo = { win: 0, title: this.coop ? '全部的人都被罰坐了' : '你被罰坐了！', sub: '沒有人能來救，全班歡呼。', stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
     if (document.pointerLockElement) document.exitPointerLock();
     if (this.coop) this.showOver('全部的人都被罰坐了', '沒有人能來救，全班歡呼。', false);
@@ -788,6 +803,14 @@ export class Game {
   }
   onWin() {
     this.addScore(CFG.score.win); this.state = 'won'; Audio.bellOut(); setTimeout(() => Audio.win(), 1800);
+    if (this.toilet) {
+      const left = Math.ceil(this.timeLeft); this.addScore(left * TOILET.timeBonus);
+      const title = '搶到廁所了！', sub = `正中紅心，剩 ${left} 秒。清潔隊讓路，廁所是你的了。`;
+      this.message('正中紅心！！！', '清潔隊讓路，廁所是你的了', 4);
+      this.overInfo = { win: 1, title, sub, stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
+      setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); this.showOver(title, sub, true); }, 3200);
+      return;
+    }
     if (this.siege) {
       const title = '守住校門！惡霸軍團撤退了', sub = '十波都擋下來了，隔壁學校再也不敢來。';
       this.message('守住了！！！', '惡霸軍團夾著尾巴逃回隔壁學校', 4);
@@ -844,12 +867,17 @@ export class Game {
     this.updateItems(dt, realDt);
     // spawning & waves
     if (this.state === 'playing') {
+      if (this.toilet) { // 搶廁所：倒數；清潔隊少於四個就從側門再進一個
+        this.timeLeft -= dt; this.ui.timer(this.timeLeft);
+        if (this.timeLeft <= 0) { this.timeLeft = 0; this.onLose(); return; }
+        if (this.students.filter(s => s.alive).length + this.spawnQueue.length < TOILET.minCrew) { this.refillT -= dt; if (this.refillT <= 0) { this.refillT = TOILET.refill; const doors = this.world.layout.doors; this.spawnQueue.push({ door: doors[Math.random() < 0.5 ? 0 : 1] }); this.spawnTimer = Math.min(this.spawnTimer, 0.2); this.message('又來一個清潔隊員', '', 1.2); } }
+      }
       if (this.bossDue > 0) { this.bossDue -= dt; if (this.bossDue <= 0 && this.bossDef) { this.spawnTeacher(this.bossDef); this.bossDef = null; } }
       for (let i = this.teachers.length - 1; i >= 0; i--) { const t = this.teachers[i]; if (t.goneT === undefined) continue; t.goneT -= dt; if (t.goneT <= 0) { t.dispose(); this.teachers.splice(i, 1); this.updateBossHud(); if (!this.teachers.length) this.ui.boss(false); } }
       if (this.spawnQueue.length) {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) { const e = this.spawnQueue.shift(), door = e.door || e, at = e.at || { x: door.x - 0.3, z: door.z }; this.students.push(new Student(this, at, { leader: !!e.leader, entry: e.entry || null })); if (e.leader) { if (this.siege) this.message('惡霸老大帶頭衝進來了！', '先打倒他，其他人會慌', 2); else this.message('班長帶隊進來了！', '先打倒她，其他人會慌', 2); Audio.tattle(); this.netEvent({ t: 'sfx', n: 'tattle' }); } this.spawnTimer = this.diff.spawnGap; this.ui.left(this.students.filter(s => s.alive).length + this.spawnQueue.length); }
-      } else if (!this.bossPhase) {
+      } else if (!this.bossPhase && !this.toilet) {
         const alive = this.students.filter(s => s.alive).length, bossUp = this.bossDue > 0 || this.teachers.some(t => !t.defeated);
         if (alive === 0 && !bossUp) {
           if (this.nextWavePending) {
@@ -870,7 +898,7 @@ export class Game {
       }
     }
     if (this.offerTimer > 0) { this.offerTimer -= dt; if (this.offerTimer <= 0) this.openOffer(); }
-    this.panicT = Math.max(0, (this.panicT || 0) - dt);
+    this.panicT = Math.max(0, (this.panicT || 0) - dt); this.hintT = Math.max(0, (this.hintT || 0) - dt);
     this.updateMilk(dt); this.updateProps(dt); this.updateZones(dt); for (const p of this.props) p.update(dt); this.world.tick(dt);
     for (const s of this.students) s.update(dt);
     for (let i = this.students.length - 1; i >= 0; i--) if (this.students[i].gone) { this.students[i].dispose(); this.students.splice(i, 1); } // leaders who left for the office
@@ -887,6 +915,11 @@ export class Game {
       if (d.kind === 'dart' && this.ball && this.ball.testDart(d)) return true;
       if (d.kind === 'dart' && this.bully && this.bully.testHit(p)) { this.bully.poke(d.owner, d.shooter, d.who); return true; }
       if (d.owner === 'player' && this.monitor && this.monitor.testHit(p)) { this.monitor.hitByDart(); return true; }
+      if (this.toilet && d.owner === 'player' && this.world.target) { // 搶廁所：正中紅心就贏，打到靶的外圈給提示
+        const T = this.world.target, dd = Math.hypot(p.x - T.x, p.y - T.y, p.z - T.z);
+        if (dd < TOILET.bull) { this.lastShooter = d.who; this.onWin(); this.lastShooter = null; return true; }
+        if (dd < TOILET.target && p.z < T.z + 0.25 && !(this.hintT > 0)) { this.hintT = 2; this.message('打到靶了，再準一點！', '要正中紅心', 1.2); }
+      }
       if (d.owner === 'player') {
         for (const s of this.students) {
           if (!s.alive) continue;
@@ -904,7 +937,16 @@ export class Game {
         for (const pl of this.activeTargets()) {
           const dx = p.x - pl.pos.x, dz = p.z - pl.pos.z;
           const hr = 0.28 * (1 - (pl.up ? pl.up.dodge : 0));
-          if (dx * dx + dz * dz < hr * hr && p.y > pl.pos.y && p.y < pl.pos.y + pl.eye + 0.2) { if (d.kind === 'eraser') this.dustBurst(p.clone()); pl.hurt(); return true; }
+          if (dx * dx + dz * dz < hr * hr && p.y > pl.pos.y && p.y < pl.pos.y + pl.eye + 0.2) {
+            if (d.kind === 'eraser') this.dustBurst(p.clone());
+            if (d.kind === 'water') { // 潑水：不扣血，慢 5 秒
+              this.spawnRing(p.clone(), 0.6, 0x6fb7ef);
+              if (pl === this.player) { pl.wet = TOILET.wetSeconds; this.ui.wet(true); this.message('被潑到水了！', '行動變慢 5 秒', 1.4); Audio.boing(); }
+              else { pl.wet = TOILET.wetSeconds; this.netEvent({ t: 'wet', s: TOILET.wetSeconds }, pl.slot); }
+              return true;
+            }
+            pl.hurt(); return true;
+          }
         }
       }
       return false;

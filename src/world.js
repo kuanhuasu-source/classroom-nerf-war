@@ -68,11 +68,11 @@ export class World {
     if (!World.indoorBg && s.background) World.indoorBg = s.background.clone();
     s.background = outdoor ? new THREE.Color(0xc9e6ff) : (World.indoorBg || new THREE.Color(0xfbf6e6));
     // floor / ceiling / walls by style
-    const floorTex = outdoor ? Draw.tex(Draw.grass(), [w / 3, d / 3]) : st === 'lab' ? Draw.tex(Draw.tiles(), [w / 2, d / 2]) : Draw.tex(Draw.floor(), st === 'gym' ? [w / 2.5, d / 2.5] : [w / 4, d / 4]);
+    const floorTex = outdoor ? Draw.tex(Draw.grass(), [w / 3, d / 3]) : st === 'lab' || st === 'toilet' ? Draw.tex(Draw.tiles(), [w / 2, d / 2]) : Draw.tex(Draw.floor(), st === 'gym' ? [w / 2.5, d / 2.5] : [w / 4, d / 4]);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: floorTex, gradientMap: this.gradient }));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; this.add(floor);
     if (!outdoor) { const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ color: 0xf3eee0, gradientMap: this.gradient })); ceil.rotation.x = Math.PI / 2; ceil.position.y = h; this.add(ceil); }
-    const wallCanvas = st === 'music' ? Draw.staffWall() : Draw.paperWall(st === 'lab' ? '#eef5e8' : st === 'gym' ? '#f6efd9' : outdoor ? '#f3e2c8' : '#fbf6e6');
+    const wallCanvas = st === 'music' ? Draw.staffWall() : Draw.paperWall(st === 'lab' ? '#eef5e8' : st === 'toilet' ? '#e6f0f4' : st === 'gym' ? '#f6efd9' : outdoor ? '#f3e2c8' : '#fbf6e6');
     const wallMat = new THREE.MeshToonMaterial({ map: Draw.tex(wallCanvas, [w / 4, 1]), gradientMap: this.gradient });
     const wallH = outdoor ? 4.2 : h;
     const mk = (pw, px, pz, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, wallH), wallMat); m.position.set(px, wallH / 2, pz); m.rotation.y = ry; m.receiveShadow = true; this.add(m); };
@@ -139,6 +139,7 @@ export class World {
     // furniture
     for (const f of L.furniture) this.furniture(f);
     if (this.siege && L.siege) this.buildSiege(L.siege);
+    this.target = L.target ? { ...L.target } : null; // 搶廁所：小便斗裡的靶心
     // logical cover entries
     for (const dsk of L.desks) this.desks.push({ x: dsk.x, z: dsk.z, w: dsk.w, d: dsk.d, h: dsk.h, floor: dsk.floor || 0, seat: { x: dsk.seat.x, z: dsk.seat.z }, occupant: null, covered: null });
     this.bounds = { minX: -w / 2 + 0.3, maxX: w / 2 - 0.3, minZ: -d / 2 + 0.3, maxZ: d / 2 - 0.3 };
@@ -250,6 +251,46 @@ export class World {
       case 'banner': { // a cloth banner hanging on a wall
         const m = new THREE.Mesh(new THREE.PlaneGeometry(f.w, f.h), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.banner(f.text || '歡迎')) })); m.position.set(f.x, f.y, f.z); m.rotation.y = f.ry || 0; this.add(m); return;
       }
+      case 'stall': { // a toilet cubicle: two partitions, a half-open door, a toilet inside; kids hide behind the door side
+        for (const sz of [-1, 1]) this.box(f.w, f.h - 0.2, 0.06, f.x, fl + 0.2 + (f.h - 0.2) / 2, f.z + sz * f.d / 2, 0xbfd8e6);
+        this.box(0.06, f.h - 0.2, f.d, f.x - f.w / 2 + 0.03, fl + 0.2 + (f.h - 0.2) / 2, f.z, 0xbfd8e6, { collide: false });
+        const door = this.box(0.7, f.h - 0.3, 0.05, f.x + f.w / 2 - 0.3, fl + 0.25 + (f.h - 0.3) / 2, f.z - f.d / 2 + 0.4, 0x9fc3d6, { collide: false }); door.rotation.y = -0.9;
+        this.collide(f.x + f.w / 2 - 0.2, f.z - f.d / 2 + 0.35, 0.5, 0.6, f.h);
+        this.box(0.4, 0.4, 0.5, f.x - 0.3, fl + 0.2, f.z, 0xffffff, { collide: false }); this.box(0.4, 0.6, 0.12, f.x - 0.3, fl + 0.6, f.z - 0.2, 0xffffff, { collide: false }); // the toilet
+        return;
+      }
+      case 'sinkrow': { // sinks along the +x wall, mirrors above
+        this.box(f.w, f.h, f.d, f.x, fl + f.h / 2, f.z, 0xffffff);
+        for (let i = -1; i <= 1; i++) { this.cylinder(0.02, 0.26, f.x + 0.2, fl + f.h + 0.13, f.z + i * 0.8, 0xb8b8b8, { collide: false, seg: 8 }); this.cylinder(0.14, 0.03, f.x - 0.05, fl + f.h + 0.01, f.z + i * 0.8, 0xdde7ee, { collide: false, seg: 12 }); }
+        const mirror = this.box(0.03, 0.9, f.d - 0.2, this.room.w / 2 - 0.02, fl + 1.8, f.z, 0xcfe6f2, { collide: false, shadow: false }); mirror.material = new THREE.MeshBasicMaterial({ color: 0xd8eaf4 });
+        return;
+      }
+      case 'mopcart': { // a yellow mop bucket on wheels with the mop standing in it: low cover you can crouch behind
+        this.box(f.w, f.h - 0.2, f.d, f.x, fl + 0.2 + (f.h - 0.2) / 2, f.z, 0xf4e27a);
+        this.box(f.w - 0.1, 0.12, 0.3, f.x, fl + f.h - 0.06, f.z + 0.15, 0x7a8794, { collide: false }); // the wringer
+        for (const [dx, dz] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) this.cylinder(0.06, 0.06, f.x + dx, fl + 0.06, f.z + dz, 0x2b2622, { collide: false, seg: 8 }).rotation.z = Math.PI / 2;
+        const mop = this.cylinder(0.02, 1.5, f.x - 0.15, fl + f.h + 0.4, f.z - 0.1, 0xb98556, { collide: false, seg: 6 }); mop.rotation.z = 0.15;
+        this.cylinder(0.12, 0.14, f.x - 0.15, fl + f.h - 0.1, f.z - 0.1, 0xe8e2cc, { collide: false, seg: 8 });
+        return;
+      }
+      case 'wetsign': { // the yellow "caution: wet floor" A-frame; small and soft, it trips nobody and stops no dart
+        const g = new THREE.Group(); g.position.set(f.x, fl, f.z); g.rotation.y = rand(-0.4, 0.4); this.add(g);
+        for (const s of [-1, 1]) { const b = this.box(0.42, 0.7, 0.02, 0, 0.35, s * 0.14, 0xf4e27a, { collide: false, parent: g }); b.rotation.x = s * 0.35; }
+        const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.14), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.nameTag('小心地滑', '#f4e27a', '#2b2622')), transparent: true })); tag.position.set(0, 0.42, -0.21); tag.rotation.x = -0.35; tag.rotation.y = Math.PI; g.add(tag);
+        this.collide(f.x, f.z, 0.4, 0.36, 0.7, 0, true);
+        return;
+      }
+      case 'urinal': { // the big urinal at the back wall: an open bowl with the bullseye inside; the sides and lip collide, the mouth does not
+        const back = this.box(f.w, f.h, 0.2, f.x, fl + f.h / 2, f.z - f.d / 2 + 0.1, 0xffffff);
+        for (const sx of [-1, 1]) this.box(0.3, f.h, f.d, f.x + sx * (f.w / 2 - 0.15), fl + f.h / 2, f.z, 0xffffff);
+        this.box(f.w, 0.5, f.d, f.x, fl + 0.25, f.z, 0xffffff); // the lip you cannot step over
+        this.box(f.w, 0.25, f.d, f.x, fl + f.h - 0.12, f.z, 0xdde7ee, { collide: false });
+        this.cylinder(0.03, 0.5, f.x, fl + f.h + 0.2, f.z - f.d / 2 + 0.2, 0xb8b8b8, { collide: false, seg: 8 }); // the flush pipe
+        const T = this.layout.target || { x: f.x, y: 1.25, z: f.z - f.d / 2 + 0.22 };
+        const tgt = new THREE.Mesh(new THREE.CircleGeometry(0.45, 32), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.bullseye()) })); tgt.position.set(T.x, T.y, T.z); this.add(tgt);
+        this.targetMesh = tgt;
+        return;
+      }
       case 'podium': return this.box(f.w, f.h, f.d, f.x, fl + f.h / 2, f.z, 0xb98556);
       case 'desk': return this.deskAndChair(f.x, f.z);
       case 'cupboard': return this.box(f.w, f.h, f.d, f.x, f.h / 2, f.z, 0xa88a68);
@@ -270,7 +311,8 @@ export class World {
       case 'stool': { this.cylinder(0.18, 0.04, f.x, 0.6, f.z, 0x5d8ad6, { collide: false }); this.cylinder(0.03, 0.58, f.x, 0.29, f.z, 0x7a8794, { collide: false, seg: 8 }); this.collide(f.x, f.z, 0.32, 0.32, 0.62); return; }
       case 'cabinet': { // lab chemicals or music instruments
         const m = this.box(f.w, f.h, f.d, f.x, f.h / 2, f.z, this.layout.style === 'lab' ? 0xe8e2cc : 0xb98556);
-        if (this.layout.style === 'lab') for (let i = 0; i < 6; i++) this.cylinder(0.07, 0.2, f.x - f.w / 2 + 0.25 + i * 0.26, f.h + 0.1, f.z, pick([0xb7e3a1, 0x9fd3f2, 0xf7a8c4, 0xf4e27a, 0xd8432b]), { collide: false, seg: 10 });
+        if (this.layout.style === 'toilet') { for (let i = 0; i < 4; i++) this.cylinder(0.11, 0.2, f.x - f.w / 2 + 0.25 + i * 0.36, f.h + 0.1, f.z, 0xffffff, { collide: false, seg: 10 }).rotation.x = Math.PI / 2; }
+        else if (this.layout.style === 'lab') for (let i = 0; i < 6; i++) this.cylinder(0.07, 0.2, f.x - f.w / 2 + 0.25 + i * 0.26, f.h + 0.1, f.z, pick([0xb7e3a1, 0x9fd3f2, 0xf7a8c4, 0xf4e27a, 0xd8432b]), { collide: false, seg: 10 });
         else { const nb = this.box(f.w - 0.3, 0.05, 0.3, f.x, f.h + 0.03, f.z, 0x2b2622, { collide: false }); this.cylinder(0.12, 0.5, f.x + f.w / 2 - 0.3, f.h + 0.25, f.z, 0xf28a1a, { collide: false, seg: 12 }); }
         return m;
       }

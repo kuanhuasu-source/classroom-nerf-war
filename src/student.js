@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, SIEGE, rand, pick, clamp } from './config.js';
+import { CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, SIEGE, TOILET, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { Draw } from './draw.js';
 import { PaperFigure } from './paperfigure.js';
@@ -12,6 +12,7 @@ export class Student extends PaperFigure {
     const leader = !!(opts.leader || (opts.v && opts.v.leader));
     const v = opts.v || (leader ? { ...Draw.kidVariant(), hair: 1, shirt: '#ffffff', leader: true } : Draw.kidVariant());
     // 守校門：隔壁學校的惡霸，深色衣服加紅頭巾；入口（校門／爬牆／水溝蓋）跟著 variant 一起同步給隊友
+    if (!opts.v && game.toilet) { v.cleaner = true; v.shirt = '#5d8ad6'; } // 搶廁所：清潔隊員，白圍裙藍帽子
     if (!opts.v && game.siege) { v.bully = true; v.shirt = leader ? '#8a2a2a' : pick(['#2b2622', '#5a1e1e', '#3a3a5a', '#4a4a4a']); if (leader) v.hair = 2; }
     const entry = opts.entry || (v.entry ? { kind: v.entry, index: v.di } : null);
     if (entry && !v.entry) { v.entry = entry.kind; v.di = entry.index; }
@@ -115,7 +116,9 @@ export class Student extends PaperFigure {
         if (this.timer <= 0) {
           this.alert.visible = false;
           if (this.canSee(player) && this.game.shootersBusy()) { this.state = 'hide'; this.timer = rand(0.5, 1.2); } // someone else is already firing: wait your turn
-          else if (this.canSee(player)) { this.state = 'shoot'; this.shotsLeft = 1 + Math.floor(Math.random() * (this.game.diff.burstMax + (this.leader ? 1 : 0))); this.shotsFired = 0; this.shotTimer = 0.15; }
+          else if (this.canSee(player)) { this.state = 'shoot'; this.shotsLeft = 1 + Math.floor(Math.random() * (this.game.diff.burstMax + (this.leader ? 1 : 0))); this.shotsFired = 0; this.shotTimer = 0.15;
+            if (this.v.cleaner) { this.burstKind = Math.random() < TOILET.waterChance ? 'water' : 'plunger'; this.shotsLeft = this.burstKind === 'water' ? 1 : TOILET.plungerBurst[0] + Math.floor(Math.random() * (TOILET.plungerBurst[1] - TOILET.plungerBurst[0] + 1)); } // 清潔隊：潑一桶水，或通馬桶連發 3 到 5 支
+          }
           else { this.chooseDesk(); }
         }
         break;
@@ -123,7 +126,7 @@ export class Student extends PaperFigure {
       case 'shoot': {
         this.shotTimer -= dt;
         if (this.shotTimer <= 0) {
-          this.fireAt(player); this.shotsLeft--; this.shotTimer = 0.42;
+          this.fireAt(player); this.shotsLeft--; this.shotTimer = this.v.cleaner && this.burstKind === 'plunger' ? TOILET.plungerGap : 0.42;
           if (this.shotsLeft <= 0) { if (Math.random() < 0.45) this.chooseDesk(); else { this.state = 'hide'; this.timer = rand(1.4, 2.8) * this.game.diff.hideMul; } }
         }
         break;
@@ -162,14 +165,15 @@ export class Student extends PaperFigure {
     const from = this.eye(); from.y -= 0.15;
     const target = player.eyePos(); target.y -= 0.25;
     const dir = target.clone().sub(from); const dist = dir.length();
-    const speed = (this.game.diff.dartSpeed || CFG.enemy.dartSpeed) * (player.touch ? CFG.assist.enemyDartMul : 1);
-    dir.y += dist * dist * CFG.gun.gravity / (2 * speed * speed);
+    const kind = this.v.cleaner ? (this.burstKind || 'plunger') : 'dart';
+    const speed = (kind === 'water' ? TOILET.waterSpeed : (this.game.diff.dartSpeed || CFG.enemy.dartSpeed)) * (player.touch ? CFG.assist.enemyDartMul : 1);
+    dir.y += dist * dist * (kind === 'water' ? 9 : CFG.gun.gravity) / (2 * speed * speed);
     const spread = CFG.enemy.spread * this.game.difficultySpread * (this.shotsFired === 0 ? this.game.diff.firstShotMul : 1) * (this.leader ? 0.6 : 1) * (this.game.panicT > 0 ? CFG.leader.panicSpreadMul : 1) * (player.touch ? CFG.assist.enemySpreadMul : 1); this.shotsFired++;
     dir.normalize().add(new THREE.Vector3(rand(-spread, spread), rand(-spread, spread), rand(-spread, spread))).normalize();
     // move dart start a little toward the target so it clears own body/desk
     from.addScaledVector(dir, 0.5);
-    const d = this.game.darts.fire(from, dir, speed, 'enemy'); d.shooter = this;
-    Audio.enemyPew();
+    const d = this.game.darts.fire(from, dir, speed, 'enemy', kind); d.shooter = this;
+    if (kind === 'water') Audio.boing(); else Audio.enemyPew();
   }
   hit() {
     if (!this.alive) return false;

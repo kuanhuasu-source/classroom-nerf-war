@@ -50,6 +50,9 @@ body {
 #hud-top b { font-family: var(--font-hand); font-weight: 400; color: var(--pencil); font-size: 15px; margin-right: 6px; }
 #hud-hp { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); letter-spacing: 4px; font-size: 26px; }
 #hud-hp .lost { opacity: .22; }
+#hud-time.low { background: var(--red-pen); color: var(--paper); } #hud-time.low b { color: var(--paper); }
+#wet { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; background: radial-gradient(ellipse at center, rgba(111,183,239,0) 35%, rgba(111,183,239,.55) 100%); }
+#wet.on { opacity: 1; }
 #hud-ammo { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; font-family: var(--font-num); font-size: 30px; font-variant-numeric: tabular-nums; min-width: 110px; }
 #hud-ammo small { display: block; font-family: var(--font-hand); font-size: 14px; color: var(--pencil); }
 #hud-ammo .reserve { font-size: 18px; color: var(--pencil); margin-left: 4px; }
@@ -260,7 +263,9 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
     <div class="sticker"><b>波次</b><span id="wave">1</span></div>
     <div class="sticker"><b>分數</b><span id="score">0</span></div>
     <div class="sticker"><b>同學</b><span id="left">0</span></div>
+    <div class="sticker" id="hud-time" hidden><b>倒數</b><span id="time">90</span></div>
   </div>
+  <div id="wet"></div>
   <div id="hud-boss"></div>
   <div class="sticker" id="hud-buff"><b id="buff-name">滿分考卷</b> <span id="buff-effect">分數雙倍</span> <span id="buff-time">12</span></div>
   <div class="sticker" id="hud-up"></div>
@@ -295,6 +300,7 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
       <div class="seg" role="radiogroup" aria-label="玩法">
         <button type="button" class="seg-btn on" data-mode="class">下課大戰</button>
         <button type="button" class="seg-btn" data-mode="siege">守校門</button>
+        <button type="button" class="seg-btn" data-mode="toilet">搶廁所</button>
       </div>
       <span class="note" id="mode-note">下課大戰：六波同學加一位老師。</span>
     </div>

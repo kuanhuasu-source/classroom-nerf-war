@@ -10,7 +10,7 @@ export class RemotePlayer extends PaperFigure {
   constructor(game, skin) {
     super(game.scene, () => Draw.kid(skin.v, 'normal'), 0.9, 1.35);
     this.game = game; this.skin = skin; this.slot = skin.slot || 'g1'; this.hp = 5; this.eye = 1.25; this.yaw = 0; this.crouch = false; this.targetSy = 1;
-    this.pos = this.group.position; this.ammo = 0; this.reserve = 0; this.up = freshUp(); this.maxHp = 5;
+    this.pos = this.group.position; this.ammo = 0; this.reserve = 0; this.up = freshUp(); this.maxHp = 5; this.wet = 0;
     this.sitting = false; this.sitT = 0; this.invuln = 0; this.hurtCd = 0; this.seat = null; this.texState = 'normal'; this.sayT = 0; this.bubble = null; this.offline = false; this.shots = 0; this.hits = 0;
     this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: RemotePlayer.tagTex(skin.name), transparent: true, depthTest: false }));
     this.tag.scale.set(0.64, 0.2, 1); this.tag.position.set(0, 1.6, 0); this.group.add(this.tag);
