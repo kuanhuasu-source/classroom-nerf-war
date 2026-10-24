@@ -139,10 +139,20 @@ export class World {
     // furniture
     for (const f of L.furniture) this.furniture(f);
     if (this.siege && L.siege) this.buildSiege(L.siege);
-    this.target = L.target ? { ...L.target } : null; // 搶廁所：小便斗裡的靶心
+    this.cans = (L.cans || []).map(([x, y, z], i) => this.can(x, y, z, i)); // 搶廁所：要射破的罐子
     // logical cover entries
     for (const dsk of L.desks) this.desks.push({ x: dsk.x, z: dsk.z, w: dsk.w, d: dsk.d, h: dsk.h, floor: dsk.floor || 0, seat: { x: dsk.seat.x, z: dsk.seat.z }, occupant: null, covered: null });
     this.bounds = { minX: -w / 2 + 0.3, maxX: w / 2 - 0.3, minZ: -d / 2 + 0.3, maxZ: d / 2 - 0.3 };
+  }
+  // 搶廁所：一罐清潔劑。身體、瓶蓋、標籤；不擋人也不擋彈，命中由 Game 判定
+  can(x, y, z, i) {
+    const colors = [0xd8432b, 0x2f6fd1, 0xf4e27a, 0x5fa84a, 0xf28a1a, 0x9fd3f2, 0xf7a8c4, 0x7a8794], col = colors[i % colors.length];
+    const g = new THREE.Group(); g.position.set(x, y, z); this.add(g);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.3, 14), this.toon(col)); this.inked(body); body.castShadow = true; g.add(body);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 10), this.toon(0xffffff)); cap.position.y = 0.18; g.add(cap);
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(0.112, 0.112, 0.12, 14, 1, true), new THREE.MeshBasicMaterial({ color: 0xffffff })); label.position.y = -0.02; g.add(label);
+    const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.1), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.nameTag(['洗', '刷', '亮', '香', '泡', '淨', '滑', '光'][i % 8], '#ffffff', '#2b2622')), transparent: true })); tag.position.set(0, -0.02, 0.113); g.add(tag);
+    return { x, y, z, mesh: g, alive: true, color: col };
   }
   // 守校門：水溝蓋（惡霸從底下鑽出來時蓋子會掀開）和靠在圍牆內側的木板（爬牆點）
   buildSiege(S) {
@@ -280,16 +290,13 @@ export class World {
         this.collide(f.x, f.z, 0.4, 0.36, 0.7, 0, true);
         return;
       }
-      case 'urinal': { // the big urinal at the back wall: an open bowl with the bullseye inside; the sides and lip collide, the mouth does not
+      case 'urinal': { // the big urinal at the back wall: an open bowl with a shelf of cans inside; the sides and lip collide, the mouth does not
         const back = this.box(f.w, f.h, 0.2, f.x, fl + f.h / 2, f.z - f.d / 2 + 0.1, 0xffffff);
         for (const sx of [-1, 1]) this.box(0.3, f.h, f.d, f.x + sx * (f.w / 2 - 0.15), fl + f.h / 2, f.z, 0xffffff);
         this.box(f.w, 0.5, f.d, f.x, fl + 0.25, f.z, 0xffffff); // the lip you cannot step over
         this.box(f.w, 0.25, f.d, f.x, fl + f.h - 0.12, f.z, 0xdde7ee, { collide: false });
         this.cylinder(0.03, 0.5, f.x, fl + f.h + 0.2, f.z - f.d / 2 + 0.2, 0xb8b8b8, { collide: false, seg: 8 }); // the flush pipe
-        const T = this.layout.target || { x: f.x, y: 1.25, z: f.z - f.d / 2 + 0.25 };
-        const tgt = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.bullseye()) })); tgt.position.set(T.x, T.y, T.z); this.add(tgt);
-        const halo = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.58, 32), new THREE.MeshBasicMaterial({ color: 0xf4e27a })); halo.position.set(T.x, T.y, T.z - 0.005); this.add(halo);
-        this.targetMesh = tgt;
+        this.box(f.w - 0.6, 0.06, 0.4, f.x, fl + 1.15, f.z - f.d / 2 + 0.35, 0xdcc39a, { collide: false }); // the shelf the cans stand on
         return;
       }
       case 'podium': return this.box(f.w, f.h, f.d, f.x, fl + f.h / 2, f.z, 0xb98556);

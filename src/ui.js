@@ -14,6 +14,7 @@ export class UI {
   wave(n) { $('wave').textContent = n; }
   timer(t) { const el = $('hud-time'); if (t === null || t === undefined) { el.hidden = true; return; } el.hidden = false; $('time').textContent = Math.max(0, Math.ceil(t)); el.classList.toggle('low', t <= 10); }
   leftLabel(text) { $('left').previousElementSibling.textContent = text; }
+  waveLabelText(text) { $('wave').previousElementSibling.textContent = text; }
   wet(on) { $('wet').classList.toggle('on', !!on); }
   score(n) { $('score').textContent = n; }
   left(n) { $('left').textContent = n; }

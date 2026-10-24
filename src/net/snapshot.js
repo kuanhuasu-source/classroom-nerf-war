@@ -19,7 +19,7 @@ export function serializeSnapshot(g) {
   const p = g.player;
   const snap = {
     t: 'snap', seq: ++g.snapSeq, ts: Math.round(performance.now()), st: g.state, wave: g.wave, score: g.score, kills: g.kills, boss: g.bossPhase ? 1 : 0, ov: g.overInfo || undefined,
-    left: g.teachers.length ? '老師' : g.students.filter(s => s.alive).length + g.spawnQueue.length, tl: g.toilet ? +g.timeLeft.toFixed(1) : undefined,
+    left: g.teachers.length ? '老師' : g.students.filter(s => s.alive).length + g.spawnQueue.length, tl: g.toilet ? +g.timeLeft.toFixed(1) : undefined, cn: g.toilet ? g.world.cans.map(c => c.alive ? 1 : 0).join('') : undefined,
     slow: g.worldSlow() ? 1 : 0,
     host: { x: r2(p.pos.x), z: r2(p.pos.z), yaw: r2(p.yaw), eye: r2(p.eye), c: p.crouching ? 1 : 0, hp: p.hp, sit: p.sitting ? 1 : 0, sx: p.seat ? r2(p.seat.x) : 0, sz: p.seat ? r2(p.seat.z) : 0, nm: g.profile.name, lk: g.profile.look },
     pl: Object.fromEntries([...g.remotes.values()].map(r => [r.slot, { x: r2(r.pos.x), z: r2(r.pos.z), yaw: r2(r.yaw), eye: r2(r.eye), c: r.crouch ? 1 : 0, hp: r.hp, mh: r.maxHp, sit: r.sitting ? 1 : 0, sx: r.seat ? r2(r.seat.x) : 0, sz: r.seat ? r2(r.seat.z) : 0, st: r2(r.sitT), off: r.offline || !r.group.visible ? 1 : 0, nm: r.skin.name, lk: r.skin.lk || '' , v: r.skin.v }])),
@@ -53,6 +53,7 @@ export function applySnapshot(g, s) {
   PaperFigure.stamp = s.ts !== undefined ? g.net.toLocal(s.ts) : undefined; // every figure sample below carries this moment
   g.wave = s.wave; g.score = s.score; g.kills = s.kills; g.bossPhase = !!s.boss;
   g.ui.wave(g.waveLabel(s.wave)); g.ui.score(s.score); g.ui.left(s.left); if (s.tl !== undefined) g.ui.timer(s.tl);
+  if (s.cn !== undefined) { let changed = false; g.world.cans.forEach((c, i) => { const alive = s.cn[i] === '1'; if (c.alive !== alive) { c.alive = alive; c.mesh.visible = alive; changed = true; } }); if (changed) g.ui.wave(g.waveLabel(0)); }
   g.remoteSlow = !!s.slow;
   if (!g.hostFigure) g.hostFigure = new RemotePlayer(g, skinFor('host', s.host.nm, s.host.lk));
   g.hostFigure.applySkin(skinFor('host', s.host.nm, s.host.lk)); g.hostFigure.applyInput(s.host);

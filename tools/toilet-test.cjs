@@ -36,10 +36,15 @@ const { chromium } = require('playwright');
   // crew refill: knock out two, wait
   const refill = await page.evaluate(() => { const g = window.__game; let n = 0; for (const s of g.students) { if (s.alive && n < 2) { s.hp = 1; s.hit(); n++; } } const a0 = g.students.filter(s => s.alive).length + g.spawnQueue.length; for (let i = 0; i < 60 * 8; i++) g.step(1 / 60); return { after: a0, later: g.students.filter(s => s.alive).length + g.spawnQueue.length }; });
   console.log('refill', JSON.stringify(refill));
-  // bullseye: a dart straight at the target from mid-room
-  const win = await page.evaluate(() => { const g = window.__game, V = g.player.pos.constructor, T = g.world.target; const from = new V(0, 1.25, -4.5); const d = g.darts.fire(from, new V(T.x - from.x, T.y - from.y, T.z - from.z).normalize(), 32, 'player'); d.who = 'host'; for (let i = 0; i < 40; i++) g.step(1 / 60); return { state: g.state, score: g.score, title: g.overInfo && g.overInfo.title, sub: g.overInfo && g.overInfo.sub }; });
-  console.log('bullseye', JSON.stringify(win));
-  await page.evaluate(() => { const g = window.__game; g.player.pos.set(0, 0, -4.0); g.player.yaw = 0; g.player.pitch = 0.05; g.player.update(1 / 60); g.renderer.render(g.scene, g.camera); }); await page.screenshot({ path: 'toilet-win.png' });
+  // cans: stand 3 m in front of each can (side cans: from the aisle), crosshair on it, pull the trigger
+  const win = await page.evaluate(() => { const g = window.__game, V = g.player.pos.constructor; const log = [];
+    for (let i = 0; i < g.world.cans.length && g.state === 'playing'; i++) { const c = g.world.cans[i]; const side = c.x > 4; const px = side ? c.x - 3 : c.x, pz = side ? c.z : c.z + 3;
+      g.player.pos.set(px, 0, pz); g.player.yaw = side ? -Math.PI / 2 : 0; g.player.pitch = Math.atan2(c.y - 1.25, 3); g.player.update(1 / 60);
+      let shots = 0; while (g.world.cans[i].alive && shots < 4 && g.state === 'playing') { g.player.fireCd = 0; g.player.ammo = 15; g.player.tryFire(); shots++; for (let k = 0; k < 30; k++) g.step(1 / 60); }
+      log.push([i, shots, !g.world.cans[i].alive]); }
+    return { log, state: g.state, left: g.cansLeft(), hud: document.getElementById('wave').textContent, label: document.getElementById('wave').previousElementSibling.textContent, title: g.overInfo && g.overInfo.title, sub: g.overInfo && g.overInfo.sub }; });
+  console.log('cans', JSON.stringify(win));
+  await page.evaluate(() => { const g = window.__game; g.player.pos.set(0, 0, -4.0); g.player.yaw = 0; g.player.pitch = -0.02; g.player.update(1 / 60); g.renderer.render(g.scene, g.camera); }); await page.screenshot({ path: 'toilet-win.png' });
   // timeout: a fresh round with 1 s left
   const lose = await page.evaluate(() => { const g = window.__game; g.toMenu(); g.start(); g.timeLeft = 1.0; for (let i = 0; i < 90; i++) g.step(1 / 60); return { state: g.state, title: document.getElementById('over-title').textContent, hidden: document.getElementById('over').hidden }; });
   console.log('timeout', JSON.stringify(lose));
