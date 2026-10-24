@@ -5,24 +5,24 @@
 const r2 = (v) => Math.round(v * 100) / 100;
 
 function classroom() {
-  // 5 columns 2.0 m apart, 4 rows 1.9 m apart: a desk plus its chair is 0.91 m deep, so every aisle is at least 0.99 m wide (player 0.56)
-  const cols = [-4.0, -2.0, 0, 2.0, 4.0], rows = [-3.0, -1.1, 0.8, 2.7];
+  // a class of 30: 6 columns 2.0 m apart, 5 rows 1.9 m apart. A desk plus its chair is 0.91 m deep, so every aisle is at least 0.99 m wide (player 0.56)
+  const cols = [-5.0, -3.0, -1.0, 1.0, 3.0, 5.0], rows = [-3.8, -1.9, 0, 1.9, 3.8];
   const desks = [], furniture = [];
   for (const x of cols) for (const z of rows) { desks.push({ x, z, w: 0.62, d: 0.46, h: 0.72, seat: { x, z: z + 0.48 } }); furniture.push({ kind: 'desk', x, z }); }
-  furniture.push({ kind: 'podium', x: 0, z: -4.5, w: 1.3, d: 0.65, h: 0.78 });
-  furniture.push({ kind: 'cupboard', x: 4.9, z: 4.95, w: 1.4, d: 0.5, h: 1.9 });
-  furniture.push({ kind: 'bulletin', x: -2.8, z: 5.23 });
+  furniture.push({ kind: 'podium', x: 0, z: -5.5, w: 1.3, d: 0.65, h: 0.78 });
+  furniture.push({ kind: 'cupboard', x: 5.4, z: 5.95, w: 1.4, d: 0.5, h: 1.9 });
+  furniture.push({ kind: 'bulletin', x: -2.8, z: 6.23 });
   return {
-    id: 'classroom', name: '三年二班', w: 13, d: 10.5, h: 3.2, style: 'classroom',
-    doors: [{ x: 6.1, z: -4.0 }, { x: 6.1, z: 4.0 }], windows: [-3.3, -1.1, 1.1, 3.3],
-    start: { x: -5.6, z: 4.4, yaw: -0.55 }, front: -3.5, board: { w: 5.6, h: 1.5, style: 'chalk' },
-    desks, furniture, props: [{ kind: 'trash', x: -5.8, z: -4.6 }, { kind: 'trash', x: 5.6, z: 0.3 }, { kind: 'bucket', door: 0 }],
+    id: 'classroom', name: '三年二班', w: 14, d: 12.5, h: 3.2, style: 'classroom',
+    doors: [{ x: 6.6, z: -4.5 }, { x: 6.6, z: 4.5 }], windows: [-4.4, -2.2, 0, 2.2, 4.4],
+    start: { x: -6.1, z: 5.3, yaw: -0.55 }, front: -4.4, board: { w: 5.6, h: 1.5, style: 'chalk' },
+    desks, furniture, props: [{ kind: 'trash', x: -6.3, z: -5.6 }, { kind: 'trash', x: 6.1, z: 0.3 }, { kind: 'bucket', door: 0 }],
     mounts: [
-      { x: -2.4, y: 2.0, z: -5.16, ry: 0 }, { x: -0.8, y: 1.35, z: -5.16, ry: 0 }, { x: 1.8, y: 1.25, z: -5.16, ry: 0 }, { x: 2.6, y: 2.05, z: -5.16, ry: 0 },
-      { x: -3.6, y: 1.85, z: 5.16, ry: Math.PI }, { x: -2.1, y: 1.5, z: 5.16, ry: Math.PI },
-      { x: 4.9, y: 1.55, z: 4.68, ry: Math.PI },
-      { x: -6.46, y: 2.75, z: -1.5, ry: Math.PI / 2 }, { x: -6.46, y: 2.75, z: 1.5, ry: Math.PI / 2 },
-      { x: 6.46, y: 1.7, z: 0, ry: -Math.PI / 2 },
+      { x: -2.4, y: 2.0, z: -6.21, ry: 0 }, { x: -0.8, y: 1.35, z: -6.21, ry: 0 }, { x: 1.8, y: 1.25, z: -6.21, ry: 0 }, { x: 2.6, y: 2.05, z: -6.21, ry: 0 },
+      { x: -3.6, y: 1.85, z: 6.21, ry: Math.PI }, { x: -2.1, y: 1.5, z: 6.21, ry: Math.PI },
+      { x: 5.4, y: 1.55, z: 5.68, ry: Math.PI },
+      { x: -6.96, y: 2.75, z: -2.0, ry: Math.PI / 2 }, { x: -6.96, y: 2.75, z: 2.0, ry: Math.PI / 2 },
+      { x: 6.96, y: 1.7, z: 0, ry: -Math.PI / 2 },
     ],
   };
 }
