@@ -5,8 +5,8 @@
 const r2 = (v) => Math.round(v * 100) / 100;
 
 function classroom() {
-  // 5 columns 1.8 m apart, 4 rows 1.7 m apart: with a desk 0.62 deep plus its chair, every aisle is at least 0.8 m wide
-  const cols = [-3.6, -1.8, 0, 1.8, 3.6], rows = [-2.9, -1.2, 0.5, 2.2];
+  // 5 columns 2.0 m apart, 4 rows 1.9 m apart: a desk plus its chair is 0.91 m deep, so every aisle is at least 0.99 m wide (player 0.56)
+  const cols = [-4.0, -2.0, 0, 2.0, 4.0], rows = [-3.0, -1.1, 0.8, 2.7];
   const desks = [], furniture = [];
   for (const x of cols) for (const z of rows) { desks.push({ x, z, w: 0.62, d: 0.46, h: 0.72, seat: { x, z: z + 0.48 } }); furniture.push({ kind: 'desk', x, z }); }
   furniture.push({ kind: 'podium', x: 0, z: -4.5, w: 1.3, d: 0.65, h: 0.78 });
@@ -29,9 +29,10 @@ function classroom() {
 
 function lab() {
   const desks = [], furniture = [];
-  for (const x of [-2.6, 2.6]) for (const z of [-1.8, 0.3, 2.4]) {
+  // rows 2.2 m apart with the stools tucked against the bench: 0.84 m between a stool and the next bench
+  for (const x of [-2.6, 2.6]) for (const z of [-1.9, 0.3, 2.5]) {
     furniture.push({ kind: 'bench', x, z, w: 2.4, d: 1.0, h: 0.85 });
-    for (const dx of [-0.6, 0.6]) { desks.push({ x: x + dx, z, w: 1.2, d: 1.0, h: 0.85, seat: { x: x + dx, z: z + 0.85 } }); furniture.push({ kind: 'stool', x: x + dx, z: z + 0.85 }); }
+    for (const dx of [-0.6, 0.6]) { desks.push({ x: x + dx, z, w: 1.2, d: 1.0, h: 0.85, seat: { x: x + dx, z: z + 0.72 } }); furniture.push({ kind: 'stool', x: x + dx, z: z + 0.68 }); }
   }
   furniture.push({ kind: 'bench', x: 0, z: -3.9, w: 2.2, d: 0.8, h: 0.9, teacher: true });
   furniture.push({ kind: 'cabinet', x: -5.9, z: 4.4, w: 1.8, d: 0.55, h: 2.0 });
@@ -57,13 +58,14 @@ function music() {
   const desks = [], furniture = [];
   // chairs in three arcs facing the front; also the seats for knocked-out students
   const chairs = [];
-  [[3.0, 7], [4.3, 9], [5.6, 11]].forEach(([radius, n]) => {
-    for (let i = 0; i < n; i++) { const a = -0.95 + (i / (n - 1)) * 1.9; const x = Math.sin(a) * radius, z = -4.2 + Math.cos(a) * radius; chairs.push({ x: r2(x), z: r2(z), ry: r2(-a) }); furniture.push({ kind: 'chair', x: r2(x), z: r2(z), ry: r2(-a) }); }
+  // 6/8/10 chairs on arcs 1.4 m apart: at least 0.7 m between neighbours, 1.0 m between arcs
+  [[3.0, 6], [4.4, 8], [5.8, 10]].forEach(([radius, n]) => {
+    for (let i = 0; i < n; i++) { const a = -0.85 + (i / (n - 1)) * 1.7; const x = Math.sin(a) * radius, z = -4.2 + Math.cos(a) * radius; chairs.push({ x: r2(x), z: r2(z), ry: r2(-a) }); furniture.push({ kind: 'chair', x: r2(x), z: r2(z), ry: r2(-a) }); }
   });
   const covers = [
-    { kind: 'piano', x: -3.9, z: -2.0, w: 2.0, d: 1.6, h: 1.0, entries: [[-4.4, -2.0], [-3.4, -2.0]] },
-    { kind: 'timpani', x: 3.6, z: -2.3, w: 1.1, d: 1.1, h: 0.85, entries: [[3.6, -2.3]] },
-    { kind: 'timpani', x: 4.8, z: -2.3, w: 1.1, d: 1.1, h: 0.85, entries: [[4.8, -2.3]] },
+    { kind: 'piano', x: -4.4, z: -2.2, w: 2.0, d: 1.6, h: 1.0, entries: [[-4.9, -2.2], [-3.9, -2.2]] },
+    { kind: 'timpani', x: 4.0, z: -2.5, w: 1.1, d: 1.1, h: 0.85, entries: [[4.0, -2.5]] },
+    { kind: 'timpani', x: 5.2, z: -2.5, w: 1.1, d: 1.1, h: 0.85, entries: [[5.2, -2.5]] },
     { kind: 'cabinet', x: -4.6, z: 1.2, w: 1.6, d: 0.55, h: 0.95, entries: [[-5.0, 1.2], [-4.2, 1.2]] },
     { kind: 'cabinet', x: 4.6, z: 1.2, w: 1.6, d: 0.55, h: 0.95, entries: [[4.2, 1.2], [5.0, 1.2]] },
     { kind: 'cabinet', x: -3.6, z: 3.9, w: 1.6, d: 0.55, h: 0.95, entries: [[-4.0, 3.9], [-3.2, 3.9]] },
@@ -120,8 +122,8 @@ function hall() {
   }
   // bulky cover on the floor
   for (const [x, z] of [[-6.0, -2.4], [6.0, -2.4]]) { furniture.push({ kind: 'vault', x, z, w: 0.9, d: 0.9, h: 1.1 }); desks.push({ x, z, w: 0.9, d: 0.9, h: 1.1, seat: { x: x + (x < 0 ? 0.9 : -0.9), z } }); }
-  furniture.push({ kind: 'cart', x: 0, z: -2.0, w: 1.2, d: 0.8, h: 0.9 }); desks.push({ x: 0, z: -2.0, w: 1.2, d: 0.8, h: 0.9, seat: { x: 0, z: -1.1 } });
-  for (const x of [-5.2, 5.2]) { furniture.push({ kind: 'mat', x, z: 1.5, w: 1.8, d: 0.9, h: 0.5 }); desks.push({ x, z: 1.5, w: 1.8, d: 0.9, h: 0.5, seat: { x, z: 2.3 } }); }
+  for (const x of [-5.2, 5.2]) { furniture.push({ kind: 'mat', x, z: -3.5, w: 1.8, d: 0.9, h: 0.5 }); desks.push({ x, z: -3.5, w: 1.8, d: 0.9, h: 0.5, seat: { x, z: -2.7 } }); } // against the stage front, off the side corridors
+  furniture.push({ kind: 'cart', x: 2.4, z: -6.4, w: 1.2, d: 0.8, h: 0.9, floor: STAGE }); desks.push({ x: 2.4, z: -6.4, w: 1.2, d: 0.8, h: 0.9, floor: STAGE, seat: { x: 2.4, z: -5.5 } }); // ball cart at the back of the stage
   // on the stage: a lectern and two speakers
   furniture.push({ kind: 'podium', x: 0, z: -5.6, w: 1.3, d: 0.65, h: 0.78, floor: STAGE }); desks.push({ x: 0, z: -5.6, w: 1.3, d: 0.65, h: 0.78, floor: STAGE, seat: { x: 0, z: -6.4 } });
   for (const x of [-3.5, 3.5]) { furniture.push({ kind: 'speaker', x, z: -5.2, w: 0.7, d: 0.6, h: 1.0, floor: STAGE }); desks.push({ x, z: -5.2, w: 0.7, d: 0.6, h: 1.0, floor: STAGE, seat: { x, z: -6.2 } }); }
@@ -138,7 +140,7 @@ function hall() {
     doors: [{ x: 7.6, z: -4.5 }, { x: 7.6, z: 5.5, floor: BALC }], windows: [-4.5, -1.5, 1.5, 4.5], windowY: 3.8,
     start: { x: -5.8, z: 3.2, yaw: -0.5 }, front: -3.0, board: { w: 5.0, h: 1.4, style: 'chalk' }, boardY: STAGE + 0.3,
     stage: { minX: -4.3, maxX: 4.3, minZ: -6.6, maxZ: -4.4 },
-    terrain, desks, furniture, props: [{ kind: 'trash', x: -7.2, z: -6.3 }, { kind: 'trash', x: 5.6, z: 3.4 }, { kind: 'bucket', door: 0 }],
+    terrain, desks, furniture, props: [{ kind: 'trash', x: -7.2, z: -6.3 }, { kind: 'trash', x: 7.5, z: -6.5 }, { kind: 'bucket', door: 0 }], // bins in the front corners, out of the side corridors
     mounts: [
       { x: -3.2, y: STAGE + 2.4, z: -6.96, ry: 0 }, { x: 3.6, y: STAGE + 2.1, z: -6.96, ry: 0 },
       { x: -7.96, y: 2.0, z: -2.5, ry: Math.PI / 2 }, { x: -7.96, y: 2.3, z: -5.5, ry: Math.PI / 2 },
@@ -164,7 +166,7 @@ function yard() {
   furniture.push({ kind: 'swing', x: 4, z: -3 });
   for (const sx of [-1, 1]) desks.push({ x: 4 + sx * 1.4, z: -3, w: 0.5, d: 1.2, h: 2.4, seat: { x: 4 + sx * 0.5, z: -3 } });
   furniture.push({ kind: 'pond', x: 0.5, z: 3.5, w: 5, d: 3.4 });
-  for (let i = 0; i < 5; i++) { const x = -7.5 + i * 0.95; furniture.push({ kind: 'tire', x, z: 2.6 }); desks.push({ x, z: 2.6, w: 0.9, d: 0.34, h: 0.55, seat: { x, z: 2.6 } }); }
+  for (let i = 0; i < 4; i++) { const x = -8.0 + i * 1.6; furniture.push({ kind: 'tire', x, z: 2.6 }); desks.push({ x, z: 2.6, w: 0.9, d: 0.34, h: 0.55, seat: { x, z: 2.6 } }); }
   furniture.push({ kind: 'sandbox', x: 6.5, z: 2.8, w: 3, d: 3 });
   furniture.push({ kind: 'flag', x: 7.5, z: -6.3, floor: 0.5 });
   for (const x of [-6.5, -2.5, 2.5, 6.5]) { furniture.push({ kind: 'gymbench', x, z: 5.2, w: 1.8, d: 0.4, h: 0.45 }); desks.push({ x, z: 5.2, w: 1.8, d: 0.4, h: 0.45, seat: { x, z: 5.22 } }); }

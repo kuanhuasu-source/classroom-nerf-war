@@ -43,7 +43,7 @@ export class World {
   walk(pos, dx, dz, r) {
     const y = pos.y || 0;
     for (const [ax, v] of [['x', dx], ['z', dz]]) { if (!v) continue; const o = pos[ax]; pos[ax] += v; if (Math.abs(this.heightAt(pos.x, pos.z) - y) > 0.45) pos[ax] = o; }
-    this.collideCircle(pos, r);
+    this.collideCircle(pos, r); this.collideCircle(pos, r);
     pos.y = this.heightAt(pos.x, pos.z);
   }
   box(w, h, d, x, y, z, color, { collide = true, ink = true, shadow = true, parent = null } = {}) {
@@ -235,7 +235,7 @@ export class World {
         this.collide(f.x, f.z, f.w, f.d, f.h);
         return;
       }
-      case 'stool': { this.cylinder(0.18, 0.04, f.x, 0.6, f.z, 0x5d8ad6, { collide: false }); this.cylinder(0.03, 0.58, f.x, 0.29, f.z, 0x7a8794, { collide: false, seg: 8 }); this.collide(f.x, f.z, 0.36, 0.36, 0.62); return; }
+      case 'stool': { this.cylinder(0.18, 0.04, f.x, 0.6, f.z, 0x5d8ad6, { collide: false }); this.cylinder(0.03, 0.58, f.x, 0.29, f.z, 0x7a8794, { collide: false, seg: 8 }); this.collide(f.x, f.z, 0.32, 0.32, 0.62); return; }
       case 'cabinet': { // lab chemicals or music instruments
         const m = this.box(f.w, f.h, f.d, f.x, f.h / 2, f.z, this.layout.style === 'lab' ? 0xe8e2cc : 0xb98556);
         if (this.layout.style === 'lab') for (let i = 0; i < 6; i++) this.cylinder(0.07, 0.2, f.x - f.w / 2 + 0.25 + i * 0.26, f.h + 0.1, f.z, pick([0xb7e3a1, 0x9fd3f2, 0xf7a8c4, 0xf4e27a, 0xd8432b]), { collide: false, seg: 10 });
@@ -260,7 +260,7 @@ export class World {
         const seat = this.box(0.4, 0.04, 0.4, 0, 0.42, 0, 0x5d8ad6, { collide: false, parent: g });
         this.box(0.4, 0.4, 0.04, 0, 0.64, 0.18, 0x5d8ad6, { collide: false, parent: g });
         [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => this.box(0.03, 0.42, 0.03, sx * 0.17, 0.21, sz * 0.17, 0x7a8794, { collide: false, ink: false, parent: g }));
-        this.collide(f.x, f.z, 0.42, 0.42, 0.44);
+        this.collide(f.x, f.z, 0.36, 0.36, 0.44);
         return;
       }
       case 'piano': {
@@ -287,7 +287,7 @@ export class World {
     const back = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.04), chairMat); back.position.set(0, 0.64, seatZ + 0.18); this.inked(back); g.add(back);
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.42, 0.03), legMat); leg.position.set(sx * 0.17, 0.21, seatZ + sz * 0.17); g.add(leg); });
     this.collide(x, z, DESK.w, DESK.d, DESK.h);
-    this.collide(x, z + seatZ, 0.4, 0.4, 0.44);
+    this.collide(x, z + (DESK.d / 2 + seatZ + 0.2) / 2, 0.4, seatZ + 0.2 - DESK.d / 2, 0.44); // chair box runs from the desk's back edge to the chair back
   }
   setTally(n) { const old = this.blackboardMat.map; this.blackboardMat.map = Draw.tex(Draw.blackboard(n, this.boardStyle)); this.blackboardMat.needsUpdate = true; if (old) old.dispose(); }
   buildGrid() {

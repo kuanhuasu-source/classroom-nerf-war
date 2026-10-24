@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
   const r = await page.evaluate(() => { const g = window.__game, w = g.world, V = g.player.pos.constructor; const out = {};
     out.room = [w.room.w, w.room.d, w.desks.length];
     // walk every row aisle left to right and every column aisle front to back
-    const rows = [-2.9, -1.2, 0.5, 2.2], cols = [-3.6, -1.8, 0, 1.8, 3.6];
+    const rows = [-3.0, -1.1, 0.8, 2.7], cols = [-4.0, -2.0, 0, 2.0, 4.0];
     out.rowAisles = []; for (let i = 0; i < rows.length - 1; i++) { const z = (rows[i] + 0.68 + rows[i + 1] - 0.23) / 2; const p = new V(-5.0, 0, z); for (let k = 0; k < 260; k++) w.walk(p, 0.045, 0, 0.28); out.rowAisles.push(+p.x.toFixed(1)); }
     out.colAisles = []; for (let i = 0; i < cols.length - 1; i++) { const x = (cols[i] + cols[i + 1]) / 2; const p = new V(x, 0, 4.5); for (let k = 0; k < 220; k++) w.walk(p, 0, -0.045, 0.28); out.colAisles.push(+p.z.toFixed(1)); }
     // diagonal wander with random direction changes: how often does the player get wedged (no movement for 1 s)?
