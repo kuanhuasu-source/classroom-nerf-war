@@ -27,13 +27,14 @@ const { chromium, devices } = require('playwright');
     // the hit-circle check through the real step (the magnet is disabled by moving the crosshair far after firing)
     const r2 = await page.evaluate(() => {
       const g = window.__game, V = g.player.pos.constructor, p = g.player, s = g.students[0]; g.touch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 ? g.touchCtl.on : false;
-      s.hp = 3; s.state = 'hide'; s.timer = 99; s.group.position.set(0.9, 0, -2.0); g.darts.clear();
-      const eye = p.eyePos(); p.yaw = Math.atan2(-(0.9 + 0.40 - eye.x), -(-2.0 - eye.z)); p.pitch = Math.atan2(0.8 - eye.y, 5); p.update(1 / 60);
-      const hp0 = s.hp; p.ammo = 15; p.fireCd = 0; p.tryFire();
-      for (let i = 0; i < 40; i++) g.step(1 / 60);
+      s.hp = 3; s.state = 'peek'; s.timer = 99; s.crouch = 0; s.group.scale.y = 1; s.group.position.set(0.9, 0, -2.0); g.darts.clear();
+      const eye = p.eyePos(); p.yaw = Math.atan2(-(0.9 + 0.40 - eye.x), -(-2.0 - eye.z)); p.pitch = Math.atan2(0.6 - eye.y, 5); p.update(1 / 60);
+      const hp0 = s.hp; p.ammo = 15; p.fireCd = 0; p.tryFire(); const d0 = g.darts.list.find(d => d.owner === 'player'); let minLat = 9; 
+      for (let i = 0; i < 40; i++) { g.step(1 / 60); if (d0 && !d0.stuck) { const lat = Math.hypot(d0.mesh.position.x - s.group.position.x, 0); if (Math.abs(d0.mesh.position.z - s.group.position.z) < 0.3) minLat = Math.min(minLat, lat); } }
+      var __lat = +minLat.toFixed(2), __scale = +s.group.scale.y.toFixed(2);
       // enemy spread multiplier through fireAt
       let spreadSeen = null; const of = g.darts.fire.bind(g.darts); g.darts.fire = (pos, dir, sp, o, k) => { spreadSeen = sp; return of(pos, dir, sp, o, k); }; s.state = 'shoot'; s.shotsLeft = 1; s.shotTimer = 0; s.shotsFired = 1; s.fireAt(p); g.darts.fire = of;
-      return { hitAt040: s.hp < hp0, enemyDartSpeed: spreadSeen };
+      return { hitAt040: s.hp < hp0, lateralAtKid: __lat, kidScale: __scale, enemyDartSpeed: spreadSeen };
     });
     await ctx.close(); return { ...r, ...r2 };
   };
