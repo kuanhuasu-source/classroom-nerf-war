@@ -27,7 +27,8 @@ export class World {
   dispose() { for (const o of this.objects) this.scene.remove(o); this.objects = []; this.boxes = []; this.desks = []; }
   toon(color) { return new THREE.MeshToonMaterial({ color, gradientMap: this.gradient }); }
   inked(mesh) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 20), this.inkMat); mesh.add(e); return mesh; }
-  collide(x, z, w, d, h, y0 = 0) { this.boxes.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h, y0 }); }
+  // soft: stops feet (walking, the nav grid) but not darts or sight — for open frames like the swing's A-legs and the pond's water
+  collide(x, z, w, d, h, y0 = 0, soft = false) { this.boxes.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h, y0, soft }); }
   // floor height at a point: 0 on the ground, the platform height on a stage or balcony, in between on stairs
   heightAt(x, z) {
     let h = 0;
@@ -177,7 +178,7 @@ export class World {
     switch (f.kind) {
       case 'swing': { // an A-frame with two seats that sway
         const g = new THREE.Group(); g.position.set(f.x, 0, f.z); this.add(g);
-        for (const sx of [-1, 1]) { for (const sz of [-1, 1]) { const leg = this.cylinder(0.05, 2.5, sx * 1.4, 1.25, sz * 0.5, 0x2f6fd1, { collide: false, parent: g, seg: 8 }); leg.rotation.x = sz * 0.2; } this.collide(f.x + sx * 1.4, f.z, 0.4, 1.2, 2.5); }
+        for (const sx of [-1, 1]) { for (const sz of [-1, 1]) { const leg = this.cylinder(0.05, 2.5, sx * 1.4, 1.25, sz * 0.5, 0x2f6fd1, { collide: false, parent: g, seg: 8 }); leg.rotation.x = sz * 0.2; } this.collide(f.x + sx * 1.4, f.z, 0.4, 1.2, 2.5, 0, true); }
         const bar = this.cylinder(0.05, 3.0, 0, 2.45, 0, 0x2f6fd1, { collide: false, parent: g, seg: 8 }); bar.rotation.z = Math.PI / 2;
         [-0.5, 0.5].forEach((sx, i) => {
           const pivot = new THREE.Group(); pivot.position.set(sx, 2.45, 0); g.add(pivot);
@@ -192,7 +193,7 @@ export class World {
         const rim = new THREE.Mesh(new THREE.RingGeometry(0.98, 1.08, 36), this.toon(0x8a7a66)); rim.rotation.x = -Math.PI / 2; rim.scale.set(f.w / 2, f.d / 2, 1); rim.position.set(f.x, 0.03, f.z); this.add(rim);
         for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283 + 0.4, pad = new THREE.Mesh(new THREE.CircleGeometry(0.18 + Math.random() * 0.1, 12), this.toon(0x4f9a3f)); pad.rotation.x = -Math.PI / 2; pad.position.set(f.x + Math.cos(a) * f.w * 0.3, 0.04, f.z + Math.sin(a) * f.d * 0.3); this.add(pad); }
         for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283, rx = f.x + Math.cos(a) * (f.w / 2 + 0.15), rz = f.z + Math.sin(a) * (f.d / 2 + 0.15); this.cylinder(0.02, 0.9 + Math.random() * 0.4, rx, 0.5, rz, 0x6b8f3a, { collide: false, seg: 6 }); }
-        this.collide(f.x, f.z, f.w, f.d * 0.5, 0.35); this.collide(f.x, f.z, f.w * 0.7, f.d * 0.85, 0.35); this.collide(f.x, f.z, f.w * 0.4, f.d, 0.35);
+        this.collide(f.x, f.z, f.w, f.d * 0.5, 0.35, 0, true); this.collide(f.x, f.z, f.w * 0.7, f.d * 0.85, 0.35, 0, true); this.collide(f.x, f.z, f.w * 0.4, f.d, 0.35, 0, true);
         const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.3), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.nameTag('生態池', '#fbf6e6', '#2b2622')), transparent: true })); sign.position.set(f.x + f.w / 2 + 0.5, 0.9, f.z - f.d / 2 - 0.2); this.add(sign); this.cylinder(0.03, 0.8, f.x + f.w / 2 + 0.5, 0.4, f.z - f.d / 2 - 0.22, 0xb98556, { collide: false, seg: 6 });
         return;
       }
@@ -411,7 +412,7 @@ export class World {
   pointInBox(p) {
     if (Math.abs(p.x) > this.room.w / 2 - 0.05 || Math.abs(p.z) > this.room.d / 2 - 0.05) return 'wall';
     if (p.y > this.room.h - 0.05) return 'wall';
-    for (const b of this.boxes) if (p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ && p.y < b.h && p.y > b.y0) return b;
+    for (const b of this.boxes) if (!b.soft && p.x > b.minX && p.x < b.maxX && p.z > b.minZ && p.z < b.maxZ && p.y < b.h && p.y > b.y0) return b;
     if (this.terrain.length && p.y < this.heightAt(p.x, p.z) - 0.02) return 'wall';
     return null;
   }
@@ -432,6 +433,7 @@ export class World {
       for (let i = 1; i < n; i++) { const t = i / n, x = p0.x + (p1.x - p0.x) * t, y = p0.y + (p1.y - p0.y) * t, z = p0.z + (p1.z - p0.z) * t; if (y < this.heightAt(x, z) - 0.03) return true; }
     }
     for (const b of this.boxes) {
+      if (b.soft) continue;
       let tmin = 0, tmax = 1;
       const mins = [b.minX, b.y0, b.minZ], maxs = [b.maxX, b.h, b.maxZ], o = [p0.x, p0.y, p0.z], d = [p1.x - p0.x, p1.y - p0.y, p1.z - p0.z];
       let hit = true;
