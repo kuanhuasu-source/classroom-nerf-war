@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, rand, pick, clamp } from './config.js';
+import { CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, SIEGE, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { Draw } from './draw.js';
 import { PaperFigure } from './paperfigure.js';
@@ -11,18 +11,25 @@ export class Student extends PaperFigure {
   constructor(game, spawn, opts = {}) {
     const leader = !!(opts.leader || (opts.v && opts.v.leader));
     const v = opts.v || (leader ? { ...Draw.kidVariant(), hair: 1, shirt: '#ffffff', leader: true } : Draw.kidVariant());
+    // 守校門：隔壁學校的惡霸，深色衣服加紅頭巾；入口（校門／爬牆／水溝蓋）跟著 variant 一起同步給隊友
+    if (!opts.v && game.siege) { v.bully = true; v.shirt = leader ? '#8a2a2a' : pick(['#2b2622', '#5a1e1e', '#3a3a5a', '#4a4a4a']); if (leader) v.hair = 2; }
+    const entry = opts.entry || (v.entry ? { kind: v.entry, index: v.di } : null);
+    if (entry && !v.entry) { v.entry = entry.kind; v.di = entry.index; }
     super(game.scene, () => Draw.kid(v, 'normal'), 0.9, 1.35);
     this.game = game; this.v = v; this.world = game.world;
     this.leader = leader;
-    this.hp = (game.diff ? game.diff.enemyHp : CFG.enemy.hp) + (leader ? CFG.leader.hpBonus : 0); this.state = 'enter'; this.timer = 0; this.path = []; this.crouch = 0; this.alive = true;
+    this.hp = (game.diff ? game.diff.enemyHp : CFG.enemy.hp) + (leader ? CFG.leader.hpBonus : 0) + (game.siege ? SIEGE.hpBonus : 0); this.state = 'enter'; this.timer = 0; this.path = []; this.crouch = 0; this.alive = true;
     this.group.position.set(spawn.x, game.world.heightAt(spawn.x, spawn.z), spawn.z);
+    this.entry = entry;
+    if (entry && entry.kind === 'wall') this.group.position.y += 1.35; // on top of the fence, about to drop
+    if (entry && entry.kind === 'drain') { this.group.position.y -= 1.45; game.world.popDrain(entry.index); } // under the lid, about to climb out
     this.desk = null; this.shotsLeft = 0; this.shotTimer = 0; this.speedMul = rand(0.85, 1.15);
     this.id = opts.id ?? game.nextId(); this.texState = 'normal'; this.remote = !!opts.remote; this.age = 0; this.shotsFired = 0;
     // the "!" that warns you she is about to fire
     if (!Student.alertTex) Student.alertTex = Draw.tex(Draw.alertIcon());
     this.alert = new THREE.Sprite(new THREE.SpriteMaterial({ map: Student.alertTex, transparent: true, depthTest: false })); this.alert.scale.set(0.28, 0.42, 1); this.alert.position.set(0, 1.75, 0); this.alert.visible = false; this.group.add(this.alert);
-    if (leader) { if (!Student.leaderTag) Student.leaderTag = Draw.tex(Draw.nameTag('班長', '#d8432b', '#ffffff')); this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: Student.leaderTag, transparent: true, depthTest: false })); this.tag.scale.set(0.56, 0.175, 1); this.tag.position.set(0, 1.55, 0); this.group.add(this.tag); }
-    if (this.remote) this.state = 'remote'; else this.chooseDesk();
+    if (leader) { const tagText = v.bully ? '老大' : '班長'; Student.tags = Student.tags || {}; if (!Student.tags[tagText]) Student.tags[tagText] = Draw.tex(Draw.nameTag(tagText, '#d8432b', '#ffffff')); this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: Student.tags[tagText], transparent: true, depthTest: false })); this.tag.scale.set(0.56, 0.175, 1); this.tag.position.set(0, 1.55, 0); this.group.add(this.tag); }
+    if (this.remote) this.state = 'remote'; else if (entry && entry.kind === 'wall') this.state = 'drop'; else if (entry && entry.kind === 'drain') this.state = 'rise'; else this.chooseDesk();
   }
   setTex(st) { if (this.texState === st) return; this.texState = st; this.setTexture(Draw.kid(this.v, st)); }
   // [id, x, y, z, sx, sy, rz, texState, alive, flash, variant?] — the variant rides along only when needed
@@ -86,6 +93,16 @@ export class Student extends PaperFigure {
           p.y = this.world.heightAt(p.x, p.z); moving = true;
         } else if (this.state === 'seekCover') { this.state = 'hide'; this.timer = rand(1.2, 2.6) * this.game.diff.hideMul; }
         else { this.chooseDesk(); }
+        break;
+      }
+      case 'drop': { // over the fence: fall to the grass, then look for cover
+        const g0 = this.world.heightAt(p.x, p.z); p.y -= 2.8 * dt; this.crouch = Math.min(1, this.crouch + dt * 3);
+        if (p.y <= g0) { p.y = g0; this.crouch = 0; this.chooseDesk(); }
+        break;
+      }
+      case 'rise': { // out of the drain: climb up through the opening
+        const g0 = this.world.heightAt(p.x, p.z); p.y += 1.7 * dt;
+        if (p.y >= g0) { p.y = g0; this.chooseDesk(); }
         break;
       }
       case 'hide': {

@@ -17,6 +17,12 @@ export function initLobby(game) {
   // the single-file build (Claude Artifact) runs in a sandbox without WebRTC: solo only
   if (import.meta.env.VITE_SOLO_ONLY === '1') { $('btn-host').hidden = true; $('btn-join-open').hidden = true; $('menu-note').textContent = '建議用電腦與滑鼠遊玩。連線模式（最多四人）在網站版才有。'; }
 
+  // mode: the classroom war or the gate siege; remembered per browser
+  const MODE_NOTES = { class: '下課大戰：六波同學加一位老師，撿地上的泡棉彈補充。', siege: '守校門：惡霸軍團從校門、圍牆、水溝蓋闖進操場，守住十波。彈藥無限，第 3、6、9 波有頭目，第 10 波是會瘋狂丟板擦的大王。' };
+  let mode = 'class'; try { const saved = localStorage.getItem('cnw-mode'); if (saved && MODE_NOTES[saved]) mode = saved; } catch (e) { /* ignore */ }
+  const applyMode = (m) => { mode = m; game.mode = m; document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('mode-note').textContent = MODE_NOTES[m]; $('map-row').classList.toggle('dim', m === 'siege'); $('map-note').textContent = m === 'siege' ? '守校門固定在操場' : ''; try { localStorage.setItem('cnw-mode', m); } catch (e) { /* ignore */ } };
+  document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { b.setAttribute('role', 'radio'); b.addEventListener('click', () => applyMode(b.dataset.mode)); });
+  applyMode(mode);
   // difficulty: remembered per browser
   const NOTES = { easy: '小考：少一點同學、準度低、一次只有一個同學開火，每清一波回 2 顆心。', normal: '段考：同時最多兩個同學開火，每清一波回 1 顆心。', hard: '模擬考：人多、準、三個同學同時射你，不回血，大 Boss 機率高。', exam: '會考：同學更多更準、四個同時開火、彈速更快、老師更兇，六成機率遇到大 Boss。給能穩過模擬考的人。' };
   let level = 'normal'; try { const saved = localStorage.getItem('cnw-difficulty'); if (saved && NOTES[saved]) level = saved; } catch (e) { /* ignore */ }

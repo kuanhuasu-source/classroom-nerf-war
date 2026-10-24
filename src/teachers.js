@@ -99,4 +99,50 @@ export const COMMITTEE = {
     },
   ],
 };
-export const teacherById = (id) => TEACHERS.find(t => t.id === id) || BOSSES.find(t => t.id === id) || COMMITTEE.members.find(t => t.id === id) || TEACHERS[0];
+// 隔壁學校的惡霸軍團（守校門模式）：第 3、6、9 波的頭目，第 10 波的大王會瘋狂丟板擦。弱點的 key 沿用老師的，因為攻擊與特技靠 key 判斷。
+export const GANG = [
+  {
+    id: 'gang1', boss: true, gang: true, name: '惡霸老大', wpHp: 3, scale: 1.15, move: 'run', speed: 2.4, attack: 'ball', interval: 2.4, enterTo: [5.5, -1.5],
+    style: { top: '#2b2622', bottom: '#3b4a8a', pants: true, hair: 'short', hairColor: '#2b2622' },
+    wp: [
+      { key: 'cap', label: '棒球帽', local: [0, 2.08, 0], r: 0.3, color: 0xd8432b, size: [0.3, 0.12, 0.3], lost: ['帽子飛了！', '老大沒面子，跑慢一半'] },
+      { key: 'ball', label: '躲避球', local: [-0.4, 1.3, 0], r: 0.32, color: 0xd8432b, size: [0.3, 0.3, 0.3], lost: ['球被打飛了！', '老大沒球可丟'] },
+      { key: 'bag', label: '書包', local: [0.46, 1.4, 0], r: 0.3, color: 0x5a4e47, size: [0.26, 0.34, 0.12], lost: ['書包掉了！', '零食撒了一地'] },
+    ],
+    intro: ['隔壁學校的惡霸老大闖進來了！！', '他會衝過來丟球，先打掉帽子'], sfx: 'tattle',
+  },
+  {
+    id: 'gang2', boss: true, gang: true, name: '惡霸軍師', wpHp: 3, scale: 1.1, move: 'pace', speed: 1.8, attack: 'planes', planesKey: 'reports', interval: 2.2, enterTo: [4.5, -2.5],
+    specials: [{ kind: 'rollcall', every: 13 }],
+    style: { top: '#4b3f6b', bottom: '#2b2622', pants: true, hair: 'short', hairColor: '#1d1f3a' },
+    wp: [
+      { key: 'glasses', label: '墨鏡', local: [0, 1.86, 0], r: 0.3, color: 0x2b2622, size: [0.3, 0.1, 0.03], lost: ['墨鏡掉了！', '軍師看不清，紙飛機亂飛'] },
+      { key: 'reports', label: '小抄', local: [-0.4, 1.3, 0], r: 0.32, color: 0xffffff, size: [0.3, 0.36, 0.03], lost: ['小抄散了！', '只剩一架一架丟'] },
+      { key: 'clipboard', label: '手機', local: [0.5, 1.9, 0], r: 0.28, color: 0x2f6fd1, size: [0.08, 0.16, 0.02], lost: ['手機摔了！', '叫不到人了'] },
+    ],
+    intro: ['惡霸軍師來了！！', '他會打電話叫更多人進來，先打掉手機'], sfx: 'tattle',
+  },
+  {
+    id: 'gang3', boss: true, gang: true, name: '惡霸打手', wpHp: 4, scale: 1.2, move: 'run', speed: 2.6, attack: 'chalk', interval: 1.4, enterTo: [5.5, 0],
+    specials: [{ kind: 'charge', every: 8 }],
+    style: { top: '#8a2a2a', bottom: '#2b2622', pants: true, hair: 'bald', hairColor: '#8a8a8a' },
+    wp: [
+      { key: 'whistle', label: '口哨', local: [0, 1.5, 0], r: 0.27, color: 0xf4e27a, size: [0.08, 0.08, 0.08], lost: ['口哨掉了！', '不會再衝刺'] },
+      { key: 'chalk', label: '小石子', local: [0.49, 1.86, 0], r: 0.27, color: 0x7a8794, size: [0.08, 0.08, 0.08], lost: ['石子掉光了！', '打手沒東西可丟……大概'] },
+      { key: 'glasses', label: '墨鏡', local: [0, 1.86, 0], r: 0.3, color: 0x2b2622, size: [0.3, 0.1, 0.03], lost: ['墨鏡掉了！', '打手看不清楚，準度大降'] },
+    ],
+    intro: ['惡霸打手來了！！', '他吹哨之後會衝過來，快閃'], sfx: 'whistle',
+  },
+  {
+    id: 'king', boss: true, gang: true, name: '惡霸大王', wpHp: 5, scale: 1.45, move: 'run', speed: 2.0, attack: 'ball', interval: 1.8, eraserEvery: 2.2, enterTo: [4, -1],
+    specials: [{ kind: 'slam', every: 14 }],
+    style: { top: '#2b2622', bottom: '#8a2a2a', pants: true, suit: true, hair: 'short', hairColor: '#2b2622', tie: '#f4e27a' },
+    wp: [
+      { key: 'cap', label: '皇冠', local: [0, 2.1, 0], r: 0.32, color: 0xf4e27a, size: [0.34, 0.14, 0.34], lost: ['皇冠飛了！', '大王沒面子，跑慢一半'] },
+      { key: 'ball', label: '躲避球', local: [-0.42, 1.3, 0], r: 0.34, color: 0xd8432b, size: [0.32, 0.32, 0.32], lost: ['球被打飛了！', '大王沒球可丟，只剩板擦'] },
+      { key: 'trophy', label: '搶來的獎盃', local: [0.5, 1.4, 0], r: 0.34, color: 0xf4e27a, size: [0.3, 0.4, 0.3], lost: ['獎盃摔了！', '不會再砸獎盃'] },
+    ],
+    intro: ['惡霸大王親自來了！！', '板擦會一直飛過來，被粉筆灰罩到就看不見'], sfx: 'chord',
+  },
+];
+export const teacherById = (id) => TEACHERS.find(t => t.id === id) || BOSSES.find(t => t.id === id) || COMMITTEE.members.find(t => t.id === id) || GANG.find(t => t.id === id) || TEACHERS[0];

@@ -66,6 +66,7 @@ export class Player {
     this.gun.position.set(this.gunBase.x + bobX, this.gunBase.y + bobY - reloadDip + this.recoil * 0.02, this.gunBase.z + this.recoil * 0.07);
     this.gun.rotation.x = this.recoil * 0.25 - reloadDip * 1.2; this.gun.rotation.z = reloadDip * 0.6;
     this.loadedDart.visible = this.ammo > 0 && this.reloading <= 0;
+    if (this.game.siege && this.reserve < this.reserveCap()) { this.reserve = this.reserveCap(); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); } // 守校門：彈藥無限，備用彈永遠是滿的
     if (this.reloading > 0) {
       this.reloading -= dt;
       this.game.ui.reloadProgress(1 - this.reloading / this.reloadTotal);

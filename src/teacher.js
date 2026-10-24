@@ -23,7 +23,7 @@ export class Teacher extends PaperFigure {
     this.throwTimer = 2.5; this.pauseTimer = 0; this.rage = 0; this.throwIdx = 0; this.glideT = 0; this.special = null;
     this.specials = (def.specials || (def.special ? [{ kind: def.special, every: def.specialEvery }] : [])).map(sp => ({ ...sp, t: sp.every }));
     // the blackboard eraser: every teacher and boss except the exam committee throws one now and then
-    this.eraserOk = def.group !== 'committee'; this.eraserT = CFG.teacher.eraserEvery * (def.boss ? 1.4 : 1) * rand(0.5, 0.9); this.retaliateT = 0;
+    this.eraserOk = def.group !== 'committee'; this.eraserT = this.eraserEvery() * rand(0.5, 0.9); this.retaliateT = 0;
     if (def.scale) this.group.scale.setScalar(def.scale);
     this.defeated = false;
     this.wp = {};
@@ -40,6 +40,8 @@ export class Teacher extends PaperFigure {
     this.debris = [];
   }
   has(k) { return this.wp[k] && this.wp[k].hp > 0; }
+  // seconds between erasers: bosses throw fewer, the gang king has his own (mad) rate
+  eraserEvery() { return this.def.eraserEvery || CFG.teacher.eraserEvery * (this.def.boss ? 1.4 : 1); }
   wpWorld(k) { return this.mesh.localToWorld(this.wp[k].local.clone()); }
   hudEntries() { return this.def.wp.map(w => ({ label: w.label, hp: this.wp[w.key].hp })); }
   serialize() {
@@ -57,7 +59,7 @@ export class Teacher extends PaperFigure {
   }
   moveSpeed() {
     let s = this.def.speed;
-    if (this.def.id === 'pe' && !this.has('cap')) s *= 0.5;
+    if ((this.def.id === 'pe' || this.def.id === 'gang1' || this.def.id === 'king') && !this.has('cap')) s *= 0.5;
     if (this.def.id === 'math' && !this.has('book')) s *= 0.6;
     if (this.def.id === 'principal' && this.rage > 0) s *= 1.6;
     if (this.def.id === 'timer' && !this.has('tie')) s *= 0.7;
@@ -82,7 +84,7 @@ export class Teacher extends PaperFigure {
     else {
       moving = this.updateMove(dt, player);
       for (const sp of this.specials) { sp.t -= dt; if (sp.t <= 0 && !this.special) { sp.t = sp.every; this.startSpecial(player, sp.kind); } }
-      if (this.eraserOk) { this.eraserT -= dt; if (this.eraserT <= 0 && !this.special) { this.eraserT = CFG.teacher.eraserEvery * (this.def.boss ? 1.4 : 1) * rand(0.8, 1.2) * (this.game.diff ? this.game.diff.teacherMul : 1); this.startSpecial(player, 'eraser'); } }
+      if (this.eraserOk) { this.eraserT -= dt; if (this.eraserT <= 0 && !this.special) { this.eraserT = this.eraserEvery() * rand(0.8, 1.2) * (this.game.diff ? this.game.diff.teacherMul : 1); this.startSpecial(player, 'eraser'); } }
     }
     // ---- ranged attack ----
     this.throwTimer -= (this.rage > 0 ? 2.2 : 1) * dt;
@@ -163,20 +165,20 @@ export class Teacher extends PaperFigure {
     if (kind === 'rollcall') {
       if (!this.has('clipboard') || g.bossPhase && g.students.filter(s => s.alive).length >= 3) return;
       for (let i = 0; i < 2; i++) g.spawnQueue.push(this.L.doors[i % 2]); g.spawnTimer = Math.min(g.spawnTimer, 0.3);
-      Audio.whistle(); g.netEvent({ t: 'sfx', n: 'whistle' }); g.message('教務主任點名：再來兩個！', '', 1.6);
+      Audio.whistle(); g.netEvent({ t: 'sfx', n: 'whistle' }); g.message(this.def.gang ? '軍師打電話叫人：再來兩個！' : '教務主任點名：再來兩個！', '', 1.6);
       return;
     }
     if (kind === 'slam') {
       if (!this.has('trophy')) return;
       this.special = { kind: 'slam', phase: 'walk', t: 2.5, target: player };
       this.path = this.world.path(this.group.position, player.pos);
-      g.message('校長要頒獎了……', '別站在他旁邊', 1.4);
+      g.message(this.def.gang ? '大王舉起獎盃要砸人了……' : '校長要頒獎了……', '別站在他旁邊', 1.4);
       return;
     }
     if (kind === 'eraser' || kind === 'eraserQuick') { // a lobbed eraser: wherever it lands, a cloud of chalk dust. Quick = thrown in anger right after being hit
       const quick = kind === 'eraserQuick';
       this.special = { kind: 'eraser', t: quick ? 0.35 : 0.7, target: player };
-      Audio.scribble(); g.netEvent({ t: 'sfx', n: 'scribble' }); g.message(quick ? '老師氣得丟板擦！' : '老師拿起板擦了！', '粉筆灰會讓人看不清楚，快閃', 1.4);
+      Audio.scribble(); g.netEvent({ t: 'sfx', n: 'scribble' }); { const who = this.def.gang ? this.def.name : '老師'; g.message(quick ? `${who}氣得丟板擦！` : `${who}拿起板擦了！`, '粉筆灰會讓人看不清楚，快閃', 1.4); }
       return;
     }
     if (kind === 'collect') { // 收卷：3 秒內誰開槍誰被記一筆；全場慢動作
@@ -201,7 +203,7 @@ export class Teacher extends PaperFigure {
     if (kind === 'charge') {
       if (!this.has('whistle')) return;
       this.special = { kind: 'charge', phase: 'windup', t: 1.0, target: player.pos.clone() };
-      Audio.whistle(); g.netEvent({ t: 'sfx', n: 'whistle' }); g.message('嗶——！體育老師要衝過來了', '快躲開', 1.4);
+      Audio.whistle(); g.netEvent({ t: 'sfx', n: 'whistle' }); g.message(this.def.gang ? '嗶——！惡霸打手要衝過來了' : '嗶——！體育老師要衝過來了', '快躲開', 1.4);
     } else if (this.def.special === 'experiment') {
       if (!this.has('manual')) return;
       const at = player.pos.clone();
@@ -290,7 +292,7 @@ export class Teacher extends PaperFigure {
       }
       s.t -= dt;
       const went = this.followPath(dt, 6.0);
-      for (const pl of g.activeTargets()) if (Math.hypot(pl.pos.x - p.x, pl.pos.z - p.z) < 0.75) { pl.hurtCd = 0; pl.hurt(); g.message('被體育老師撞飛了！', '', 1.2); s.t = 0; }
+      for (const pl of g.activeTargets()) if (Math.hypot(pl.pos.x - p.x, pl.pos.z - p.z) < 0.75) { pl.hurtCd = 0; pl.hurt(); g.message(this.def.gang ? '被惡霸打手撞飛了！' : '被體育老師撞飛了！', '', 1.2); s.t = 0; }
       if (!went || s.t <= 0) { this.special = null; this.path = []; this.pauseTimer = 0.8; }
       return went;
     }

@@ -178,6 +178,8 @@ function yard() {
     doors: [{ x: 9.6, z: -3.5 }, { x: 9.6, z: 4.5 }], windows: [],
     start: { x: -8.6, z: 4.8, yaw: -0.8 }, front: -6.0, board: { w: 4.4, h: 1.5, style: 'chalk' }, boardY: 0.2,
     terrain, desks, furniture, props: [{ kind: 'trash', x: -9.0, z: -7.0 }, { kind: 'trash', x: 9.0, z: 1.0 }, { kind: 'bucket', door: 0 }],
+    // 守校門：校門就是 +x 牆的兩個出入口；水溝蓋在草地上，爬牆點是靠在圍牆內側的木板
+    siege: { drains: [[-6.5, -4.8], [4.5, 0.3], [0, 6.0]], climbs: [[-9.6, -0.5], [-5, 7.6], [6.5, 7.6]] },
     mounts: [
       { x: -6.5, y: 1.6, z: -7.96, ry: 0 }, { x: -3.2, y: 2.1, z: -7.96, ry: 0 }, { x: 3.0, y: 1.5, z: -7.96, ry: 0 }, { x: 8.2, y: 2.0, z: -7.96, ry: 0 },
       { x: 9.96, y: 1.0, z: 0.5, ry: -Math.PI / 2 }, { x: -9.96, y: 1.0, z: -2.5, ry: Math.PI / 2 }, { x: -9.96, y: 1.0, z: 1.0, ry: Math.PI / 2 },

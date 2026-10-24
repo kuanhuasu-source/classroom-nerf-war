@@ -16,8 +16,8 @@ import { RemotePlayer } from './remoteplayer.js';
 import { serializeSnapshot, applySnapshot, applyDelta } from './net/snapshot.js';
 import { NetStats } from './net/stats.js';
 import { PaperFigure } from './paperfigure.js';
-import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY } from './config.js';
-import { TEACHERS, BOSSES, COMMITTEE } from './teachers.js';
+import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE } from './config.js';
+import { TEACHERS, BOSSES, COMMITTEE, GANG } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
 import { TouchControls } from './touch.js';
@@ -61,6 +61,7 @@ export class Game {
     this.items = []; this.itemTimer = 0; this.zones = []; this.props = [];
     this.state = 'menu'; this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.spawnTimer = 0; this.waveTimer = 0; this.difficultySpread = 1;
     this.level = 'normal'; this.diff = DIFFICULTY.normal; this.offer = null; this.offerTimer = 0; this.supplyTimer = 0;
+    this.mode = 'class'; this.siege = false; this.bossDue = 0; this.bossDef = null; // 守校門模式
     this.forceTeacher = new URLSearchParams(location.search).get('teacher'); // debug: ?teacher=pe
     this.clock = new THREE.Clock(); this.hasLock = false; this.lockSupported = 'requestPointerLock' in document.body;
     this.touchCtl = new TouchControls(this); this.touch = this.touchCtl.on;
@@ -121,7 +122,7 @@ export class Game {
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
     this.fullSnapNext = true;
     if (this.state === 'playing' || this.state === 'paused') {
-      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1 }), from);
+      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0 }), from);
       this.transport.send(JSON.stringify({ t: 'restore', taken: r.up.taken, ammo: r.ammo, res: r.reserve, hp: r.hp, buff: this.buffs[slot] || null }), from);
       if (!this.stats[slot]) this.stats[slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 };
       this.message(back ? `${r.skin.name}回來了！` : `${r.skin.name}中途加入了！`, '', 1.5);
@@ -141,9 +142,17 @@ export class Game {
   onPeerGone(slot) { const r = this.remotes.get(slot); if (this.isHost && r && r.offline) { r.group.visible = false; this.message(`${r.skin.name}回不來了`, '剩下的人撐住', 2.5); } }
   nextId() { return ++this.seq; }
   // ---------- rooms ----------
-  setLayout(id) {
-    if (this.world.layout.id === id) return;
-    this.world.dispose(); this.world = new World(this.scene, id); this.darts.world = this.world;
+  setLayout(id, siege = false) {
+    if (this.world.layout.id === id && !!this.world.siege === !!siege) return;
+    this.world.dispose(); this.world = new World(this.scene, id, { siege }); this.darts.world = this.world;
+  }
+  waveLabel(n) { return this.siege ? `${n}/${SIEGE.waves.length}` : n; }
+  // 守校門：第 i 個惡霸從哪裡進來。帶頭的一定走校門；其他人輪流校門、爬牆、水溝蓋
+  siegeEntry(i, leader) {
+    const L = this.world.layout, S = L.siege || { drains: [], climbs: [] }, kind = leader ? 'gate' : SIEGE.entries[i % SIEGE.entries.length];
+    if (kind === 'wall' && S.climbs.length) { const k = i % S.climbs.length, [x, z] = S.climbs[k]; return { at: { x, z }, entry: { kind, index: k }, leader }; }
+    if (kind === 'drain' && S.drains.length) { const k = i % S.drains.length, [x, z] = S.drains[k]; return { at: { x, z }, entry: { kind, index: k }, leader }; }
+    const door = L.doors[i % 2]; return { at: { x: door.x - 0.3, z: door.z }, entry: { kind: 'gate' }, leader };
   }
   pickLayout() { return this.mapChoice && this.mapChoice !== 'random' && LAYOUTS[this.mapChoice] ? this.mapChoice : pick(LAYOUT_IDS); }
   // a slow shockwave ring (the dean's broadcast)
@@ -217,7 +226,7 @@ export class Game {
     } else {
       if (m.t === 'welcome') { this.mySlot = m.slot; this.darts.localWho = m.slot; if (this.onWelcome) this.onWelcome(m); }
       else if (m.t === 'full') { if (this.onFull) this.onFull(); }
-      else if (m.t === 'start') { if (m.map) this.setLayout(m.map); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
+      else if (m.t === 'start') { this.siege = !!m.siege; if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
       else if (m.t === 'restore') { // back after a disconnect: the host remembers what we had
         const p = this.player;
         for (const [id, n] of Object.entries(m.taken || {})) for (let i = 0; i < n; i++) { const u = takeUpgrade(p.up, id); if (u) { p.up.refill = 0; p.up.healFull = false; p.applyUpgrade(u); } }
@@ -237,7 +246,8 @@ export class Game {
     this.guestReset(); this.markTouchPlayer();
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
-    this.ui.hp(this.player.hp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(1); this.ui.left(0); this.ui.boss(false); this.ui.buff(null);
+    this.ui.infinite = this.siege;
+    this.ui.hp(this.player.hp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.buff(null);
     if (this.lockSupported && !this.touch) this.requestLock();
     Audio.bellOut();
     this.clock.getDelta();
@@ -375,19 +385,22 @@ export class Game {
   start() {
     if (!this.isHost) return this.startGuest();
     Audio.init(); Audio.resume();
-    this.setLayout(this.pickLayout());
+    this.siege = this.mode === 'siege'; this.ui.infinite = this.siege;
+    this.diff = this.siege ? { ...DIFFICULTY[this.level], waves: SIEGE.waves } : DIFFICULTY[this.level]; // 守校門：十波，其餘照難度
+    this.setLayout(this.siege ? 'yard' : this.pickLayout(), this.siege);
     this.reset(); this.markTouchPlayer();
     this.coop = this.isHost && this.remoteList().length > 0; this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
-    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0 }));
+    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0 }));
     if (this.coop) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
-    this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(1); this.ui.left(0); this.ui.boss(false);
+    this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false);
     if (this.lockSupported && !this.touch) this.requestLock();
     Audio.bellOut();
-    this.message('叮咚叮咚，下課了！', `${this.world.layout.name}變成戰場`, 3.5);
+    if (this.siege) this.message('隔壁學校的惡霸軍團來了！', `守住${this.world.layout.name}十波，彈藥無限`, 3.5);
+    else this.message('叮咚叮咚，下課了！', `${this.world.layout.name}變成戰場`, 3.5);
     this.waveTimer = 4.6; this.nextWavePending = true;
     this.clock.getDelta();
   }
@@ -399,8 +412,8 @@ export class Game {
     this.debris.forEach(d => this.scene.remove(d.mesh)); this.debris = []; this.rings.forEach(r => this.scene.remove(r.mesh)); this.rings = [];
     if (this.bully) this.bully.dispose(); if (this.monitor) this.monitor.dispose(); if (this.ball) this.ball.dispose();
     this.bully = null; this.monitor = null; this.ball = null;
-    const f = { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
-    const enabled = Object.keys(f).filter(k => CFG.features[k] > 0);
+    const f = this.siege ? { bully: false, ball: Math.random() < CFG.features.ball, monitor: false } : { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
+    const enabled = this.siege ? [] : Object.keys(f).filter(k => CFG.features[k] > 0);
     if (enabled.length && !enabled.some(k => f[k])) f[pick(enabled)] = true; // at least one surprise per game, but never a switched-off one
     this.features = f;
     if (f.bully) this.bully = new Bully(this);
@@ -411,7 +424,7 @@ export class Game {
     this.props.forEach(p => p.dispose()); this.props = (this.world.layout.props || []).map((d, i) => new Prop(this, d, i));
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
-    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null;
+    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null;
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
     for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = this.baseHp(r); }
@@ -435,13 +448,21 @@ export class Game {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
   startWave() {
-    this.wave++; this.ui.wave(this.wave); Audio.wave();
+    this.wave++; this.ui.wave(this.waveLabel(this.wave)); Audio.wave();
     for (const p of this.props) if (p.kind === 'bucket' && p.state !== 'up') { p.reset(); this.netEvent({ t: 'prop', id: p.id, st: 'up' }); }
     const np = this.players().length, base = this.diff.waves[this.wave - 1], count = this.coop ? Math.round(base * (1 + (COOP.waveMul - 1) * (np - 1))) : base;
     this.difficultySpread = Math.max(this.diff.minSpread, this.diff.spread - (this.wave - 1) * 0.1);
-    this.message(`第 ${this.wave} 波`, `${count} 位同學衝進來了`, 2);
     const doors = this.world.layout.doors;
-    this.spawnQueue = Array.from({ length: count }, (_, i) => ({ door: doors[i % 2], leader: i === count - 1 })); this.spawnTimer = 0.4; this.waveCount = count;
+    if (this.siege) { // 守校門：三種入口輪流；第 3、6、9、10 波的頭目晚幾秒跟進
+      const bossId = SIEGE.bosses[this.wave];
+      this.message(`第 ${this.wave}/${SIEGE.waves.length} 波`, `${count} 個惡霸闖進來了${bossId ? '，頭目也來了' : ''}`, 2);
+      this.spawnQueue = Array.from({ length: count }, (_, i) => this.siegeEntry(i, i === count - 1));
+      if (bossId) { this.bossDef = GANG.find(x => x.id === bossId); this.bossDue = SIEGE.bossDelay; }
+    } else {
+      this.message(`第 ${this.wave} 波`, `${count} 位同學衝進來了`, 2);
+      this.spawnQueue = Array.from({ length: count }, (_, i) => ({ door: doors[i % 2], leader: i === count - 1 }));
+    }
+    this.spawnTimer = 0.4; this.waveCount = count;
   }
   startBoss() {
     this.bossPhase = true;
@@ -473,13 +494,20 @@ export class Game {
     this.bossName = def.name;
     Audio.teacher(); if (def.sfx && Audio[def.sfx] && def.sfx !== 'teacher') setTimeout(() => Audio[def.sfx](), 500);
     this.message(def.intro[0], def.intro[1], 3.5);
-    this.ui.boss(true); this.updateBossHud(); this.ui.left(def.name);
+    this.ui.boss(true); this.updateBossHud(); if (!this.siege) this.ui.left(def.name);
   }
   updateBossHud() { if (this.teachers.length) this.ui.bossWp(this.teachers.map(t => ({ name: t.def.short || t.def.name, entries: t.hudEntries(), max: t.wpMax, defeated: t.defeated }))); }
   // one boss fell; with the committee the others carry on, faster
   onTeacherDefeated(t) {
     const alive = this.teachers.filter(x => !x.defeated);
     this.updateBossHud();
+    if (this.siege) { // 守校門：頭目倒了就退場，這波的小弟清光才算過；大王倒了也要等小弟清光（都倒了由波次判定收尾）
+      this.addScore(CFG.score.leader);
+      for (const o of this.students) if (o.alive && o.state !== 'flyOut') { o.state = 'hide'; o.timer = rand(1.5, 2.5); o.alert.visible = false; }
+      this.message(`${t.def.name}倒了！`, this.wave >= SIEGE.waves.length ? '剩下的惡霸嚇壞了，清光他們就守住了' : '小弟們嚇壞了，趁現在', 2.5);
+      t.goneT = 3.5; // leaves the field after the collapse (game time, see step)
+      return;
+    }
     if (!alive.length) return this.onWin();
     for (const o of alive) { o.overtime = true; if (alive.length === 1) o.alone = true; }
     this.message(`${t.def.name}崩潰了！`, alive.length === 1 ? `只剩${alive[0].def.name}，要下台追人了` : '剩下的監考官加班，更快更兇', 2.5);
@@ -760,6 +788,13 @@ export class Game {
   }
   onWin() {
     this.addScore(CFG.score.win); this.state = 'won'; Audio.bellOut(); setTimeout(() => Audio.win(), 1800);
+    if (this.siege) {
+      const title = '守住校門！惡霸軍團撤退了', sub = '十波都擋下來了，隔壁學校再也不敢來。';
+      this.message('守住了！！！', '惡霸軍團夾著尾巴逃回隔壁學校', 4);
+      this.overInfo = { win: 1, title, sub, stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
+      setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); this.showOver(title, sub, true); }, 3200);
+      return;
+    }
     const tn = this.bossName || '老師', trio = this.teachers.length > 1;
     const sub = trio ? '三位監考官同時崩潰，會考取消。你是全校的傳說。' : '三個道具全掉，全班自由。你是三年二班的傳說。';
     this.message('下課！！！', `${tn}崩潰，宣布今天不用上課`, 4);
@@ -769,7 +804,7 @@ export class Game {
   showOver(title, sub, win, remoteStats = null) {
     $('over').hidden = false; $('hud').hidden = true;
     $('over-title').textContent = title; $('over-title').classList.toggle('red-pen', !win); $('over-sub').textContent = sub;
-    $('st-score').textContent = this.score; $('st-wave').textContent = this.bossPhase ? '老師' : this.wave;
+    $('st-score').textContent = this.score; $('st-wave').textContent = this.bossPhase ? '老師' : this.waveLabel(this.wave);
     const st = remoteStats || this.coopStats();
     if (st) {
       const acc = (h, s) => s ? Math.min(100, Math.round(h / s * 100)) + '%' : '0%';
@@ -809,16 +844,19 @@ export class Game {
     this.updateItems(dt, realDt);
     // spawning & waves
     if (this.state === 'playing') {
+      if (this.bossDue > 0) { this.bossDue -= dt; if (this.bossDue <= 0 && this.bossDef) { this.spawnTeacher(this.bossDef); this.bossDef = null; } }
+      for (let i = this.teachers.length - 1; i >= 0; i--) { const t = this.teachers[i]; if (t.goneT === undefined) continue; t.goneT -= dt; if (t.goneT <= 0) { t.dispose(); this.teachers.splice(i, 1); this.updateBossHud(); if (!this.teachers.length) this.ui.boss(false); } }
       if (this.spawnQueue.length) {
         this.spawnTimer -= dt;
-        if (this.spawnTimer <= 0) { const e = this.spawnQueue.shift(), door = e.door || e; this.students.push(new Student(this, { x: door.x - 0.3, z: door.z }, { leader: !!e.leader })); if (e.leader) { this.message('班長帶隊進來了！', '先打倒她，其他人會慌', 2); Audio.tattle(); this.netEvent({ t: 'sfx', n: 'tattle' }); } this.spawnTimer = this.diff.spawnGap; this.ui.left(this.students.filter(s => s.alive).length + this.spawnQueue.length); }
+        if (this.spawnTimer <= 0) { const e = this.spawnQueue.shift(), door = e.door || e, at = e.at || { x: door.x - 0.3, z: door.z }; this.students.push(new Student(this, at, { leader: !!e.leader, entry: e.entry || null })); if (e.leader) { if (this.siege) this.message('惡霸老大帶頭衝進來了！', '先打倒他，其他人會慌', 2); else this.message('班長帶隊進來了！', '先打倒她，其他人會慌', 2); Audio.tattle(); this.netEvent({ t: 'sfx', n: 'tattle' }); } this.spawnTimer = this.diff.spawnGap; this.ui.left(this.students.filter(s => s.alive).length + this.spawnQueue.length); }
       } else if (!this.bossPhase) {
-        const alive = this.students.filter(s => s.alive).length;
-        if (alive === 0) {
+        const alive = this.students.filter(s => s.alive).length, bossUp = this.bossDue > 0 || this.teachers.some(t => !t.defeated);
+        if (alive === 0 && !bossUp) {
           if (this.nextWavePending) {
             this.waveTimer -= dt;
-            if (this.waveTimer <= 0) { this.nextWavePending = false; if (this.wave >= this.diff.waves.length) this.startBoss(); else this.startWave(); }
-          } else if (this.wave > 0) {
+            if (this.waveTimer <= 0) { this.nextWavePending = false; if (this.wave >= this.diff.waves.length) { if (this.siege) this.onWin(); else this.startBoss(); } else this.startWave(); }
+          } else if (this.siege && this.wave >= this.diff.waves.length) { this.onWin(); }
+          else if (this.wave > 0) {
             this.addScore(CFG.score.wave); this.nextWavePending = true; this.waveTimer = 2.5;
             const heal = this.diff.healPerWave;
             this.message('這波清光了！', heal ? `+500，回 ${heal} ♥` : '+500', 1.8);

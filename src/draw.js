@@ -78,7 +78,7 @@ export const Draw = (() => {
     }
     if (v.leader) { // the wave leader's armband and ribbon
       shape(ctx, [[70, 236], [96, 228], [100, 252], [74, 262]], '#d8432b', '#2b2622', 2);
-      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.save(); ctx.translate(85, 250); ctx.rotate(-0.25); ctx.fillText('班長', 0, 0); ctx.restore();
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.save(); ctx.translate(85, 250); ctx.rotate(-0.25); ctx.fillText(v.bully ? '老大' : '班長', 0, 0); ctx.restore();
       shape(ctx, [[cx - 8, 224], [cx + 8, 224], [cx, 250]], '#f4e27a', '#2b2622', 2);
     }
     // head
@@ -94,6 +94,10 @@ export const Draw = (() => {
       shape(ctx, ellipsePts(cx + 72, headY - 18, 9, 9, 10), '#d8432b');
     } else { // spiky
       shape(ctx, [[cx - 64, headY - 12], [cx - 70, headY - 60], [cx - 36, headY - 42], [cx - 24, headY - 92], [cx, headY - 50], [cx + 20, headY - 96], [cx + 34, headY - 44], [cx + 72, headY - 64], [cx + 64, headY - 12], [cx, headY - 34]], v.hairColor);
+    }
+    if (v.bully) { // the gang's red bandana, knotted at the side
+      shape(ctx, [[cx - 66, headY - 16], [cx + 66, headY - 16], [cx + 64, headY + 2], [cx - 64, headY + 2]], '#d8432b', '#2b2622', 2);
+      shape(ctx, [[cx + 60, headY - 10], [cx + 92, headY - 22], [cx + 88, headY + 4], [cx + 62, headY + 2]], '#d8432b', '#2b2622', 2);
     }
     // face
     const ey = headY + 6;

@@ -62,6 +62,8 @@ export const DIFFICULTY = {
   hard:   { label: '模擬考', waves: [3, 4, 5, 6, 7, 8], enemyHp: 3, spread: 1.1, minSpread: 0.7, maxShooters: 3, spawnGap: 0.9, healPerWave: 0, burstMax: 3, teacherMul: 1.0, peekDelay: 0.5, dartSpeed: 18, firstShotMul: 1.3, bossChance: 0.4, hideMul: 1.0 },
   exam:   { label: '會考', waves: [4, 5, 6, 7, 8, 9], enemyHp: 3, spread: 1.0, minSpread: 0.6, maxShooters: 4, spawnGap: 0.8, healPerWave: 0, burstMax: 3, teacherMul: 0.85, peekDelay: 0.45, dartSpeed: 19, firstShotMul: 1.25, bossChance: 0.6, hideMul: 0.9 }, // 會考：給已經能穩過模擬考的人
 };
+// 守校門：隔壁學校的惡霸軍團從校門、圍牆、水溝蓋闖進操場，守十波。彈藥無限；第 3、6、9 波有頭目，第 10 波是大王。
+export const SIEGE = { waves: [4, 5, 6, 7, 8, 9, 10, 11, 12, 10], bosses: { 3: 'gang1', 6: 'gang2', 9: 'gang3', 10: 'king' }, hpBonus: 1, entries: ['gate', 'drain', 'wall', 'gate'], bossDelay: 2.5 };
 export const COOP = { offerSeconds: 10, waveMul: 1.4, supplyAmount: 30, lowInterval: 8, maxGuests: 3, starters: { host: 'mag', g1: 'magnet', g2: 'rapid', g3: 'bag' }, waves: [4, 6, 6, 8, 8, 9], teacherWpHp: 4, reinforcements: 3, sitSeconds: 12, reviveRadius: 1.2, reviveHp: 2, invuln: 1.5 };
 export const EMOTES = ['', '掩護我！', '我沒彈了！', '惡霸醒了！', '班長來了！'];
 export const BUFFS = [

@@ -169,7 +169,9 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
 .card-up:hover, .card-up:focus-visible { background: var(--paper); transform: translate(-1px, -2px); outline: 3px dashed var(--nerf-blue); outline-offset: 2px; }
 .card-up kbd { font-family: var(--font-num); font-size: 14px; border: 2px solid var(--ink); border-radius: 6px; padding: 0 7px; background: var(--nerf-orange); color: var(--paper); width: max-content; }
 .card-up b { font-weight: 400; font-size: 22px; } .card-up span { font-size: 15px; color: var(--pencil); }
-#difficulty-row { margin: -6px 0 10px; gap: 10px; }
+#mode-row { margin: -6px 0 10px; gap: 10px; }
+#difficulty-row { margin: 0 0 10px; gap: 10px; }
+#map-row.dim .seg { opacity: .45; }
 #map-row { margin: 0 0 10px; gap: 10px; }
 #profile-row { margin: 0 0 14px; gap: 10px; align-items: center; }
 #my-name { font: inherit; font-size: 17px; width: 7.5em; padding: 3px 10px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; color: var(--ink); box-shadow: 2px 2px 0 var(--ink); }
@@ -222,7 +224,7 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
   .card h1 { font-size: 32px; } .card h2 { font-size: 24px; } .card .sub { font-size: 14px; margin-bottom: 8px; }
   .keys { font-size: 13px; gap: 3px 10px; margin-bottom: 10px; } .keys kbd { font-size: 12px; padding: 0 5px; }
   .seg-btn { font-size: 14px; padding: 3px 10px; } .btn { font-size: 18px; padding: 8px 18px; }
-  #difficulty-row, #map-row, #profile-row { margin-bottom: 8px; gap: 6px; } .look-btn { width: 32px; height: 42px; } .look-btn canvas { width: 24px; height: 48px; }
+  #mode-row, #difficulty-row, #map-row, #profile-row { margin-bottom: 8px; gap: 6px; } .look-btn { width: 32px; height: 42px; } .look-btn canvas { width: 24px; height: 48px; }
   .stats b { font-size: 22px; } .stats { font-size: 15px; margin: 6px 0 12px; }
 }
 /* on a touch device the keyboard help is noise: the menu note explains the touch controls instead */
@@ -288,6 +290,14 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
       <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></dt><dd>連線模式：喊話泡泡（掩護我、我沒彈了、惡霸醒了、班長來了）</dd>
       <dt><kbd>Esc</kbd></dt><dd>暫停（遊戲會進入全螢幕，按 <kbd>F11</kbd> 離開全螢幕會暫停，再按一次就繼續）</dd>
     </dl>
+    <div class="row" id="mode-row">
+      <span class="note">玩法</span>
+      <div class="seg" role="radiogroup" aria-label="玩法">
+        <button type="button" class="seg-btn on" data-mode="class">下課大戰</button>
+        <button type="button" class="seg-btn" data-mode="siege">守校門</button>
+      </div>
+      <span class="note" id="mode-note">下課大戰：六波同學加一位老師。</span>
+    </div>
     <div class="row" id="difficulty-row">
       <span class="note">難度</span>
       <div class="seg" role="radiogroup" aria-label="難度">
@@ -308,6 +318,7 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
         <button type="button" class="seg-btn map-btn" data-map="hall">活動中心</button>
         <button type="button" class="seg-btn map-btn" data-map="yard">操場</button>
       </div>
+      <span class="note" id="map-note"></span>
     </div>
     <div class="row" id="profile-row">
       <span class="note">連線時</span>

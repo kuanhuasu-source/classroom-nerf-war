@@ -28,7 +28,7 @@ export class UI {
   closeOffer() { $('upgrade').hidden = true; this.offerOpen = false; }
   offerTime(t) { if (this.offerOpen) $('upgrade-note').textContent = `${Math.max(0, Math.ceil(t))} 秒內按 1、2、3，沒選自動拿第一張`; }
   upgrades(names) { const el = $('hud-up'); if (!names.length) { el.classList.remove('on'); return; } el.classList.add('on'); el.textContent = names.join('・'); }
-  ammo(n, empty, reserve) { $('ammo').textContent = n; $('hud-ammo').classList.toggle('empty', !!empty); $('hud-ammo').classList.remove('reloading'); if (reserve !== undefined) { $('reserve').textContent = reserve; $('reserve').parentElement.classList.toggle('low', reserve <= 5); } }
+  ammo(n, empty, reserve) { $('ammo').textContent = n; $('hud-ammo').classList.toggle('empty', !!empty); $('hud-ammo').classList.remove('reloading'); if (reserve !== undefined) { $('reserve').textContent = this.infinite ? '∞' : reserve; $('reserve').parentElement.classList.toggle('low', !this.infinite && reserve <= 5); } }
   pickFlash() { const el = $('hud-ammo'); el.classList.remove('pick'); void el.offsetWidth; el.classList.add('pick'); }
   reloading(on) { $('hud-ammo').classList.toggle('reloading', on); $('reload-bar').style.width = '0%'; }
   reloadProgress(t) { $('reload-bar').style.width = (t * 100).toFixed(0) + '%'; }

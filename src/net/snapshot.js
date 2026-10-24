@@ -52,7 +52,7 @@ export function applyDelta(g, d) {
 export function applySnapshot(g, s) {
   PaperFigure.stamp = s.ts !== undefined ? g.net.toLocal(s.ts) : undefined; // every figure sample below carries this moment
   g.wave = s.wave; g.score = s.score; g.kills = s.kills; g.bossPhase = !!s.boss;
-  g.ui.wave(s.wave); g.ui.score(s.score); g.ui.left(s.left);
+  g.ui.wave(g.waveLabel(s.wave)); g.ui.score(s.score); g.ui.left(s.left);
   g.remoteSlow = !!s.slow;
   if (!g.hostFigure) g.hostFigure = new RemotePlayer(g, skinFor('host', s.host.nm, s.host.lk));
   g.hostFigure.applySkin(skinFor('host', s.host.nm, s.host.lk)); g.hostFigure.applyInput(s.host);

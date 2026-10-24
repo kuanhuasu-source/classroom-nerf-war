@@ -7,7 +7,8 @@ import { layoutById } from './layouts.js';
 //  World: builds a room from a layout; collision boxes; nav grid
 // ============================================================
 export class World {
-  constructor(scene, layout = 'classroom') {
+  constructor(scene, layout = 'classroom', opts = {}) {
+    this.siege = !!opts.siege; // 守校門：加校門柱、水溝蓋、爬牆木板
     this.scene = scene;
     this.layout = typeof layout === 'string' ? layoutById(layout) : layout;
     this.room = { w: this.layout.w, d: this.layout.d, h: this.layout.h };
@@ -17,7 +18,7 @@ export class World {
     this.objects = [];        // everything we add to the scene, so the room can be torn down
     this.gradient = Draw.gradientMap();
     this.inkMat = new THREE.LineBasicMaterial({ color: 0x3a2e2a });
-    this.animated = [];
+    this.animated = []; this.drains = [];
     this.build();
     this.buildGrid();
   }
@@ -101,6 +102,12 @@ export class World {
       const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.06, 1.7, 1.6)), this.inkMat); frame.position.set(-w / 2 + 0.03, wy, z); this.add(frame);
     }
     for (const dr of L.doors) {
+      if (outdoor && this.siege) { // the school gate: brick pillars and a sign over each opening
+        for (const sz of [-1, 1]) { this.box(0.5, 2.6, 0.5, w / 2 - 0.25, 1.3, dr.z + sz * 1.05, 0xb98556, { collide: false }); this.box(0.6, 0.12, 0.6, w / 2 - 0.25, 2.66, dr.z + sz * 1.05, 0x7a4a22, { collide: false }); }
+        this.box(0.12, 0.5, 2.6, w / 2 - 0.25, 2.95, dr.z, 0xd8432b, { collide: false });
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.42), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.nameTag('校門', '#d8432b', '#ffffff')), transparent: true })); sign.position.set(w / 2 - 0.32, 2.95, dr.z); sign.rotation.y = -Math.PI / 2; this.add(sign);
+        continue;
+      }
       if (outdoor) { for (const sz of [-1, 1]) this.box(0.3, 1.6, 0.3, w / 2 - 0.15, 0.8, dr.z + sz * 0.9, 0xb98556, { collide: false }); this.box(0.1, 0.4, 2.1, w / 2 - 0.15, 1.75, dr.z, 0x2f6fd1, { collide: false }); continue; }
       const door = this.box(0.08, 2.1, 1.0, w / 2 - 0.04, 1.05 + (dr.floor || 0), dr.z, 0x8fb98a, { collide: false, shadow: false });
       const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), this.toon(0xf4e27a)); knob.position.set(-0.06, 0, -0.35); door.add(knob);
@@ -130,9 +137,33 @@ export class World {
     }
     // furniture
     for (const f of L.furniture) this.furniture(f);
+    if (this.siege && L.siege) this.buildSiege(L.siege);
     // logical cover entries
     for (const dsk of L.desks) this.desks.push({ x: dsk.x, z: dsk.z, w: dsk.w, d: dsk.d, h: dsk.h, floor: dsk.floor || 0, seat: { x: dsk.seat.x, z: dsk.seat.z }, occupant: null, covered: null });
     this.bounds = { minX: -w / 2 + 0.3, maxX: w / 2 - 0.3, minZ: -d / 2 + 0.3, maxZ: d / 2 - 0.3 };
+  }
+  // 守校門：水溝蓋（惡霸從底下鑽出來時蓋子會掀開）和靠在圍牆內側的木板（爬牆點）
+  buildSiege(S) {
+    const { w, d } = this.room;
+    for (const [x, z] of S.drains) {
+      this.box(0.9, 0.04, 0.7, x, 0.02, z, 0x3a3a3a, { collide: false, ink: false });
+      const lid = this.box(0.8, 0.05, 0.6, x, 0.05, z, 0x6a6a6a, { collide: false });
+      for (let i = -2; i <= 2; i++) this.box(0.7, 0.012, 0.05, 0, 0.03, i * 0.12, 0x2b2622, { collide: false, parent: lid });
+      this.drains.push({ x, z, lid, base: lid.position.clone() });
+    }
+    for (const [x, z] of S.climbs) {
+      const ry = x < -w / 2 + 1 ? Math.PI / 2 : x > w / 2 - 1 ? -Math.PI / 2 : z > d / 2 - 1 ? Math.PI : 0;
+      const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; this.add(g);
+      const plank = this.box(0.34, 1.5, 0.05, 0, 0.66, 0.12, 0xb98556, { collide: false, parent: g }); plank.rotation.x = 0.4;
+      const plank2 = this.box(0.34, 1.3, 0.05, -0.5, 0.58, 0.18, 0xd9a86c, { collide: false, parent: g }); plank2.rotation.x = 0.5;
+      this.cylinder(0.03, 1.6, 0.35, 0.8, 0.1, 0x8a6a3a, { collide: false, parent: g, seg: 6 }).rotation.x = 0.3; // a knotted rope over the fence
+    }
+  }
+  // a knocked-open drain lid: slides aside and tilts, then settles back
+  popDrain(i) {
+    const dr = this.drains[i]; if (!dr) return;
+    let t = 0; const fn = (dt) => { t += dt; const k = Math.min(1, t / 1.6), s = Math.sin(k * Math.PI); dr.lid.position.x = dr.base.x + s * 0.7; dr.lid.position.y = dr.base.y + s * 0.5; dr.lid.rotation.z = s * 1.1; if (k >= 1) { dr.lid.position.copy(dr.base); dr.lid.rotation.z = 0; this.animated = this.animated.filter(f => f !== fn); } };
+    this.animated.push(fn);
   }
   // a low fence: posts every 2 m and two rails; visual only, the room bounds do the stopping
   fence(len, x, z, ry) {
