@@ -46,7 +46,7 @@ function lab() {
     start: { x: -6.0, z: 4.1, yaw: -0.55 }, front: -3.0, board: { w: 6.0, h: 1.5, style: 'lab' },
     desks, furniture, props: [{ kind: 'trash', x: -3.0, z: -4.4 }, { kind: 'trash', x: 0.2, z: 4.0 }, { kind: 'bucket', door: 0 }],
     mounts: [
-      { x: -3.6, y: 2.1, z: -4.96, ry: 0 }, { x: 3.8, y: 1.4, z: -4.96, ry: 0 }, { x: 4.6, y: 2.2, z: -4.96, ry: 0 },
+      { x: -3.6, y: 2.1, z: -4.96, ry: 0 }, { x: 3.6, y: 1.4, z: -4.96, ry: 0 }, { x: 2.7, y: 2.3, z: -4.96, ry: 0 }, // both clear of the fume hood (x 3.95..5.25)
       { x: -0.8, y: 1.9, z: 4.96, ry: Math.PI }, { x: 0.6, y: 2.3, z: 4.96, ry: Math.PI },
       { x: -6.96, y: 2.8, z: -2, ry: Math.PI / 2 }, { x: -6.96, y: 2.8, z: 2, ry: Math.PI / 2 },
       { x: 6.96, y: 1.8, z: 0, ry: -Math.PI / 2 }, { x: 6.96, y: 2.4, z: 2.0, ry: -Math.PI / 2 },

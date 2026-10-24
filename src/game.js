@@ -563,8 +563,8 @@ export class Game {
     // a box lands near whoever is running dry (in co-op that is often the partner, not the host)
     const who = nearPlayer ? this.players().slice().sort((x, y) => (x.ammo + x.reserve) - (y.ammo + y.reserve))[0] : this.player;
     const pp = who.pos;
-    const ok = this.world.desks.filter(d => { const dd = Math.hypot(d.x - pp.x, d.z - pp.z); return Math.abs((d.floor || 0) - (pp.y || 0)) < 0.5 && (nearPlayer ? dd > 1.2 && dd < CFG.supply.near : dd > 2) && !this.milks.some(m => m.desk === d); });
-    const desk = pick(ok.length ? ok : this.world.desks);
+    const ok = this.tables().filter(d => { const dd = Math.hypot(d.x - pp.x, d.z - pp.z); return Math.abs((d.floor || 0) - (pp.y || 0)) < 0.5 && (nearPlayer ? dd > 1.2 && dd < CFG.supply.near : dd > 2) && !this.milks.some(m => m.desk === d); });
+    const desk = pick(ok.length ? ok : this.tables());
     const mk = this.makeMilk(desk.x + rand(-0.12, 0.12), (desk.floor || 0) + (desk.h || DESK.h) + 0.1, desk.z + rand(-0.05, 0.05), 'ammo');
     mk.desk = desk; mk.id = this.nextId(); mk.kind = 'ammo'; this.milks.push(mk);
     Audio.itemSpawn(); this.message('有人放了一盒泡棉彈在課桌上', `走過去撿 +${this.supplyAmount()} 發`, 2);
@@ -656,11 +656,13 @@ export class Game {
     }
   }
   // ---------- milk (healing) ----------
+  // tables a carton or a box can land on: anything higher than 1.2 m (a tree, the swing frame, the slide tower) is out of reach from the floor
+  tables() { return this.world.desks.filter(d => (d.h || DESK.h) <= 1.2); }
   spawnMilk() {
     if (this.milks.length >= CFG.milk.max) return;
     const pp = this.player.pos;
-    const far = this.world.desks.filter(d => Math.abs((d.floor || 0) - (pp.y || 0)) < 0.5 && Math.hypot(d.x - pp.x, d.z - pp.z) > CFG.milk.minDistFromPlayer && Math.hypot(d.x - pp.x, d.z - pp.z) < 9 && !this.milks.some(m => m.desk === d));
-    const desk = pick(far.length ? far : this.world.desks);
+    const far = this.tables().filter(d => Math.abs((d.floor || 0) - (pp.y || 0)) < 0.5 && Math.hypot(d.x - pp.x, d.z - pp.z) > CFG.milk.minDistFromPlayer && Math.hypot(d.x - pp.x, d.z - pp.z) < 9 && !this.milks.some(m => m.desk === d));
+    const desk = pick(far.length ? far : this.tables());
     const mk = this.makeMilk(desk.x + rand(-0.12, 0.12), (desk.floor || 0) + (desk.h || DESK.h) + 0.1, desk.z + rand(-0.05, 0.05));
     mk.desk = desk; mk.id = this.nextId(); this.milks.push(mk);
     Audio.milkSpawn();
