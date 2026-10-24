@@ -1,5 +1,7 @@
 import { PeerTransport, roomCode, normalizeCode } from './net/peer.js';
 import { $ } from './ui.js';
+import { LOOKS } from './config.js';
+import { Draw } from './draw.js';
 
 // The front page: solo, open a room, or join one by code.
 export function initLobby(game) {
@@ -26,6 +28,17 @@ export function initLobby(game) {
   const applyMap = (m) => { mapChoice = m; game.mapChoice = m; document.querySelectorAll('.map-btn').forEach(b => { const on = b.dataset.map === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); try { localStorage.setItem('cnw-map', m); } catch (e) { /* ignore */ } };
   document.querySelectorAll('.map-btn').forEach(b => { b.setAttribute('role', 'radio'); b.addEventListener('click', () => applyMap(b.dataset.map)); });
   applyMap(mapChoice);
+  // who am I in a room: a typed name (up to 6 characters) and one of the looks; remembered per browser
+  const nameEl = $('my-name'), lookRow = $('look-row');
+  nameEl.value = game.profile.name;
+  nameEl.addEventListener('input', () => { game.profile.name = nameEl.value.trim().slice(0, 6); try { localStorage.setItem('cnw-name', game.profile.name); } catch (e) { /* ignore */ } });
+  const applyLook = (id) => { game.profile.look = id; try { localStorage.setItem('cnw-look', id); } catch (e) { /* ignore */ } lookRow.querySelectorAll('button').forEach(b => { const on = b.dataset.look === id; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); };
+  for (const l of LOOKS) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'look-btn'; b.dataset.look = l.id; b.title = l.label; b.setAttribute('role', 'radio');
+    const c = document.createElement('canvas'); c.width = 44; c.height = 88; c.getContext('2d').drawImage(Draw.kid(l.v, 'normal'), 0, 0, 44, 88); b.appendChild(c);
+    b.addEventListener('click', () => applyLook(l.id)); lookRow.appendChild(b);
+  }
+  applyLook(LOOKS.some(l => l.id === game.profile.look) ? game.profile.look : LOOKS[0].id);
   $('btn-start').addEventListener('click', () => { leave(); game.start(); });
 
   $('btn-host').addEventListener('click', () => {

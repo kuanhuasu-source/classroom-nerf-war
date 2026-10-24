@@ -164,7 +164,13 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
 .card-up kbd { font-family: var(--font-num); font-size: 14px; border: 2px solid var(--ink); border-radius: 6px; padding: 0 7px; background: var(--nerf-orange); color: var(--paper); width: max-content; }
 .card-up b { font-weight: 400; font-size: 22px; } .card-up span { font-size: 15px; color: var(--pencil); }
 #difficulty-row { margin: -6px 0 10px; gap: 10px; }
-#map-row { margin: 0 0 14px; gap: 10px; }
+#map-row { margin: 0 0 10px; gap: 10px; }
+#profile-row { margin: 0 0 14px; gap: 10px; align-items: center; }
+#my-name { font: inherit; font-size: 17px; width: 7.5em; padding: 3px 10px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; color: var(--ink); box-shadow: 2px 2px 0 var(--ink); }
+#look-row { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.look-btn { width: 40px; height: 52px; padding: 0; border: 2px solid var(--ink); border-radius: 10px; background: #fff; cursor: pointer; overflow: hidden; display: flex; align-items: flex-start; justify-content: center; box-shadow: 2px 2px 0 var(--ink); }
+.look-btn canvas { width: 30px; height: 60px; margin-top: -4px; }
+.look-btn.on { background: var(--nerf-blue); border-color: var(--nerf-blue); box-shadow: 2px 2px 0 var(--ink), inset 0 0 0 2px #fff; }
 .seg { display: inline-flex; border: 2px solid var(--ink); border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 2px 2px 0 var(--ink); }
 .seg-btn { font: inherit; font-size: 17px; padding: 4px 14px; border: 0; background: transparent; color: var(--ink); cursor: pointer; border-right: 2px solid var(--ink); }
 .seg-btn:last-child { border-right: 0; }
@@ -239,6 +245,11 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
         <button type="button" class="seg-btn map-btn" data-map="hall">活動中心</button>
         <button type="button" class="seg-btn map-btn" data-map="yard">操場</button>
       </div>
+    </div>
+    <div class="row" id="profile-row">
+      <span class="note">連線時</span>
+      <input id="my-name" maxlength="6" placeholder="你的名字" autocomplete="off" spellcheck="false" aria-label="名字">
+      <div id="look-row" role="radiogroup" aria-label="造型"></div>
     </div>
     <div class="row" id="menu-buttons">
       <button class="btn" id="btn-start">單人開戰</button>

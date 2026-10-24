@@ -39,6 +39,20 @@ export const PLAYERS = [
   { slot: 'g3', name: '小芳', v: { skin: '#f6d6b8', shirt: '#f7a8c4', hair: 0, hairColor: '#5a3a1e' } },
 ];
 export const skinOf = (slot) => PLAYERS.find(p => p.slot === slot) || PLAYERS[0];
+// looks a player can pick for a room (name is typed separately); the slot defaults above stay as fallbacks
+export const LOOKS = [
+  { id: 'l1', label: '藍衣', v: { skin: '#f6d6b8', shirt: '#9fd3f2', hair: 0, hairColor: '#2b2622' } },
+  { id: 'l2', label: '黃衣', v: { skin: '#f3c9ad', shirt: '#f4e27a', hair: 1, hairColor: '#4a2f1d' } },
+  { id: 'l3', label: '綠衣', v: { skin: '#e9c39c', shirt: '#b7e3a1', hair: 2, hairColor: '#2b2622' } },
+  { id: 'l4', label: '粉衣', v: { skin: '#f6d6b8', shirt: '#f7a8c4', hair: 0, hairColor: '#5a3a1e' } },
+  { id: 'l5', label: '白衣', v: { skin: '#f0cfae', shirt: '#ffffff', hair: 2, hairColor: '#6b3a1e' } },
+  { id: 'l6', label: '紫衣', v: { skin: '#f3c9ad', shirt: '#c9b6f2', hair: 1, hairColor: '#2b2622' } },
+  { id: 'l7', label: '橘衣', v: { skin: '#e9c39c', shirt: '#f6a85a', hair: 0, hairColor: '#2b2622' } },
+  { id: 'l8', label: '紅衣', v: { skin: '#f6d6b8', shirt: '#e0463a', hair: 1, hairColor: '#8a8a8a' } },
+];
+export const lookById = (id) => LOOKS.find(l => l.id === id) || null;
+// the skin a player ends up with: typed name and picked look, else the slot's default kid
+export const skinFor = (slot, name, look) => { const base = skinOf(slot), l = lookById(look); return { slot, name: (name || '').trim().slice(0, 6) || base.name, v: l ? l.v : base.v }; };
 export const GUEST_SLOTS = ['g1', 'g2', 'g3'];
 export const PLAYER_SKINS = { host: PLAYERS[0], guest: PLAYERS[1] };
 // Difficulty presets. maxShooters is the big one: how many students may be firing at once.

@@ -16,7 +16,7 @@ import { RemotePlayer } from './remoteplayer.js';
 import { serializeSnapshot, applySnapshot, applyDelta } from './net/snapshot.js';
 import { NetStats } from './net/stats.js';
 import { PaperFigure } from './paperfigure.js';
-import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, COOP, EMOTES, DIFFICULTY } from './config.js';
+import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY } from './config.js';
 import { TEACHERS, BOSSES, COMMITTEE } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
@@ -36,6 +36,8 @@ export class Game {
     // guest side: the host's figure plus the other guests
     this.others = new Map(); this.mySlot = 'host'; this.buffs = {};
     this.pid = opts.pid || Game.persistentId();
+    this.profile = { name: '', look: '' }; // what this player typed and picked on the front page (the lobby fills it)
+    try { this.profile.name = localStorage.getItem('cnw-name') || ''; this.profile.look = localStorage.getItem('cnw-look') || ''; } catch (e) { /* ignore */ }
     this.net = new NetStats(); this.showNet = true; this.pvSeq = 0; this.snapSeq = 0; this.pingT = 0; this.acc = 0;
     PaperFigure.renderTime = () => performance.now() - (this.isHost ? 100 : this.net.delay); // guests from inputs: 100 ms behind; snapshots: adaptive
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -92,12 +94,13 @@ export class Game {
   connOf(slot) { for (const [c, s] of this.conns) if (s === slot) return c; return null; }
   sendTo(slot, msg) { const c = this.connOf(slot); if (c && this.transport) this.transport.send(JSON.stringify(msg), c); }
   lobbyNames() { return [...this.remotes.values()].filter(r => !r.offline && this.connOf(r.slot)).map(r => r.skin.name + (r.touch ? '📱' : '')); }
-  sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid, touch: this.touch ? 1 : 0 })); }
+  sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid, touch: this.touch ? 1 : 0, name: this.profile.name, look: this.profile.look })); }
+  mySkin() { return skinFor(this.mySlot, this.profile.name, this.profile.look); }
   touchOf(who) { if (!who || who === 'host') return !!this.touch; const r = this.remotes.get(who); return !!(r && r.touch); }
   hitMul(who) { return this.touchOf(who) ? CFG.assist.hitMul : 1; }
   baseHp(pl) { return CFG.player.hp + (pl && pl.touch ? CFG.assist.extraHp : 0); }
   // a guest said hello on a connection: give it its slot (the same one if it came back) and catch it up
-  onHello(from, pid, touch = false) {
+  onHello(from, pid, touch = false, name = '', look = '') {
     let slot = this.pids.get(pid);
     if (!slot) {
       const used = new Set(this.pids.values());
@@ -108,7 +111,8 @@ export class Game {
     for (const [c, s] of [...this.conns]) if (s === slot && c !== from) this.conns.delete(c);
     this.conns.set(from, slot);
     let r = this.remotes.get(slot); const back = !!r;
-    if (!r) { r = new RemotePlayer(this, skinOf(slot)); this.remotes.set(slot, r); }
+    const skin = skinFor(slot, name, look);
+    if (!r) { r = new RemotePlayer(this, skin); this.remotes.set(slot, r); } else r.applySkin(skin);
     r.offline = false; r.group.visible = true; r.touch = touch; if (!back) { r.maxHp = this.baseHp(r); r.hp = r.maxHp; }
     if (this.goneTimers.has(slot)) { clearTimeout(this.goneTimers.get(slot)); this.goneTimers.delete(slot); }
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
@@ -196,7 +200,7 @@ export class Game {
   onNet(str, from = 'peer') {
     let m; try { m = JSON.parse(str); } catch (e) { return; }
     if (this.isHost) {
-      if (m.t === 'hello') { this.onHello(from, m.pid, !!m.touch); return; }
+      if (m.t === 'hello') { this.onHello(from, m.pid, !!m.touch, m.name, m.look); return; }
       if (m.t === 'ping') { this.transport.send(JSON.stringify({ t: 'pong', ts: m.ts }), from); return; }
       const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
       if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
@@ -766,7 +770,7 @@ export class Game {
   }
   coopStats() {
     if (!this.coop || !this.stats) return null;
-    const h = this.stats.host, out = [{ slot: 'host', name: PLAYERS[0].name, kills: h.kills, hits: this.player.hits, shots: this.player.shots, revives: h.revives, strokes: h.strokes }];
+    const h = this.stats.host, out = [{ slot: 'host', name: this.mySkin().name, kills: h.kills, hits: this.player.hits, shots: this.player.shots, revives: h.revives, strokes: h.strokes }];
     for (const r of this.remotes.values()) { const g = this.stats[r.slot] || { kills: 0, revives: 0, strokes: 0 }; out.push({ slot: r.slot, name: r.skin.name, kills: g.kills, hits: r.hits, shots: r.shots, revives: g.revives, strokes: g.strokes }); }
     return out;
   }
