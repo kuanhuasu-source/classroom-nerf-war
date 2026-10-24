@@ -286,8 +286,9 @@ export class World {
         this.box(f.w, 0.5, f.d, f.x, fl + 0.25, f.z, 0xffffff); // the lip you cannot step over
         this.box(f.w, 0.25, f.d, f.x, fl + f.h - 0.12, f.z, 0xdde7ee, { collide: false });
         this.cylinder(0.03, 0.5, f.x, fl + f.h + 0.2, f.z - f.d / 2 + 0.2, 0xb8b8b8, { collide: false, seg: 8 }); // the flush pipe
-        const T = this.layout.target || { x: f.x, y: 1.25, z: f.z - f.d / 2 + 0.22 };
-        const tgt = new THREE.Mesh(new THREE.CircleGeometry(0.45, 32), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.bullseye()) })); tgt.position.set(T.x, T.y, T.z); this.add(tgt);
+        const T = this.layout.target || { x: f.x, y: 1.25, z: f.z - f.d / 2 + 0.25 };
+        const tgt = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.bullseye()) })); tgt.position.set(T.x, T.y, T.z); this.add(tgt);
+        const halo = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.58, 32), new THREE.MeshBasicMaterial({ color: 0xf4e27a })); halo.position.set(T.x, T.y, T.z - 0.005); this.add(halo);
         this.targetMesh = tgt;
         return;
       }

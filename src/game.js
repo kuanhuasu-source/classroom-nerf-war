@@ -433,7 +433,7 @@ export class Game {
     this.props.forEach(p => p.dispose()); this.props = (this.world.layout.props || []).map((d, i) => new Prop(this, d, i));
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
-    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null; this.timeLeft = 0; this.refillT = 0; this.ui.wet(false);
+    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null; this.timeLeft = 0; this.refillT = 0; this.hintT = 0; this.ui.wet(false);
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
     for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = this.baseHp(r); }
@@ -916,9 +916,12 @@ export class Game {
       if (d.kind === 'dart' && this.bully && this.bully.testHit(p)) { this.bully.poke(d.owner, d.shooter, d.who); return true; }
       if (d.owner === 'player' && this.monitor && this.monitor.testHit(p)) { this.monitor.hitByDart(); return true; }
       if (this.toilet && d.owner === 'player' && this.world.target) { // 搶廁所：正中紅心就贏，打到靶的外圈給提示
-        const T = this.world.target, dd = Math.hypot(p.x - T.x, p.y - T.y, p.z - T.z);
-        if (dd < TOILET.bull) { this.lastShooter = d.who; this.onWin(); this.lastShooter = null; return true; }
-        if (dd < TOILET.target && p.z < T.z + 0.25 && !(this.hintT > 0)) { this.hintT = 2; this.message('打到靶了，再準一點！', '要正中紅心', 1.2); }
+        const T = this.world.target; // where did the dart cross the target's plane this step?
+        if (prev && prev.z > T.z && p.z <= T.z) {
+          const k = (prev.z - T.z) / (prev.z - p.z), x = prev.x + (p.x - prev.x) * k, y = prev.y + (p.y - prev.y) * k, rr = Math.hypot(x - T.x, y - T.y);
+          if (rr < TOILET.bull) { this.lastShooter = d.who; this.onWin(); this.lastShooter = null; return true; }
+          if (rr < TOILET.target && !(this.hintT > 0)) { this.hintT = 2; this.message('打到靶了，再準一點！', '要正中紅心', 1.2); Audio.thud(); }
+        }
       }
       if (d.owner === 'player') {
         for (const s of this.students) {

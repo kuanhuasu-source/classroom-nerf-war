@@ -202,7 +202,7 @@ function toilet() {
     id: 'toilet', name: '廁所', w: W, d: D, h: 3.4, style: 'toilet', modeOnly: true,
     doors: [{ x: 5.1, z: 6.3 }, { x: 5.1, z: -5.8 }], windows: [-5, -1, 3], windowY: 2.5,
     start: { x: 2.6, z: 6.8, yaw: 0.25 }, front: -6.0, board: { w: 2.8, h: 0.9, style: 'toilet' }, boardY: 1.2,
-    target: { x: 0, y: 1.25, z: -7.72 }, crewSpots: [[-3.0, -4.5], [3.6, -3.2], [-0.4, -2.6], [2.2, 1.6], [-3.0, 1.5], [3.4, 4.2], [-1.6, 4.4]],
+    target: { x: 0, y: 1.25, z: -7.6 }, // 3 cm in front of the urinal's back face (z -7.65), so it is visible and darts cross it before sticking crewSpots: [[-3.0, -4.5], [3.6, -3.2], [-0.4, -2.6], [2.2, 1.6], [-3.0, 1.5], [3.4, 4.2], [-1.6, 4.4]],
     desks, furniture, props: [{ kind: 'trash', x: -4.6, z: 7.3 }, { kind: 'trash', x: 4.6, z: 2.2 }, { kind: 'bucket', door: 0 }],
     mounts: [
       { x: -3.2, y: 2.4, z: -7.96, ry: 0 }, { x: 2.6, y: 2.6, z: -7.96, ry: 0 },

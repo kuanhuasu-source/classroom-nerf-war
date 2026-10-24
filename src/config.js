@@ -65,7 +65,7 @@ export const DIFFICULTY = {
 // 守校門：隔壁學校的惡霸軍團從校門、圍牆、水溝蓋闖進操場，守十波。彈藥無限；第 3、6、9 波有頭目，第 10 波是大王。
 export const SIEGE = { waves: [4, 5, 6, 7, 8, 9, 10, 11, 12, 10], bosses: { 3: 'gang1', 6: 'gang2', 9: 'gang3', 10: 'king' }, hpBonus: 1, entries: ['gate', 'drain', 'wall', 'gate'], bossDelay: 2.5 };
 // 搶廁所：下課要去廁所，清潔隊正在打掃。三滴血、倒數 90 秒；潑水中了慢 5 秒、通馬桶連發 3 到 5 支；射中小便斗裡的紅心就贏
-export const TOILET = { time: 90, hp: 3, crew: 5, minCrew: 4, refill: 6, wetSeconds: 5, wetSpeed: 0.5, plungerBurst: [3, 5], plungerGap: 0.25, waterChance: 0.4, waterSpeed: 13, bull: 0.15, target: 0.45, timeBonus: 20 };
+export const TOILET = { time: 90, hp: 3, crew: 5, minCrew: 4, refill: 6, wetSeconds: 5, wetSpeed: 0.5, plungerBurst: [3, 5], plungerGap: 0.25, waterChance: 0.4, waterSpeed: 13, bull: 0.2, target: 0.5, timeBonus: 20 };
 export const COOP = { offerSeconds: 10, waveMul: 1.4, supplyAmount: 30, lowInterval: 8, maxGuests: 3, starters: { host: 'mag', g1: 'magnet', g2: 'rapid', g3: 'bag' }, waves: [4, 6, 6, 8, 8, 9], teacherWpHp: 4, reinforcements: 3, sitSeconds: 12, reviveRadius: 1.2, reviveHp: 2, invuln: 1.5 };
 export const EMOTES = ['', '掩護我！', '我沒彈了！', '惡霸醒了！', '班長來了！'];
 export const BUFFS = [
