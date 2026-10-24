@@ -41,9 +41,10 @@ export const GUEST_SLOTS = ['g1', 'g2', 'g3'];
 export const PLAYER_SKINS = { host: PLAYERS[0], guest: PLAYERS[1] };
 // Difficulty presets. maxShooters is the big one: how many students may be firing at once.
 export const DIFFICULTY = {
-  easy:   { label: '簡單', waves: [2, 3, 3, 4, 4, 5], enemyHp: 2, spread: 1.8, minSpread: 1.4, maxShooters: 1, spawnGap: 2.0, healPerWave: 2, burstMax: 2, teacherMul: 1.5, peekDelay: 0.9, dartSpeed: 12, firstShotMul: 2.5, bossChance: 0.1, hideMul: 1.5 },
-  normal: { label: '普通', waves: [3, 4, 4, 5, 5, 6], enemyHp: 2, spread: 1.5, minSpread: 1.0, maxShooters: 2, spawnGap: 1.5, healPerWave: 1, burstMax: 2, teacherMul: 1.2, peekDelay: 0.7, dartSpeed: 14, firstShotMul: 2.0, bossChance: 0.25, hideMul: 1.3 },
-  hard:   { label: '困難', waves: [3, 4, 5, 6, 7, 8], enemyHp: 3, spread: 1.1, minSpread: 0.7, maxShooters: 3, spawnGap: 0.9, healPerWave: 0, burstMax: 3, teacherMul: 1.0, peekDelay: 0.5, dartSpeed: 18, firstShotMul: 1.3, bossChance: 0.4, hideMul: 1.0 },
+  easy:   { label: '小考', waves: [2, 3, 3, 4, 4, 5], enemyHp: 2, spread: 1.8, minSpread: 1.4, maxShooters: 1, spawnGap: 2.0, healPerWave: 2, burstMax: 2, teacherMul: 1.5, peekDelay: 0.9, dartSpeed: 12, firstShotMul: 2.5, bossChance: 0.1, hideMul: 1.5 },
+  normal: { label: '段考', waves: [3, 4, 4, 5, 5, 6], enemyHp: 2, spread: 1.5, minSpread: 1.0, maxShooters: 2, spawnGap: 1.5, healPerWave: 1, burstMax: 2, teacherMul: 1.2, peekDelay: 0.7, dartSpeed: 14, firstShotMul: 2.0, bossChance: 0.25, hideMul: 1.3 },
+  hard:   { label: '模擬考', waves: [3, 4, 5, 6, 7, 8], enemyHp: 3, spread: 1.1, minSpread: 0.7, maxShooters: 3, spawnGap: 0.9, healPerWave: 0, burstMax: 3, teacherMul: 1.0, peekDelay: 0.5, dartSpeed: 18, firstShotMul: 1.3, bossChance: 0.4, hideMul: 1.0 },
+  exam:   { label: '會考', waves: [4, 5, 6, 7, 8, 9], enemyHp: 3, spread: 1.0, minSpread: 0.6, maxShooters: 4, spawnGap: 0.8, healPerWave: 0, burstMax: 3, teacherMul: 0.85, peekDelay: 0.45, dartSpeed: 19, firstShotMul: 1.25, bossChance: 0.6, hideMul: 0.9 }, // 會考：給已經能穩過模擬考的人
 };
 export const COOP = { offerSeconds: 10, waveMul: 1.4, supplyAmount: 30, lowInterval: 8, maxGuests: 3, starters: { host: 'mag', g1: 'magnet', g2: 'rapid', g3: 'bag' }, waves: [4, 6, 6, 8, 8, 9], teacherWpHp: 4, reinforcements: 3, sitSeconds: 12, reviveRadius: 1.2, reviveHp: 2, invuln: 1.5 };
 export const EMOTES = ['', '掩護我！', '我沒彈了！', '惡霸醒了！', '班長來了！'];

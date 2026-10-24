@@ -441,7 +441,7 @@ export class Game {
   pickBoss() {
     if (this.forceTeacher) return [...TEACHERS, ...BOSSES, COMMITTEE].find(x => x.id === this.forceTeacher) || pick(TEACHERS);
     if (Math.random() >= this.diff.bossChance) return pick(TEACHERS);
-    const stageOk = !!this.world.layout.stage && (this.level === 'hard' || this.coop);
+    const stageOk = !!this.world.layout.stage && (this.level === 'hard' || this.level === 'exam' || this.coop);
     return stageOk && Math.random() < 0.5 ? COMMITTEE : pick(BOSSES);
   }
   spawnTeacher(def = this.pickBoss()) {

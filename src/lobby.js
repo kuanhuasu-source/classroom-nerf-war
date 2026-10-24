@@ -16,7 +16,7 @@ export function initLobby(game) {
   if (import.meta.env.VITE_SOLO_ONLY === '1') { $('btn-host').hidden = true; $('btn-join-open').hidden = true; $('menu-note').textContent = '建議用電腦與滑鼠遊玩。連線模式（最多四人）在網站版才有。'; }
 
   // difficulty: remembered per browser
-  const NOTES = { easy: '少一點同學、準度低、一次只有一個同學開火，每清一波回 2 顆心。', normal: '同時最多兩個同學開火，每清一波回 1 顆心。', hard: '原本的難度：人多、準、四個同學同時射你，不回血。' };
+  const NOTES = { easy: '小考：少一點同學、準度低、一次只有一個同學開火，每清一波回 2 顆心。', normal: '段考：同時最多兩個同學開火，每清一波回 1 顆心。', hard: '模擬考：人多、準、三個同學同時射你，不回血，大 Boss 機率高。', exam: '會考：同學更多更準、四個同時開火、彈速更快、老師更兇，六成機率遇到大 Boss。給能穩過模擬考的人。' };
   let level = 'normal'; try { const saved = localStorage.getItem('cnw-difficulty'); if (saved && NOTES[saved]) level = saved; } catch (e) { /* ignore */ }
   const applyLevel = (l) => { level = l; game.setDifficulty(l); document.querySelectorAll('.seg-btn[data-level]').forEach(b => { const on = b.dataset.level === l; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('difficulty-note').textContent = NOTES[l]; try { localStorage.setItem('cnw-difficulty', l); } catch (e) { /* ignore */ } };
   document.querySelectorAll('.seg-btn[data-level]').forEach(b => { b.setAttribute('role', 'radio'); b.addEventListener('click', () => applyLevel(b.dataset.level)); });
