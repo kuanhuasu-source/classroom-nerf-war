@@ -51,25 +51,49 @@ export class Cart {
     if (this.inSplash && this.loaded && Math.abs(t) > 0.3 && Math.abs(this.v) > 1.5) this.spill(LUNCH.soup.splash * Math.abs(t) * (Math.abs(this.v) / P.max) * dt, 'splash'); // sliding through a puddle while turning fast
     const fw = this.forward(), want = this.pos.clone().addScaledVector(fw, this.v * dt);
     // a bucket in the way gets knocked over (then it is only a puddle)
-    for (let i = 0; i < this.world.buckets.length; i++) { const b = this.world.buckets[i]; if (b.knocked) continue; if (Math.hypot(want.x - b.x, want.z - b.z) < LUNCH.cart.radius + 0.3 && Math.abs(this.v) > 1) { this.world.knockBucket(i); this.game.onBucket(i); if (this.loaded) this.spill(LUNCH.soup.bucket, 'bucket'); this.v *= 0.5; this.shake = Math.max(this.shake, 0.6); } }
+    for (let i = 0; i < this.world.buckets.length; i++) { const b = this.world.buckets[i]; if (b.knocked) continue; if (Math.hypot(want.x - b.x, want.z - b.z) < LUNCH.cart.radius + 0.3 && Math.abs(this.v) > 1) { if (this.local) { this.v *= 0.5; continue; } this.world.knockBucket(i); this.game.onBucket(i); if (this.loaded) this.spill(LUNCH.soup.bucket, 'bucket'); this.v *= 0.5; this.shake = Math.max(this.shake, 0.6); } }
     const before = want.clone(); this.world.collideCircle(want, LUNCH.cart.radius);
     const corr = before.distanceTo(want);
     if (corr > 0.02) { // ran into a wall or furniture
-      if (Math.abs(this.v) > 2) { if (this.loaded) this.spill(Math.min(LUNCH.soup.impactMax, Math.abs(this.v) * LUNCH.soup.impactMul), 'impact'); this.shake = 1; Audio.thud(); this.game.netEvent({ t: 'sfx', n: 'thud' }); this.v = 0; }
+      if (Math.abs(this.v) > 2) { if (!this.local) { if (this.loaded) this.spill(Math.min(LUNCH.soup.impactMax, Math.abs(this.v) * LUNCH.soup.impactMul), 'impact'); Audio.thud(); this.game.netEvent({ t: 'sfx', n: 'thud' }); } this.shake = 1; this.v = 0; }
       else this.v *= 0.3;
     }
     this.pos.copy(want); this.pos.y = this.world.heightAt(want.x, want.z);
     this.shake = Math.max(0, this.shake - dt);
     this.sync();
   }
-  spill(n, why) { if (!this.loaded || n <= 0) return; this.soup = Math.max(0, this.soup - n); this.game.onSpill(n, why); }
+  spill(n, why) { if (!this.loaded || n <= 0 || this.local) return; this.soup = Math.max(0, this.soup - n); this.game.onSpill(n, why); }
   // guest replica: glide to the host's state
-  applyState(s) { this.target = s; if (!this.gotFirst) { this.gotFirst = true; this.pos.set(s.x, 0, s.z); this.heading = s.h; } this.loaded = !!s.ld; this.soup = s.sp; this.v = s.v; }
+  applyState(s, stamp) {
+    this.target = s; this.loaded = !!s.ld; this.soup = s.sp; if (!this.predicting) this.v = s.v;
+    if (!this.gotFirst) { this.gotFirst = true; this.pos.set(s.x, 0, s.z); this.heading = s.h; }
+    if (stamp !== undefined && stamp !== null) { this.hist = this.hist || []; const last = this.hist[this.hist.length - 1]; if (!last || stamp > last.t) this.hist.push({ t: stamp, x: s.x, z: s.z, h: s.h }); if (this.hist.length > 16) this.hist.shift(); }
+  }
+  static lerpAngle(a, b, f) { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * f; }
+  // the rider who is not steering: draw the cart a little behind the newest sample, between two samples, like every other remote figure
   smooth(dt) {
+    this.predicting = false; const s = this.target; if (!s) return;
+    const h = this.hist;
+    if (h && h.length >= 2 && PaperFigure.renderTime) {
+      const rt = PaperFigure.renderTime(), last = h[h.length - 1]; let x, z, hd;
+      if (rt >= last.t) { const a = h[h.length - 2], span = Math.max(1, last.t - a.t), f = Math.min(rt - last.t, 80) / span; x = last.x + (last.x - a.x) * f; z = last.z + (last.z - a.z) * f; hd = Cart.lerpAngle(last.h, last.h + (last.h - a.h), f); }
+      else { let i = h.length - 1; while (i > 0 && h[i - 1].t > rt) i--; if (i === 0) { x = h[0].x; z = h[0].z; hd = h[0].h; } else { const a = h[i - 1], b = h[i], f = (rt - a.t) / Math.max(1, b.t - a.t); x = a.x + (b.x - a.x) * f; z = a.z + (b.z - a.z) * f; hd = Cart.lerpAngle(a.h, b.h, f); } }
+      this.pos.x = x; this.pos.z = z; this.heading = hd;
+    } else {
+      const k = Math.min(1, dt * 12); this.pos.x += (s.x - this.pos.x) * k; this.pos.z += (s.z - this.pos.z) * k; this.heading = Cart.lerpAngle(this.heading, s.h, k);
+    }
+    this.pos.y = this.world.heightAt(this.pos.x, this.pos.z); this.shake = s.sh || 0; this.sync();
+  }
+  // the guest who is steering: run the same physics locally from their own keys so the cart answers at once,
+  // and lean toward the host's state (pushed forward by the lag) so the two never drift apart
+  predict(dt, input) {
+    this.predicting = true; this.local = true; this.step(dt, input); this.local = false;
     const s = this.target; if (!s) return;
-    const k = Math.min(1, dt * 12); this.pos.x += (s.x - this.pos.x) * k; this.pos.z += (s.z - this.pos.z) * k; this.pos.y = this.world.heightAt(this.pos.x, this.pos.z);
-    let dh = s.h - this.heading; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI; this.heading += dh * k;
-    this.shake = s.sh || 0; this.sync();
+    const lag = ((this.game.net && this.game.net.rtt) || 0) / 2000 + 0.05, hx = s.x + Math.cos(s.h) * s.v * lag, hz = s.z + Math.sin(s.h) * s.v * lag;
+    const ex = hx - this.pos.x, ez = hz - this.pos.z, err = Math.hypot(ex, ez);
+    if (err > 2.5) { this.pos.x = hx; this.pos.z = hz; this.heading = s.h; this.v = s.v; }
+    else { const k = Math.min(1, dt * 2.5); this.pos.x += ex * k; this.pos.z += ez * k; this.heading = Cart.lerpAngle(this.heading, s.h, k * 0.6); this.v += (s.v - this.v) * k * 0.5; }
+    this.pos.y = this.world.heightAt(this.pos.x, this.pos.z); this.sync();
   }
   serialize() { return { x: +this.pos.x.toFixed(2), z: +this.pos.z.toFixed(2), h: +this.heading.toFixed(3), v: +this.v.toFixed(2), ld: this.loaded ? 1 : 0, sp: Math.round(this.soup), sh: +this.shake.toFixed(2) }; }
   dispose() { this.game.scene.remove(this.group); }
@@ -198,7 +222,7 @@ export class LunchMode {
     const drv = this.driver === 'host' ? g.player : g.remoteBySlot(this.driver);
     let input = { f: 0, t: 0 };
     if (drv && !drv.sitting) {
-      if (this.driver === 'host') { const k = g.player.keys, tc = g.touchCtl, tm = tc && tc.on ? tc.move : null; input.f = (k['KeyW'] || k['ArrowUp'] ? 1 : 0) - (k['KeyS'] || k['ArrowDown'] ? 1 : 0) + (tm ? -tm.z : 0); input.t = (k['KeyD'] || k['ArrowRight'] ? 1 : 0) - (k['KeyA'] || k['ArrowLeft'] ? 1 : 0) + (tm ? tm.x : 0); }
+      if (this.driver === 'host') input = g.driveInput();
       else input = drv.cartIn || input;
     }
     c.step(dt, input);
@@ -232,6 +256,6 @@ export class LunchMode {
   stars() { const s = this.cart.soup; return s >= LUNCH.stars[0] ? 3 : s >= LUNCH.stars[1] ? 2 : s > 0 ? 1 : 0; }
   serialize() { return { ...this.cart.serialize(), ph: this.phase, dr: this.driver, lt: +this.loadT.toFixed(1), tl: +this.timeLeft.toFixed(1), hc: +this.hornCd.toFixed(1) }; }
   // guest: apply the host's cart and roles
-  applyState(s) { this.cart.applyState(s); const swapped = this.driver !== s.dr; this.phase = s.ph; this.driver = s.dr; this.timeLeft = s.tl; this.hornCd = s.hc; if (swapped && this.gotRole) this.game.ui.roleLabel(this.roleOf(this.game.mySlot)); this.gotRole = true; }
+  applyState(s) { this.cart.applyState(s, PaperFigure.stamp); const swapped = this.driver !== s.dr; this.phase = s.ph; this.driver = s.dr; this.timeLeft = s.tl; this.hornCd = s.hc; if (swapped && this.gotRole) this.game.ui.roleLabel(this.roleOf(this.game.mySlot)); this.gotRole = true; }
   dispose() { this.cart.dispose(); for (const k of this.kids) k.dispose(); this.kids = []; }
 }

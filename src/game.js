@@ -152,6 +152,7 @@ export class Game {
   waveLabel(n) { return this.lunch ? (this.lunchMode ? (this.lunchMode.roleOf(this.mySlot) === 'driver' ? '推車手' : '射手') : '—') : this.toilet ? `剩 ${this.cansLeft()}` : this.siege ? `${n}/${SIEGE.waves.length}` : n; }
   cansLeft() { return (this.world.cans || []).filter(c => c.alive).length; }
   // ---------- 午餐大作戰 ----------
+  driveInput() { const k = this.player.keys, tc = this.touchCtl, tm = tc && tc.on ? tc.move : null; return { f: (k['KeyW'] || k['ArrowUp'] ? 1 : 0) - (k['KeyS'] || k['ArrowDown'] ? 1 : 0) + (tm ? -tm.z : 0), t: (k['KeyD'] || k['ArrowRight'] ? 1 : 0) - (k['KeyA'] || k['ArrowLeft'] ? 1 : 0) + (tm ? tm.x : 0) }; }
   horn() { if (!this.lunch || !this.lunchMode) return; if (this.isHost) this.lunchMode.horn('host'); else { this.hornSeq = (this.hornSeq || 0) + 1; Audio.whistle(); } }
   refillShooter() { const LM = this.lunchMode, slot = LM.shooterSlot(); if (slot === 'host') { const p = this.player; p.ammo = p.magSize(); p.reserve = LUNCH.ammo; this.ui.ammo(p.ammo, false, p.reserve); this.ui.pickFlash(); } else { const r = this.remoteBySlot(slot); if (r) r.reserve = LUNCH.ammo; this.netEvent({ t: 'ammoSet', n: LUNCH.ammo }, slot); } }
   onBucket(i) { this.netEvent({ t: 'bucket', i }); this.message('撞倒水桶了！', '地上都是水，轉彎會滑', 1.5); Audio.thud(); }
@@ -312,7 +313,7 @@ export class Game {
     if (this.transport && this.inputTimer <= 0) {
       this.inputTimer = 1 / NET.inputHz; const p = this.player;
       const msg = { t: 'input', x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), yaw: +p.yaw.toFixed(2), eye: +p.eye.toFixed(2), c: p.crouching ? 1 : 0, ammo: p.ammo, res: p.reserve, sh: p.shots, rtt: Math.round(this.net.rtt) };
-      if (this.lunch && this.lunchMode && this.lunchMode.driver === this.mySlot) { const k = p.keys, tc = this.touchCtl, tm = tc && tc.on ? tc.move : null; msg.cf = +((k['KeyW'] || k['ArrowUp'] ? 1 : 0) - (k['KeyS'] || k['ArrowDown'] ? 1 : 0) + (tm ? -tm.z : 0)).toFixed(2); msg.ct = +((k['KeyD'] || k['ArrowRight'] ? 1 : 0) - (k['KeyA'] || k['ArrowLeft'] ? 1 : 0) + (tm ? tm.x : 0)).toFixed(2); msg.hn = this.hornSeq || 0; }
+      if (this.lunch && this.lunchMode && this.lunchMode.driver === this.mySlot) { const di = this.driveInput(); msg.cf = +di.f.toFixed(2); msg.ct = +di.t.toFixed(2); msg.hn = this.hornSeq || 0; }
       this.transport.send(JSON.stringify(msg), undefined, true);
     }
   }

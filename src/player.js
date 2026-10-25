@@ -45,7 +45,7 @@ export class Player {
     if (this.wet > 0) { this.wet -= dt; if (this.wet <= 0) { this.wet = 0; this.game.ui.wet(false); } }
     const speed = (this.crouching ? CFG.player.crouchSpeed : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1) * (this.wet > 0 ? TOILET.wetSpeed : 1);
     const LM = this.game.lunch ? this.game.lunchMode : null; // 午餐大作戰：兩個人都綁在餐車上
-    if (LM) { if (!this.game.isHost) LM.cart.smooth(dt); this.pos.copy(LM.pose(this.game.mySlot || 'host')); }
+    if (LM) { if (!this.game.isHost) { if (LM.driver === this.game.mySlot && !this.sitting) LM.cart.predict(dt, this.game.driveInput()); else LM.cart.smooth(dt); } this.pos.copy(LM.pose(this.game.mySlot || 'host')); }
     let mx = 0, mz = 0;
     if (k['KeyW'] || k['ArrowUp']) mz -= 1; if (k['KeyS'] || k['ArrowDown']) mz += 1;
     if (k['KeyA'] || k['ArrowLeft']) mx -= 1; if (k['KeyD'] || k['ArrowRight']) mx += 1;
