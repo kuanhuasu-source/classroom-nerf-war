@@ -204,7 +204,16 @@ export class World {
         const rim = new THREE.Mesh(new THREE.RingGeometry(0.98, 1.08, 36), this.toon(0x8a7a66)); rim.rotation.x = -Math.PI / 2; rim.scale.set(f.w / 2, f.d / 2, 1); rim.position.set(f.x, 0.03, f.z); this.add(rim);
         for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283 + 0.4, pad = new THREE.Mesh(new THREE.CircleGeometry(0.18 + Math.random() * 0.1, 12), this.toon(0x4f9a3f)); pad.rotation.x = -Math.PI / 2; pad.position.set(f.x + Math.cos(a) * f.w * 0.3, 0.04, f.z + Math.sin(a) * f.d * 0.3); this.add(pad); }
         for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283, rx = f.x + Math.cos(a) * (f.w / 2 + 0.15), rz = f.z + Math.sin(a) * (f.d / 2 + 0.15); this.cylinder(0.02, 0.9 + Math.random() * 0.4, rx, 0.5, rz, 0x6b8f3a, { collide: false, seg: 6 }); }
-        this.collide(f.x, f.z, f.w, f.d * 0.5, 0.35, 0, true); this.collide(f.x, f.z, f.w * 0.7, f.d * 0.85, 0.35, 0, true); this.collide(f.x, f.z, f.w * 0.4, f.d, 0.35, 0, true);
+        // the water stops feet (soft: darts fly over). With a bridge the three boxes split into a left and a right half around it
+        for (const [bw, bd] of [[f.w, f.d * 0.5], [f.w * 0.7, f.d * 0.85], [f.w * 0.4, f.d]]) {
+          if (!f.bridgeW) { this.collide(f.x, f.z, bw, bd, 0.35, 0, true); continue; }
+          const gap = f.bridgeW / 2 + 0.05, half = (bw / 2 - gap);
+          if (half > 0.05) for (const s of [-1, 1]) this.collide(f.x + s * (gap + half / 2), f.z, half, bd, 0.35, 0, true);
+        }
+        if (f.bridgeW) for (const s of [-1, 1]) { // the bridge rails: posts and a rope, nothing that stops a dart
+          for (const t of [-1, 0, 1]) this.box(0.06, 0.6, 0.06, f.x + s * (f.bridgeW / 2 + 0.03), 0.42, f.z + t * (f.d / 2 + 0.2), 0x7a5a2b, { collide: false });
+          this.box(0.03, 0.03, f.d + 0.5, f.x + s * (f.bridgeW / 2 + 0.03), 0.7, f.z, 0x5a4e47, { collide: false });
+        }
         const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.3), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.nameTag('生態池', '#fbf6e6', '#2b2622')), transparent: true })); sign.position.set(f.x + f.w / 2 + 0.5, 0.9, f.z - f.d / 2 - 0.2); this.add(sign); this.cylinder(0.03, 0.8, f.x + f.w / 2 + 0.5, 0.4, f.z - f.d / 2 - 0.22, 0xb98556, { collide: false, seg: 6 });
         return;
       }

@@ -165,7 +165,9 @@ function yard() {
   desks.push({ x: -4, z: -2, w: 1.4, d: 1.4, h: TOWER, seat: { x: -4, z: -0.6 } }); desks.push({ x: -4, z: -2, w: 1.4, d: 1.4, h: TOWER, seat: { x: -4, z: -3.4 } });
   furniture.push({ kind: 'swing', x: 4, z: -3 });
   for (const sx of [-1, 1]) desks.push({ x: 4 + sx * 1.4, z: -3, w: 0.5, d: 1.2, h: 2.4, seat: { x: 4 + sx * 0.5, z: -3 } });
-  furniture.push({ kind: 'pond', x: 0.5, z: 3.5, w: 5, d: 3.4 });
+  // a small pond with a plank bridge across the middle (the bridge is terrain, 12 cm up, so people and kids walk over it)
+  furniture.push({ kind: 'pond', x: 0.5, z: 3.5, w: 3.6, d: 2.4, bridgeW: 1.0 });
+  terrain.push({ kind: 'platform', x: 0.5, z: 3.5, w: 1.0, d: 3.0, h: 0.12, color: 0xb98556 });
   for (let i = 0; i < 4; i++) { const x = -8.0 + i * 1.6; furniture.push({ kind: 'tire', x, z: 2.6 }); desks.push({ x, z: 2.6, w: 0.9, d: 0.34, h: 0.55, seat: { x, z: 2.6 } }); }
   furniture.push({ kind: 'sandbox', x: 6.5, z: 2.8, w: 3, d: 3 });
   furniture.push({ kind: 'flag', x: 7.5, z: -6.3, floor: 0.5 });
