@@ -133,11 +133,12 @@ export class Player {
     const target = this.camera.position.clone().addScaledVector(view, dist);
     const dir = target.sub(muzzle).normalize();
     const speed = CFG.gun.speed * this.up.speedMul;
+    const volley = ++Player.volleySeq;
     const dirs = [dir]; if (this.up.twin) { const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion); dirs.push(dir.clone().addScaledVector(side, 0.035).normalize()); dirs[0] = dir.clone().addScaledVector(side, -0.035).normalize(); }
     for (let i = 0, extra = this.badge ? this.badge.multi : 0; i < extra && dirs.length < 3; i++) dirs.push(dir.clone().add(new THREE.Vector3(rand(-0.07, 0.07), rand(-0.04, 0.04), rand(-0.07, 0.07))).normalize()); // 連發徽章：多的子彈不耗彈，散得開
     for (const dd of dirs) {
-      if (this.game.isHost) { const d = this.game.darts.fire(muzzle, dd, speed, 'player'); d.who = 'host'; }
-      else if (this.game.transport) { const pv = ++this.game.pvSeq; this.game.darts.firePreview(muzzle, dd, speed, this.game.mySlot, pv); this.game.transport.send(JSON.stringify({ t: 'fire', p: [+muzzle.x.toFixed(3), +muzzle.y.toFixed(3), +muzzle.z.toFixed(3)], d: [+dd.x.toFixed(4), +dd.y.toFixed(4), +dd.z.toFixed(4)], s: +speed.toFixed(1), pv })); }
+      if (this.game.isHost) { const d = this.game.darts.fire(muzzle, dd, speed, 'player'); d.who = 'host'; d.volley = 'h' + volley; }
+      else if (this.game.transport) { const pv = ++this.game.pvSeq; this.game.darts.firePreview(muzzle, dd, speed, this.game.mySlot, pv); this.game.transport.send(JSON.stringify({ t: 'fire', p: [+muzzle.x.toFixed(3), +muzzle.y.toFixed(3), +muzzle.z.toFixed(3)], d: [+dd.x.toFixed(4), +dd.y.toFixed(4), +dd.z.toFixed(4)], s: +speed.toFixed(1), pv, vy: volley })); }
     }
     Audio.pew();
     if (this.game.monitor && this.game.isHost) this.game.monitor.noticeShot();
@@ -166,3 +167,4 @@ export class Player {
     if (this.hp <= 0) this.game.onPlayerDown(this);
   }
 }
+Player.volleySeq = 0;

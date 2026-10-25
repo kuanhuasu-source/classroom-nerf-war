@@ -370,7 +370,7 @@ export class Teacher extends PaperFigure {
   }
   // returns 'weak' | 'body' | null. The teacher is a sheet of paper, so we find where the dart's
   // path (prev -> pos) crosses that sheet and compare the crossing point with the items drawn on it.
-  testHit(pos, prev, mul = 1) {
+  testHit(pos, prev, mul = 1, dry = false) {
     if (this.defeated) return null;
     this.group.updateMatrixWorld(true);
     const lp = this.mesh.worldToLocal(pos.clone()), lq = prev ? this.mesh.worldToLocal(prev.clone()) : lp.clone();
@@ -380,7 +380,7 @@ export class Teacher extends PaperFigure {
     if (!c) return null;
     for (const k in this.wp) {
       const w = this.wp[k]; if (w.hp <= 0) continue;
-      if (Math.hypot(c.x - w.local.x, c.y - w.local.y) < w.r * mul) { this.hitWeak(k); return 'weak'; }
+      if (Math.hypot(c.x - w.local.x, c.y - w.local.y) < w.r * mul) { if (!dry) this.hitWeak(k); return 'weak'; }
     }
     if (Math.abs(c.x) < 0.55 && c.y > 0 && c.y < 2.3) return 'body';
     return null;

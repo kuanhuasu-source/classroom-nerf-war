@@ -126,7 +126,7 @@ export class Game {
     let r = this.remotes.get(slot); const back = !!r;
     const skin = skinFor(slot, name, look);
     if (!r) { r = new RemotePlayer(this, skin); this.remotes.set(slot, r); } else r.applySkin(skin);
-    r.offline = false; r.group.visible = true; r.touch = touch; r.badge = badge || null; if (!back) { r.maxHp = this.baseHp(r) + (r.badge ? r.badge.hp : 0); r.hp = r.maxHp; }
+    r.offline = false; r.group.visible = true; r.touch = touch; r.badge = badge || null; if (!back) { r.maxHp = this.baseHp(r) + this.badgeHp(r.badge); r.hp = r.maxHp; }
     if (this.goneTimers.has(slot)) { clearTimeout(this.goneTimers.get(slot)); this.goneTimers.delete(slot); }
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
     this.fullSnapNext = true;
@@ -283,8 +283,8 @@ export class Game {
       if (m.t === 'ping') { this.transport.send(JSON.stringify({ t: 'pong', ts: m.ts }), from); return; }
       const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
       if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.cf !== undefined) r.cartIn = { f: m.cf, t: m.ct || 0 }; if (m.hn && m.hn !== r.hornSeq) { r.hornSeq = m.hn; if (this.lunchMode) this.lunchMode.horn(slot); } if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
-      else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (this.monitor) this.monitor.noticeShot(r); }
-      else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = this.baseHp(r) + r.up.maxHpBonus + (r.badge ? r.badge.hp : 0); r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
+      else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (m.vy) d.volley = slot + m.vy; if (this.monitor) this.monitor.noticeShot(r); }
+      else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = this.baseHp(r) + r.up.maxHpBonus + this.badgeHp(r.badge); r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
       else if (m.t === 'revive') {
         if (r.sitting) return; const t = this.reviveNear(r.pos, r);
         if (t) { this.stat(slot, 'revives'); this.addScore(200); this.message(`${r.skin.name}把${t === this.player ? '你' : t.skin.name}拉起來了！`, '+200', 1.6); this.netEvent({ t: 'sfx', n: 'wave' }); }
@@ -320,7 +320,8 @@ export class Game {
     Audio.bellOut();
     this.clock.getDelta();
   }
-  markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.badge = Badges.effects(); p.maxHp = this.baseHp(p) + p.up.maxHpBonus + p.badge.hp; p.hp = p.maxHp; this.badgeHud(); }
+  badgeHp(fx) { return fx ? (this.toilet ? Math.min(1, fx.hp) : fx.hp) : 0; }
+  markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.badge = Badges.effects(); p.maxHp = this.baseHp(p) + p.up.maxHpBonus + this.badgeHp(p.badge); p.hp = p.maxHp; this.badgeHud(); }
   guestReset() {
     if (this.lunchMode) { this.lunchMode.dispose(); this.lunchMode = null; }
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
@@ -523,7 +524,7 @@ export class Game {
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
-    for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = this.baseHp(r) + (r.badge ? r.badge.hp : 0); }
+    for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = this.baseHp(r) + this.badgeHp(r.badge); }
   }
   pause() {
     if (this.state !== 'playing') return;
@@ -1030,7 +1031,7 @@ export class Game {
       if (d.kind === 'dart' && this.ball && this.ball.testDart(d)) return true;
       if (d.kind === 'dart' && this.bully && this.bully.testHit(p)) { this.bully.poke(d.owner, d.shooter, d.who); return true; }
       if (d.owner === 'player' && this.monitor && this.monitor.testHit(p)) { this.monitor.hitByDart(); return true; }
-      if (this.lunch && d.owner === 'player' && this.lunchMode.hitKid(p, d.who || 'host')) return true;
+      if (this.lunch && d.owner === 'player' && this.lunchMode.hitKid(p, d.who || 'host', d.volley)) return true;
       if (this.lunch && d.owner !== 'player' && this.lunchMode.hitPot(p)) return true;
       if (this.toilet && d.owner === 'player') { // 搶廁所：打破罐子；全部破了就贏
         for (let i = 0; i < this.world.cans.length; i++) { const c = this.world.cans[i]; if (!c.alive) continue; const dx = p.x - c.x, dz = p.z - c.z; if (dx * dx + dz * dz < TOILET.canRadius * TOILET.canRadius && Math.abs(p.y - c.y) < 0.26) { this.breakCan(i, d.who || 'host'); return true; } }
@@ -1041,10 +1042,11 @@ export class Game {
           const dx = p.x - s.group.position.x, dz = p.z - s.group.position.z;
           const h = 1.35 * s.group.scale.y;
           const hrr = 0.36 * this.hitMul(d.who);
-          if (dx * dx + dz * dz < hrr * hrr && p.y > s.group.position.y && p.y < s.group.position.y + h) { this.lastShooter = d.who; if (s.hit()) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null; return true; }
+          if (dx * dx + dz * dz < hrr * hrr && p.y > s.group.position.y && p.y < s.group.position.y + h) { if (d.volley && s.lastVolley === d.volley) return true; s.lastVolley = d.volley; this.lastShooter = d.who; if (s.hit()) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null; return true; }
         }
         for (const t of this.teachers) {
-          this.lastShooter = d.who; const r = t.testHit(p, prev, this.hitMul(d.who)); this.lastShooter = null;
+          if (d.volley && t.lastVolley === d.volley && t.testHit(p, prev, this.hitMul(d.who), true)) return true;
+          this.lastShooter = d.who; const r = t.testHit(p, prev, this.hitMul(d.who)); this.lastShooter = null; if (r) t.lastVolley = d.volley;
           if (r === 'weak') return true;
           if (r === 'body') { if (!this.bodyHintShown) { this.bodyHintShown = true; this.message('打身體沒用！', '瞄準紅圈：眼鏡、粉筆、教案', 2.5); } Audio.thud(); return true; }
         }
