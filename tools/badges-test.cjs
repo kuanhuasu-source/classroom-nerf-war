@@ -26,6 +26,11 @@ const { chromium } = require('playwright');
     g.toMenu(); wearOnly('mag', 3, 9); g.start(); out.mag = g.player.magSize();
     g.toMenu(); wearOnly('rate', 3, 0.22); g.start(); g.player.fireCd = 0; g.player.tryFire(); out.rate = +g.player.fireCd.toFixed(3);
     g.toMenu(); wearOnly('multi', 3, 2); g.start(); const n0 = g.darts.list.length; g.player.fireCd = 0; g.player.tryFire(); out.multi = [g.darts.list.length - n0, g.player.ammo];
+    // a volley of three on one kid counts once; on two kids side by side it can count on each
+    g.toMenu(); wearOnly('multi', 3, 2); g.start(); g.students.forEach(s => s.dispose()); g.students = []; g.spawnQueue = [];
+    { const S = g.students; const mk = (x, z) => { const q = g.spawnQueue; q.push({ door: { x: x + 0.3, z } }); g.spawnTimer = 0; g.step(1 / 60); const s = g.students[g.students.length - 1]; s.update = () => {}; s.group.position.set(x, 0, z); s.hp = 5; return s; };
+      g.player.pos.set(0, 0, 4); g.player.yaw = 0; g.player.pitch = 0; g.player.update(1 / 60); const one = mk(0, 1.0); g.player.fireCd = 0; g.player.tryFire(); for (let i = 0; i < 40; i++) g.step(1 / 60);
+      out.volleyOne = 5 - one.hp; }
     g.toMenu(); wearOnly('regenAmmo', 3, 12); g.start(); g.player.reserve = 10; for (let i = 0; i < 60 * 13; i++) g.player.update(1 / 60); out.regenAmmo = g.player.reserve;
     g.toMenu(); wearOnly('regenHp', 3, 20); g.start(); g.player.hp = 2; for (let i = 0; i < 60 * 21; i++) g.player.update(1 / 60); out.regenHp = g.player.hp;
     g.toMenu(); wearOnly('speed', 3, 0.12); g.start(); g.player.keys = { KeyW: true }; const a = g.player.pos.clone(); for (let i = 0; i < 60; i++) g.player.update(1 / 60); out.speed = +g.player.pos.distanceTo(a).toFixed(2); g.player.keys = {};
