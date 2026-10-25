@@ -20,6 +20,7 @@ import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES,
 import { LunchMode } from './lunch.js';
 import { STORY, Progress, starsFor, starText } from './story.js';
 import { Ach } from './achievements.js';
+import { Badges } from './badges.js';
 import { TEACHERS, BOSSES, COMMITTEE, GANG } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
@@ -104,13 +105,15 @@ export class Game {
   connOf(slot) { for (const [c, s] of this.conns) if (s === slot) return c; return null; }
   sendTo(slot, msg) { const c = this.connOf(slot); if (c && this.transport) this.transport.send(JSON.stringify(msg), c); }
   lobbyNames() { return [...this.remotes.values()].filter(r => !r.offline && this.connOf(r.slot)).map(r => r.skin.name + (r.touch ? '📱' : '')); }
-  sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid, touch: this.touch ? 1 : 0, name: this.profile.name, look: this.profile.look })); }
+  sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid, touch: this.touch ? 1 : 0, name: this.profile.name, look: this.profile.look, badge: Badges.effects() })); }
+  badgeSlots() { return Badges.slots(Progress.finished()); }
+  badgeHud() { this.ui.badge(Badges.worn().map(b => Badges.label(b)).join('・')); }
   mySkin() { return skinFor(this.mySlot, this.profile.name, this.profile.look); }
   touchOf(who) { if (!who || who === 'host') return !!this.touch; const r = this.remotes.get(who); return !!(r && r.touch); }
   hitMul(who) { return this.touchOf(who) ? CFG.assist.hitMul : 1; }
   baseHp(pl) { return (this.toilet ? TOILET.hp : CFG.player.hp) + (pl && pl.touch ? CFG.assist.extraHp : 0); }
   // a guest said hello on a connection: give it its slot (the same one if it came back) and catch it up
-  onHello(from, pid, touch = false, name = '', look = '') {
+  onHello(from, pid, touch = false, name = '', look = '', badge = null) {
     let slot = this.pids.get(pid);
     if (!slot) {
       const used = new Set(this.pids.values());
@@ -123,7 +126,7 @@ export class Game {
     let r = this.remotes.get(slot); const back = !!r;
     const skin = skinFor(slot, name, look);
     if (!r) { r = new RemotePlayer(this, skin); this.remotes.set(slot, r); } else r.applySkin(skin);
-    r.offline = false; r.group.visible = true; r.touch = touch; if (!back) { r.maxHp = this.baseHp(r); r.hp = r.maxHp; }
+    r.offline = false; r.group.visible = true; r.touch = touch; r.badge = badge || null; if (!back) { r.maxHp = this.baseHp(r) + (r.badge ? r.badge.hp : 0); r.hp = r.maxHp; }
     if (this.goneTimers.has(slot)) { clearTimeout(this.goneTimers.get(slot)); this.goneTimers.delete(slot); }
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
     this.fullSnapNext = true;
@@ -169,7 +172,9 @@ export class Game {
   }
   // end of any round: stickers and story stars
   afterRound(win) {
-    if (this.roundDone || !this.isHost) return; this.roundDone = true;
+    if (this.roundDone) return; this.roundDone = true;
+    this.drawnBadge = Badges.roll(this.level, win, this.coop || !this.isHost); this.drawnDropped = this.drawnBadge ? Badges.add(this.drawnBadge) : null;
+    if (!this.isHost) { if (win) { Ach.unlock('first_win'); if (this.damageTaken === 0) Ach.unlock('untouched'); } return; }
     const p = this.player, acc = p.shots ? p.hits / p.shots : 0, plain = !this.siege && !this.toilet && !this.lunch;
     if (this.kills) Ach.add('kills', this.kills);
     if (win) {
@@ -274,12 +279,12 @@ export class Game {
   onNet(str, from = 'peer') {
     let m; try { m = JSON.parse(str); } catch (e) { return; }
     if (this.isHost) {
-      if (m.t === 'hello') { this.onHello(from, m.pid, !!m.touch, m.name, m.look); return; }
+      if (m.t === 'hello') { this.onHello(from, m.pid, !!m.touch, m.name, m.look, m.badge); return; }
       if (m.t === 'ping') { this.transport.send(JSON.stringify({ t: 'pong', ts: m.ts }), from); return; }
       const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
       if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.cf !== undefined) r.cartIn = { f: m.cf, t: m.ct || 0 }; if (m.hn && m.hn !== r.hornSeq) { r.hornSeq = m.hn; if (this.lunchMode) this.lunchMode.horn(slot); } if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
       else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (this.monitor) this.monitor.noticeShot(r); }
-      else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = this.baseHp(r) + r.up.maxHpBonus; r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
+      else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = this.baseHp(r) + r.up.maxHpBonus + (r.badge ? r.badge.hp : 0); r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
       else if (m.t === 'revive') {
         if (r.sitting) return; const t = this.reviveNear(r.pos, r);
         if (t) { this.stat(slot, 'revives'); this.addScore(200); this.message(`${r.skin.name}把${t === this.player ? '你' : t.skin.name}拉起來了！`, '+200', 1.6); this.netEvent({ t: 'sfx', n: 'wave' }); }
@@ -288,7 +293,7 @@ export class Game {
     } else {
       if (m.t === 'welcome') { this.mySlot = m.slot; this.darts.localWho = m.slot; if (this.onWelcome) this.onWelcome(m); }
       else if (m.t === 'full') { if (this.onFull) this.onFull(); }
-      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; this.lunch = !!m.lunch; if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
+      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; this.lunch = !!m.lunch; if (m.level) this.setDifficulty(m.level); if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
       else if (m.t === 'restore') { // back after a disconnect: the host remembers what we had
         const p = this.player;
         for (const [id, n] of Object.entries(m.taken || {})) for (let i = 0; i < n; i++) { const u = takeUpgrade(p.up, id); if (u) { p.up.refill = 0; p.up.healFull = false; p.applyUpgrade(u); } }
@@ -315,7 +320,7 @@ export class Game {
     Audio.bellOut();
     this.clock.getDelta();
   }
-  markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.maxHp = this.baseHp(p) + p.up.maxHpBonus; p.hp = p.maxHp; }
+  markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.badge = Badges.effects(); p.maxHp = this.baseHp(p) + p.up.maxHpBonus + p.badge.hp; p.hp = p.maxHp; this.badgeHud(); }
   guestReset() {
     if (this.lunchMode) { this.lunchMode.dispose(); this.lunchMode = null; }
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
@@ -468,7 +473,7 @@ export class Game {
     this.coop = this.isHost && this.remoteList().length > 0; this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
-    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0 }));
+    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, level: this.level }));
     if (this.coop) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
@@ -518,7 +523,7 @@ export class Game {
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
-    for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = this.baseHp(r); }
+    for (const r of this.remotes.values()) { r.up = freshUpRemote(); r.maxHp = this.baseHp(r) + (r.badge ? r.badge.hp : 0); }
   }
   pause() {
     if (this.state !== 'playing') return;
@@ -932,6 +937,7 @@ export class Game {
   showOver(title, sub, win, remoteStats = null) {
     $('over').hidden = false; $('hud').hidden = true;
     $('over-title').textContent = title; $('over-title').classList.toggle('red-pen', !win); $('over-sub').textContent = sub;
+    Badges.showDraw(this.drawnBadge, this.drawnDropped, this.badgeSlots(), () => this.badgeHud());
     const nb = $('btn-next'); if (nb) { nb.hidden = !(this.story && win); if (this.story && win) { const nx = Progress.next(this.story); nb.textContent = this.story.finale || this.story.hidden || !nx ? '翻開畢業紀念冊' : '下一章'; } }
     const ag = $('btn-again'); if (ag) ag.textContent = this.story ? (win ? '再玩這章' : '再試一次') : '再來一局';
     if (this.story && win) $('over-sub').textContent = `${this.story.end}　${starText(this.storyStars)}`;
@@ -970,7 +976,7 @@ export class Game {
   step(realDt) {
     if (!this.isHost) return this.guestStep(realDt);
     this.player.update(realDt); this.aimAssist(realDt);
-    for (const r of this.remotes.values()) r.update(realDt);
+    for (const r of this.remotes.values()) { r.update(realDt); if (r.badge && r.badge.regenHp && this.state === 'playing' && !r.sitting && r.group.visible) { r.regenT = (r.regenT || 0) + realDt; if (r.regenT >= r.badge.regenHp) { r.regenT = 0; if (r.hp < r.maxHp) r.hp++; } } }
     const dt = realDt * (this.worldSlow() ? CFG.items.slowScale : 1); // the world slows down, the players do not
     this.updateItems(dt, realDt);
     // spawning & waves

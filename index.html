@@ -280,6 +280,47 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
   body.touch #tc-revive { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   #upgrade.compact { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* ---- home page layout: actions on the left, this-round settings on the right ---- */
+#menu .card.menu-card { max-width: 1080px; transform: none; padding: 26px 34px 22px; }
+.menu-grid { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 1.25fr); gap: 16px 40px; align-items: start; }
+@media (max-width: 900px) { .menu-grid { grid-template-columns: 1fr; } }
+.menu-left .sub { margin-bottom: 14px; }
+#menu-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin: 0 0 12px; }
+#menu-buttons .btn { padding: 9px 14px; font-size: 21px; line-height: 1.15; }
+#menu-buttons .btn.big { grid-column: 1 / -1; font-size: 27px; padding: 12px 18px; }
+#menu-buttons .btn small { display: block; font-size: 13px; letter-spacing: 0; opacity: .92; min-height: 1em; }
+#menu-buttons .btn.small { font-size: 18px; padding: 7px 12px; }
+.menu-h { margin: 0 0 8px; font-size: 20px; font-weight: 400; color: var(--pencil); border-bottom: 2px dashed var(--paper-line); padding-bottom: 2px; }
+.menu-right .row { margin: 0 0 10px; gap: 6px 10px; }
+.menu-right .row > .note:first-child { width: 2.6em; margin: 0; text-align: right; flex: none; }
+.menu-right .row .note { margin-top: 0; }
+#mode-note, #difficulty-note, #map-note { flex-basis: 100%; margin-left: calc(2.6em + 10px); font-size: 13px; line-height: 1.35; }
+.seg { flex-wrap: wrap; }
+#profile-row { margin-bottom: 12px; }
+details.help { margin-top: 4px; }
+details.help summary { cursor: pointer; font-size: 17px; color: var(--pencil); list-style: none; }
+details.help summary::-webkit-details-marker { display: none; }
+details.help summary::before { content: '▸ '; } details.help[open] summary::before { content: '▾ '; }
+details.help .keys { margin: 10px 0 4px; font-size: 15px; gap: 4px 12px; }
+#qr-row { margin: 4px 0 0; } #qr-row .qr { margin-left: 0; }
+#lobby { margin: 0 0 10px; }
+/* ---- badges ---- */
+#badge-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin: 8px 0 14px; max-height: 50vh; overflow: auto; }
+.badge { --tier: #9aa0a6; display: flex; align-items: center; gap: 10px; border: 2px solid var(--tier); border-left-width: 10px; border-radius: 12px; padding: 8px 10px; background: var(--paper); }
+.badge.on { background: #fff; box-shadow: 0 0 0 3px var(--tier), 2px 2px 0 var(--pencil); }
+.badge .icon { font-size: 28px; } .badge .txt { flex: 1; min-width: 0; } .badge b { display: block; font-size: 16px; } .badge small { color: var(--pencil); font-size: 13px; }
+.badge .acts { display: flex; flex-direction: column; gap: 4px; } .badge .mini { font-size: 13px; padding: 1px 8px; }
+#badge-draw { margin: 6px 0 10px; text-align: center; } #badge-draw .note { margin: 4px 0; }
+.badge-card { --tier: #9aa0a6; width: 170px; height: 96px; position: relative; perspective: 700px; cursor: pointer; margin: 4px auto; }
+.badge-card .back, .badge-card .front { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; transition: transform .6s; border: 3px solid var(--tier); border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px; }
+.badge-card .back { background: var(--nerf-blue); color: #fff; font-size: 44px; font-family: var(--font-num); }
+.badge-card .front { transform: rotateY(180deg); background: var(--paper); } .badge-card .front span { font-size: 30px; } .badge-card .front b { font-size: 16px; } .badge-card .front small { font-size: 12px; color: var(--pencil); line-height: 1.2; }
+.badge-card.open .back { transform: rotateY(180deg); } .badge-card.open .front { transform: none; }
+.badge-card.shine .front { box-shadow: 0 0 20px var(--tier), 0 0 4px var(--tier); }
+#hud-badge { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); font-size: 14px; color: var(--pencil); background: #fff; }
+#hud-up.on ~ #hud-badge, #hud-up.on + #hud-badge { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 0px)); }
 </style>
 
 <div id="game"></div>
@@ -292,6 +333,7 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
     <div class="sticker" id="hud-time" hidden><b>倒數</b><span id="time">90</span></div>
     <div class="sticker" id="hud-soup" hidden><b>湯</b><span id="soup">100%</span></div>
   </div>
+  <div class="sticker" id="hud-badge" hidden></div>
   <div id="wet"></div>
   <div id="hud-buddy"><b>小美</b><span id="buddy-text"></span></div>
   <div id="ach-toast"><span id="ach-toast-icon">🎯</span><div><small>貼紙解鎖！</small><b id="ach-toast-name"></b></div></div>
@@ -310,26 +352,32 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
 </div>
 
 <div class="overlay" id="menu">
-  <div class="card">
-    <h1>課桌<span>大戰</span></h1>
-    <p class="sub">下課十分鐘，六年二班變成戰場。躲在課桌後面，用 Nerf 槍把全班打到回座位罰坐，然後……面對回來的老師。</p>
-    <dl class="keys">
-      <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>移動</dd>
-      <dt><kbd>滑鼠</kbd></dt><dd>轉視角，左鍵發射泡棉彈</dd>
-      <dt><kbd>Ctrl</kbd></dt><dd>蹲下，整個人藏在課桌後面</dd>
-      <dt><kbd>Shift</kbd></dt><dd>跑步</dd>
-      <dt><kbd>R</kbd></dt><dd>重裝彈匣（15 發，打空會自動換）</dd>
-      <dt>地上的泡棉彈</dt><dd>走過去就撿起來當備用彈，同學和老師射的也能撿</dd>
-      <dt><kbd>E</kbd></dt><dd>連線模式：走到罰坐的隊友旁邊救他</dd>
-      <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></dt><dd>連線模式：喊話泡泡（掩護我、我沒彈了、惡霸醒了、班長來了）</dd>
-      <dt><kbd>Esc</kbd></dt><dd>暫停（遊戲會進入全螢幕，按 <kbd>F11</kbd> 離開全螢幕會暫停，再按一次就繼續）</dd>
-    </dl>
-    <div class="row" id="story-row">
-      <button class="btn blue" id="btn-story" type="button">故事模式：Jason 的畢業週</button>
-      <button class="btn" id="btn-stickers" type="button" style="background:var(--nerf-orange)">貼紙簿</button>
-      <span class="note" id="story-note"></span>
+  <div class="card menu-card">
+    <div class="menu-grid">
+      <section class="menu-left">
+        <h1>課桌<span>大戰</span></h1>
+        <p class="sub">下課十分鐘，六年二班變成戰場。躲在課桌後面，用泡棉槍把全班打到罰坐，再面對回來的老師。</p>
+        <div id="menu-buttons">
+          <button class="btn big" id="btn-start">單人開戰</button>
+          <button class="btn blue big" id="btn-story" type="button">故事模式：Jason 的畢業週<small id="story-note"></small></button>
+          <button class="btn blue" id="btn-host">開房間</button>
+          <button class="btn" id="btn-join-open" style="background:var(--pencil)">輸入房號</button>
+          <button class="btn small" id="btn-badges" type="button" style="background:#8e44ad">徽章<small id="badge-note"></small></button>
+          <button class="btn small" id="btn-stickers" type="button">貼紙簿</button>
+        </div>
+        <div id="lobby" hidden>
+      <div class="lobby-code" id="lobby-code-wrap" hidden>房號 <b id="lobby-code">MILK</b> <button class="mini" id="btn-copy" type="button">複製</button>
+        <div class="qr" id="qr-room-wrap"><canvas id="qr-room" width="132" height="132" aria-label="房間 QR code"></canvas><span class="note">隊友用手機掃描<br>直接進這個房間</span></div></div>
+      <div class="row" id="lobby-join" hidden><label for="join-code" class="note">房號</label><input id="join-code" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false"> <button class="btn blue" id="btn-join" type="button">加入</button></div>
+      <p class="note" id="lobby-status">正在開房間……</p>
+      <div class="row"><button class="btn" id="btn-begin" type="button" hidden>開始！</button><button class="btn" id="btn-lobby-back" type="button" style="background:var(--pencil)">返回</button></div>
     </div>
-    <div class="row" id="mode-row">
+        <div class="row" id="qr-row"><div class="qr" id="qr-site-wrap" hidden><canvas id="qr-site" width="132" height="132" aria-label="遊戲網址 QR code"></canvas><span class="note">手機掃描<br>直接開遊戲</span></div></div>
+        <p class="note" id="menu-note">建議用電腦與滑鼠遊玩。最多四個人一起打：一個人開房間，其他人輸入房號或掃 QR code。</p>
+      </section>
+      <section class="menu-right">
+        <h3 class="menu-h">這一局</h3>
+        <div class="row" id="mode-row">
       <span class="note">玩法</span>
       <div class="seg" role="radiogroup" aria-label="玩法">
         <button type="button" class="seg-btn on" data-mode="class">下課大戰</button>
@@ -361,25 +409,37 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
       </div>
       <span class="note" id="map-note"></span>
     </div>
-    <div class="row" id="profile-row">
-      <span class="note">連線時</span>
+    <h3 class="menu-h">連線時</h3>
+        <div class="row" id="profile-row">
+      <span class="note">名字</span>
       <input id="my-name" maxlength="6" placeholder="你的名字" autocomplete="off" spellcheck="false" aria-label="名字">
       <div id="look-row" role="radiogroup" aria-label="造型"></div>
     </div>
-    <div class="row" id="menu-buttons">
-      <button class="btn" id="btn-start">單人開戰</button>
-      <button class="btn blue" id="btn-host">開房間</button>
-      <button class="btn" id="btn-join-open" style="background:var(--pencil)">輸入房號</button>
-      <div class="qr" id="qr-site-wrap" hidden><canvas id="qr-site" width="132" height="132" aria-label="遊戲網址 QR code"></canvas><span class="note">手機掃描<br>直接開遊戲</span></div>
+        <details class="help"><summary>操作說明</summary>
+    <dl class="keys">
+      <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>移動</dd>
+      <dt><kbd>滑鼠</kbd></dt><dd>轉視角，左鍵發射泡棉彈</dd>
+      <dt><kbd>Ctrl</kbd></dt><dd>蹲下，整個人藏在課桌後面</dd>
+      <dt><kbd>Shift</kbd></dt><dd>跑步</dd>
+      <dt><kbd>R</kbd></dt><dd>重裝彈匣（15 發，打空會自動換）</dd>
+      <dt>地上的泡棉彈</dt><dd>走過去就撿起來當備用彈，同學和老師射的也能撿</dd>
+      <dt><kbd>E</kbd></dt><dd>連線模式：走到罰坐的隊友旁邊救他</dd>
+      <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></dt><dd>連線模式：喊話泡泡（掩護我、我沒彈了、惡霸醒了、班長來了）</dd>
+      <dt><kbd>Esc</kbd></dt><dd>暫停（遊戲會進入全螢幕，按 <kbd>F11</kbd> 離開全螢幕會暫停，再按一次就繼續）</dd>
+    </dl>
+        </details>
+      </section>
     </div>
-    <div id="lobby" hidden>
-      <div class="lobby-code" id="lobby-code-wrap" hidden>房號 <b id="lobby-code">MILK</b> <button class="mini" id="btn-copy" type="button">複製</button>
-        <div class="qr" id="qr-room-wrap"><canvas id="qr-room" width="132" height="132" aria-label="房間 QR code"></canvas><span class="note">隊友用手機掃描<br>直接進這個房間</span></div></div>
-      <div class="row" id="lobby-join" hidden><label for="join-code" class="note">房號</label><input id="join-code" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false"> <button class="btn blue" id="btn-join" type="button">加入</button></div>
-      <p class="note" id="lobby-status">正在開房間……</p>
-      <div class="row"><button class="btn" id="btn-begin" type="button" hidden>開始！</button><button class="btn" id="btn-lobby-back" type="button" style="background:var(--pencil)">返回</button></div>
-    </div>
-    <p class="note" id="menu-note">建議用電腦與滑鼠遊玩。最多四個人一起打：一個人開房間，其他人輸入房號。</p>
+  </div>
+</div>
+
+<div class="overlay" id="badges" hidden>
+  <div class="card">
+    <h2>徽章 <small id="badge-count" class="note"></small></h2>
+    <p class="sub">每打完一場抽一枚，難度越高越容易抽到稀有的。佩戴的徽章給一點小加成；三枚同類同級可以合成高一級。</p>
+    <div id="badge-list"></div>
+    <div class="row"><button class="btn small" id="btn-badge-merge" type="button" style="background:#8e44ad">合成（三枚同類同級）</button><button class="btn small" id="btn-badges-close" type="button" style="background:var(--pencil)">返回</button></div>
+    <p class="note" id="badge-status"></p>
   </div>
 </div>
 
@@ -443,6 +503,12 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
       <div><b id="st-kills">0</b><span>打到出局的同學</span></div>
       <div><b id="st-wave">0</b><span>撐到第幾波</span></div>
       <div><b id="st-acc">0%</b><span>命中率</span></div>
+    </div>
+    <div id="badge-draw" hidden>
+      <p class="note">抽到一枚徽章，點一下翻開</p>
+      <div class="badge-card" id="badge-card"><div class="back">?</div><div class="front"><span id="badge-card-icon"></span><b id="badge-card-name"></b><small id="badge-card-desc"></small></div></div>
+      <p class="note" id="badge-card-note"></p>
+      <button class="mini" id="btn-badge-wear" type="button" hidden>佩戴這枚</button>
     </div>
     <div class="row"><button class="btn blue" id="btn-next" hidden>下一章</button><button class="btn" id="btn-again">再來一局</button><button class="btn" id="btn-menu-over" style="background:var(--pencil)">回到主選單</button></div>
   </div>

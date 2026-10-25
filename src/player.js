@@ -30,7 +30,7 @@ export class Player {
     g.position.set(0.28, -0.26, -0.5); g.rotation.y = -0.08;
     this.gun = g; this.gunBase = g.position.clone(); this.camera.add(g); this.recoil = 0; this.bob = 0;
   }
-  magSize() { return CFG.gun.mag + this.up.magBonus; }
+  magSize() { return CFG.gun.mag + this.up.magBonus + (this.badge ? this.badge.mag : 0); }
   reserveCap() { return CFG.gun.reserveMax + this.up.reserveBonus; }
   eyePos() { return new THREE.Vector3(this.pos.x, this.pos.y + this.eye, this.pos.z); }
   look(dx, dy) { this.yaw -= dx * 0.0022; this.pitch = clamp(this.pitch - dy * 0.0022, -1.4, 1.4); }
@@ -44,7 +44,8 @@ export class Player {
     this.eye += (targetEye - this.eye) * Math.min(1, dt * 10);
     const run = (k['ShiftLeft'] || k['ShiftRight']) && !this.crouching;
     if (this.wet > 0) { this.wet -= dt; if (this.wet <= 0) { this.wet = 0; this.game.ui.wet(false); } }
-    const speed = (this.crouching ? CFG.player.crouchSpeed : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1) * (this.wet > 0 ? TOILET.wetSpeed : 1);
+    const speed = (this.crouching ? CFG.player.crouchSpeed : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1) * (this.wet > 0 ? TOILET.wetSpeed : 1) * (1 + (this.badge ? this.badge.speed : 0));
+    this.badgeTick(dt);
     const LM = this.game.lunch ? this.game.lunchMode : null; // 午餐大作戰：兩個人都綁在餐車上
     if (LM) { if (!this.game.isHost) { if (LM.driver === this.game.mySlot && !this.sitting) LM.cart.predict(dt, this.game.driveInput()); else LM.cart.smooth(dt); } this.pos.copy(LM.pose(this.game.mySlot || 'host')); }
     let mx = 0, mz = 0;
@@ -87,6 +88,12 @@ export class Player {
     if (got > 0) { this.reserve += got; Ach.add('darts', got); Audio.pickup(); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); this.game.ui.pickFlash(); }
     if (this.firing && !this.sitting) this.tryFire();
   }
+  // worn badges that tick: slow heal (host decides hp, so only the host's own player here) and ammo trickle (local)
+  badgeTick(dt) {
+    const b = this.badge; if (!b || this.game.state !== 'playing' || this.sitting) return;
+    if (b.regenHp && this.game.isHost) { this.regenT = (this.regenT || 0) + dt; if (this.regenT >= b.regenHp) { this.regenT = 0; if (this.hp < this.maxHp) { this.hp++; this.game.ui.hp(this.hp, this.maxHp); this.game.ui.message('徽章慢慢回血', '+1 ♥', 1.2); } } }
+    if (b.regenAmmo) { this.ammoT = (this.ammoT || 0) + dt; if (this.ammoT >= b.regenAmmo) { this.ammoT = 0; if (this.reserve < this.reserveCap()) { this.reserve = Math.min(this.reserveCap(), this.reserve + 5); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); this.game.ui.pickFlash(); } } }
+  }
   // --- penalty sitting (co-op): knocked out, waiting for a rescue ---
   sitDown(seat, secs = COOP.sitSeconds) {
     this.sitting = true; this.sitT = secs; this.seat = seat; this.pos.set(seat.x, this.world.heightAt(seat.x, seat.z), seat.z); this.keys = {}; this.firing = false; this.reloading = 0; this.gun.visible = false; this.sitTick = -1;
@@ -115,7 +122,7 @@ export class Player {
       return;
     }
     if (!this.game.hasBuff('infinite') && !(this.up.recycle > 0 && Math.random() < this.up.recycle)) this.ammo--;
-    this.fireCd = CFG.gun.fireInterval * this.up.fireMul; this.recoil = 1; this.shots++;
+    this.fireCd = CFG.gun.fireInterval * this.up.fireMul * (1 - (this.badge ? this.badge.rate : 0)); this.recoil = 1; this.shots++;
     const view = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
     // The dart leaves from just in front of the eye, not from the drawn muzzle 28 cm right and 22 cm down: a dart that
     // starts that far off the line of sight clips the desk you are crouching behind although the crosshair sees past it.
@@ -127,6 +134,7 @@ export class Player {
     const dir = target.sub(muzzle).normalize();
     const speed = CFG.gun.speed * this.up.speedMul;
     const dirs = [dir]; if (this.up.twin) { const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion); dirs.push(dir.clone().addScaledVector(side, 0.035).normalize()); dirs[0] = dir.clone().addScaledVector(side, -0.035).normalize(); }
+    for (let i = 0, extra = this.badge ? this.badge.multi : 0; i < extra && dirs.length < 3; i++) dirs.push(dir.clone().add(new THREE.Vector3(rand(-0.07, 0.07), rand(-0.04, 0.04), rand(-0.07, 0.07))).normalize()); // 連發徽章：多的子彈不耗彈，散得開
     for (const dd of dirs) {
       if (this.game.isHost) { const d = this.game.darts.fire(muzzle, dd, speed, 'player'); d.who = 'host'; }
       else if (this.game.transport) { const pv = ++this.game.pvSeq; this.game.darts.firePreview(muzzle, dd, speed, this.game.mySlot, pv); this.game.transport.send(JSON.stringify({ t: 'fire', p: [+muzzle.x.toFixed(3), +muzzle.y.toFixed(3), +muzzle.z.toFixed(3)], d: [+dd.x.toFixed(4), +dd.y.toFixed(4), +dd.z.toFixed(4)], s: +speed.toFixed(1), pv })); }
@@ -145,7 +153,7 @@ export class Player {
   // an upgrade was picked: apply the instant parts and show it on the gun
   applyUpgrade(u) {
     if (this.up.refill) { this.reserve = Math.min(this.reserveCap(), this.reserve + this.up.refill); this.up.refill = 0; }
-    if (this.up.healFull) { this.maxHp = CFG.player.hp + this.up.maxHpBonus; this.hp = this.maxHp; this.up.healFull = false; }
+    if (this.up.healFull) { this.maxHp = CFG.player.hp + this.up.maxHpBonus + (this.badge ? this.badge.hp : 0); this.hp = this.maxHp; this.up.healFull = false; }
     this.game.ui.hp(this.hp, this.maxHp); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve);
     // a sticker on the blaster for every upgrade
     const n = Object.values(this.up.taken).reduce((a, b) => a + b, 0);

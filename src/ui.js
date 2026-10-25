@@ -45,6 +45,7 @@ export class UI {
   }
   tick(dt) { if (this.msgTimer > 0) { this.msgTimer -= dt; if (this.msgTimer <= 0) this.msgEl.classList.remove('show'); } if (this.buddyT > 0) { this.buddyT -= dt; if (this.buddyT <= 0) $('hud-buddy').classList.remove('on'); } }
   // 小美's speech bubble (story mode)
+  badge(text) { const el = $('hud-badge'); if (!el) return; el.hidden = !text; el.textContent = text || ''; }
   buddy(text, secs = 4) { const el = $('hud-buddy'); if (!el) return; $('buddy-text').textContent = text; el.classList.add('on'); this.buddyT = secs; }
   hitmark() { const h = $('hitmark'); h.classList.add('show'); clearTimeout(this._hm); this._hm = setTimeout(() => h.classList.remove('show'), 60); }
   vignette() { const v = $('vignette'); v.classList.add('hit'); clearTimeout(this._vg); this._vg = setTimeout(() => v.classList.remove('hit'), 80); }

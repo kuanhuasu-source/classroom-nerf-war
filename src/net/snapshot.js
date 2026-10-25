@@ -103,7 +103,7 @@ export function applySnapshot(g, s) {
   g.darts.applyMoving(s.dm);
   PaperFigure.stamp = undefined;
   if ((s.st === 'over' || s.st === 'won') && g.state === 'playing') {
-    g.state = s.st; const ov = s.ov || g.pendingOver; if (s.st === 'won') { Audio.bellOut(); setTimeout(() => Audio.win(), 1800); } else Audio.lose();
+    g.afterRound(s.st === 'won'); g.state = s.st; const ov = s.ov || g.pendingOver; if (s.st === 'won') { Audio.bellOut(); setTimeout(() => Audio.win(), 1800); } else Audio.lose();
     setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); g.showOver(ov ? ov.title : (s.st === 'won' ? '下課！老師投降了' : '全班被罰坐了'), ov ? ov.sub : '', s.st === 'won', ov ? ov.stats : null); }, s.st === 'won' ? 3200 : 0);
   }
 }
