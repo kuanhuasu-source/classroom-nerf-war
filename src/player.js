@@ -44,11 +44,13 @@ export class Player {
     const run = (k['ShiftLeft'] || k['ShiftRight']) && !this.crouching;
     if (this.wet > 0) { this.wet -= dt; if (this.wet <= 0) { this.wet = 0; this.game.ui.wet(false); } }
     const speed = (this.crouching ? CFG.player.crouchSpeed : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1) * (this.wet > 0 ? TOILET.wetSpeed : 1);
+    const LM = this.game.lunch ? this.game.lunchMode : null; // 午餐大作戰：兩個人都綁在餐車上
+    if (LM) { if (!this.game.isHost) LM.cart.smooth(dt); this.pos.copy(LM.pose(this.game.mySlot || 'host')); }
     let mx = 0, mz = 0;
     if (k['KeyW'] || k['ArrowUp']) mz -= 1; if (k['KeyS'] || k['ArrowDown']) mz += 1;
     if (k['KeyA'] || k['ArrowLeft']) mx -= 1; if (k['KeyD'] || k['ArrowRight']) mx += 1;
     if (tm && (tm.x || tm.z)) { mx += tm.x; mz += tm.z; }
-    const moving = (mx || mz) && !this.sitting;
+    const moving = (mx || mz) && !this.sitting && !LM;
     if (moving) {
       const l = Math.hypot(mx, mz); if (l > 1 || !tm) { mx /= l; mz /= l; } // the stick may walk slowly, keys never do
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
@@ -59,6 +61,7 @@ export class Player {
     }
     this.camera.position.set(this.pos.x, this.pos.y + this.eye + (moving ? Math.sin(this.bob) * 0.025 : 0), this.pos.z);
     this.camera.rotation.set(0, 0, 0, 'YXZ'); this.camera.rotation.order = 'YXZ'; this.camera.rotation.y = this.yaw; this.camera.rotation.x = this.pitch;
+    if (LM && LM.cart.shake > 0) this.camera.rotation.z = Math.sin(performance.now() / 25) * 0.035 * LM.cart.shake; // the cart just hit something
     // gun animation
     this.fireCd -= dt; this.hurtCd -= dt;
     this.recoil = Math.max(0, this.recoil - dt * 6);
@@ -92,7 +95,7 @@ export class Player {
     this.sitT -= dt;
     const tick = Math.ceil(this.sitT);
     if (tick !== this.sitTick) { this.sitTick = tick; this.game.ui.message('被打到了，罰坐中', `${Math.max(0, tick)} 秒後自己站起來，或等隊友走過來按 E`, 1.2); }
-    if (this.sitT <= 0 && this.game.isHost) this.standUp(1);
+    if (this.sitT <= 0 && this.game.isHost) this.standUp(this.game.lunch ? 3 : 1);
   }
   standUp(hp) {
     this.sitting = false; this.hp = hp; this.invuln = COOP.invuln; this.gun.visible = true; this.game.ui.hp(hp, this.maxHp);
@@ -100,6 +103,7 @@ export class Player {
   }
   tryFire() {
     if (this.fireCd > 0 || this.sitting) return;
+    if (this.game.lunch && this.game.lunchMode && this.game.lunchMode.roleOf(this.game.mySlot || 'host') === 'driver') { this.game.horn(); this.fireCd = 0.3; return; } // the driver's trigger is the horn
     if (this.reloading > 0) {
       if (this.ammo <= 0) return;
       this.reloading = 0; this.game.ui.reloading(false); // firing cancels a partial reload

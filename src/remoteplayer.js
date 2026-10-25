@@ -37,7 +37,7 @@ export class RemotePlayer extends PaperFigure {
     if (s.sit !== undefined) { if (s.sit && !this.sitting) { this.sitting = true; this.setTex('out'); } else if (!s.sit && this.sitting) { this.sitting = false; this.setTex('normal'); } }
     const W = this.game.world;
     if (this.sitting) { if (s.sx !== undefined) this.setTarget(s.sx, W.heightAt(s.sx, s.sz), s.sz); return; }
-    this.setTarget(s.x, W.heightAt(s.x, s.z), s.z); this.yaw = s.yaw; this.eye = s.eye; this.crouch = !!s.c; this.targetSy = this.crouch ? 0.5 : 1;
+    if (!this.game.lunch) this.setTarget(s.x, W.heightAt(s.x, s.z), s.z); this.yaw = s.yaw; this.eye = s.eye; this.crouch = !!s.c; this.targetSy = this.crouch ? 0.5 : 1;
     if (s.hp !== undefined) this.hp = s.hp; if (s.ammo !== undefined) this.ammo = s.ammo; if (s.res !== undefined) this.reserve = s.res; if (s.rtt !== undefined) this.rtt = s.rtt;
   }
   eyePos() { return new THREE.Vector3(this.group.position.x, this.group.position.y + (this.sitting ? 0.8 : this.eye), this.group.position.z); }
@@ -63,7 +63,7 @@ export class RemotePlayer extends PaperFigure {
   update(dt) {
     if (!this.group.visible) return;
     this.hurtCd -= dt; this.invuln = Math.max(0, this.invuln - dt);
-    if (this.sitting && this.game.isHost) { this.sitT -= dt; if (this.sitT <= 0) { this.standUp(1); this.game.message((this.skin.name) + '自己站起來了', '只剩 1 顆心', 1.5); } }
+    if (this.sitting && this.game.isHost) { this.sitT -= dt; if (this.sitT <= 0) { this.standUp(this.game.lunch ? 3 : 1); this.game.message((this.skin.name) + '自己站起來了', '只剩 1 顆心', 1.5); } }
     if (this.bubble) { this.sayT -= dt; if (this.sayT <= 0) { this.group.remove(this.bubble); this.bubble = null; } }
     this.remoteUpdate(dt, this.game.camera.position, !this.sitting);
     this.group.scale.y += (this.targetSy - this.group.scale.y) * Math.min(1, dt * 10);

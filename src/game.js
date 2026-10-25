@@ -16,7 +16,8 @@ import { RemotePlayer } from './remoteplayer.js';
 import { serializeSnapshot, applySnapshot, applyDelta } from './net/snapshot.js';
 import { NetStats } from './net/stats.js';
 import { PaperFigure } from './paperfigure.js';
-import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE, TOILET } from './config.js';
+import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE, TOILET, LUNCH, MP } from './config.js';
+import { LunchMode } from './lunch.js';
 import { TEACHERS, BOSSES, COMMITTEE, GANG } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
@@ -63,6 +64,7 @@ export class Game {
     this.level = 'normal'; this.diff = DIFFICULTY.normal; this.offer = null; this.offerTimer = 0; this.supplyTimer = 0;
     this.mode = 'class'; this.siege = false; this.bossDue = 0; this.bossDef = null; // 守校門模式
     this.toilet = false; this.timeLeft = 0; this.refillT = 0; // 搶廁所模式
+    this.lunch = false; this.lunchMode = null; // 午餐大作戰
     this.forceTeacher = new URLSearchParams(location.search).get('teacher'); // debug: ?teacher=pe
     this.clock = new THREE.Clock(); this.hasLock = false; this.lockSupported = 'requestPointerLock' in document.body;
     this.touchCtl = new TouchControls(this); this.touch = this.touchCtl.on;
@@ -123,7 +125,7 @@ export class Game {
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
     this.fullSnapNext = true;
     if (this.state === 'playing' || this.state === 'paused') {
-      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0 }), from);
+      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0 }), from);
       this.transport.send(JSON.stringify({ t: 'restore', taken: r.up.taken, ammo: r.ammo, res: r.reserve, hp: r.hp, buff: this.buffs[slot] || null }), from);
       if (!this.stats[slot]) this.stats[slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 };
       this.message(back ? `${r.skin.name}回來了！` : `${r.skin.name}中途加入了！`, '', 1.5);
@@ -147,8 +149,13 @@ export class Game {
     if (this.world.layout.id === id && !!this.world.siege === !!siege) return;
     this.world.dispose(); this.world = new World(this.scene, id, { siege }); this.darts.world = this.world;
   }
-  waveLabel(n) { return this.toilet ? `剩 ${this.cansLeft()}` : this.siege ? `${n}/${SIEGE.waves.length}` : n; }
+  waveLabel(n) { return this.lunch ? (this.lunchMode ? (this.lunchMode.roleOf(this.mySlot) === 'driver' ? '推車手' : '射手') : '—') : this.toilet ? `剩 ${this.cansLeft()}` : this.siege ? `${n}/${SIEGE.waves.length}` : n; }
   cansLeft() { return (this.world.cans || []).filter(c => c.alive).length; }
+  // ---------- 午餐大作戰 ----------
+  horn() { if (!this.lunch || !this.lunchMode) return; if (this.isHost) this.lunchMode.horn('host'); else { this.hornSeq = (this.hornSeq || 0) + 1; Audio.whistle(); } }
+  refillShooter() { const LM = this.lunchMode, slot = LM.shooterSlot(); if (slot === 'host') { const p = this.player; p.ammo = p.magSize(); p.reserve = LUNCH.ammo; this.ui.ammo(p.ammo, false, p.reserve); this.ui.pickFlash(); } else { const r = this.remoteBySlot(slot); if (r) r.reserve = LUNCH.ammo; this.netEvent({ t: 'ammoSet', n: LUNCH.ammo }, slot); } }
+  onBucket(i) { this.netEvent({ t: 'bucket', i }); this.message('撞倒水桶了！', '地上都是水，轉彎會滑', 1.5); Audio.thud(); }
+  onSpill(n, why) { const c = this.lunchMode.cart; this.ui.soup(c.soup); this.spillT = this.spillT || 0; if (why === 'impact') this.message('撞到了！湯灑出來', `湯剩 ${Math.round(c.soup)}%`, 1.5); else if (why === 'grab' && this.spillT <= 0) { this.spillT = 2; this.message('搶菜王在挖菜！', '射手回頭打他', 1.5); } }
   // 搶廁所：一罐被打破。飛散、計分、同步給隊友；最後一罐就贏
   breakCan(i, who = 'host') {
     const c = this.world.cans[i]; if (!c || !c.alive) return;
@@ -176,7 +183,8 @@ export class Game {
   }
   setDifficulty(level) { if (DIFFICULTY[level]) { this.level = level; this.diff = DIFFICULTY[level]; } }
   // how many students are currently firing; the difficulty caps this
-  shootersBusy() { let n = 0; for (const s of this.students) if (s.alive && s.state === 'shoot') n++; return n >= this.diff.maxShooters + (this.coop ? this.players().length - 1 : 0) + (this.leaderAlive() ? 1 : 0); }
+  extraPlayers() { return this.coop ? Math.max(0, this.players().length - 1) : 0; } // 多人加碼的基準：比單人多幾個人
+  shootersBusy() { let n = 0; for (const s of this.students) if (s.alive && s.state === 'shoot') n++; return n >= this.diff.maxShooters + Math.round(MP.shooters * this.extraPlayers()) + (this.leaderAlive() ? 1 : 0); }
   leaderAlive() { return this.students.some(s => s.alive && s.leader); }
   // the wave leader (班長) fell: the rest panic for a while
   onLeaderDown(s) {
@@ -190,6 +198,7 @@ export class Game {
   stat(who, key, n = 1) { if (!this.stats) return; if (!this.stats[who]) this.stats[who] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; this.stats[who][key] = (this.stats[who][key] || 0) + n; }
   // one player ran out of hearts
   onPlayerDown(p) {
+    if (this.lunch) { p.sitDown({ x: p.pos.x, z: p.pos.z }, LUNCH.downSeconds); const name = p === this.player ? '你' : p.skin.name; this.message(`${name}被打倒了`, `${LUNCH.downSeconds} 秒後自己爬起來`, 2); return; }
     if (!this.coop) { if (p === this.player) this.onLose(); return; }
     const near = this.world.desks.filter(d => !d.occupant).sort((a, b) => Math.hypot(a.seat.x - p.pos.x, a.seat.z - p.pos.z) - Math.hypot(b.seat.x - p.pos.x, b.seat.z - p.pos.z));
     const seat = near.length ? near[0].seat : { x: p.pos.x, z: p.pos.z };
@@ -228,7 +237,7 @@ export class Game {
       if (m.t === 'hello') { this.onHello(from, m.pid, !!m.touch, m.name, m.look); return; }
       if (m.t === 'ping') { this.transport.send(JSON.stringify({ t: 'pong', ts: m.ts }), from); return; }
       const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
-      if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
+      if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.cf !== undefined) r.cartIn = { f: m.cf, t: m.ct || 0 }; if (m.hn && m.hn !== r.hornSeq) { r.hornSeq = m.hn; if (this.lunchMode) this.lunchMode.horn(slot); } if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
       else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (this.monitor) this.monitor.noticeShot(r); }
       else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = this.baseHp(r) + r.up.maxHpBonus; r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
       else if (m.t === 'revive') {
@@ -239,7 +248,7 @@ export class Game {
     } else {
       if (m.t === 'welcome') { this.mySlot = m.slot; this.darts.localWho = m.slot; if (this.onWelcome) this.onWelcome(m); }
       else if (m.t === 'full') { if (this.onFull) this.onFull(); }
-      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
+      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; this.lunch = !!m.lunch; if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
       else if (m.t === 'restore') { // back after a disconnect: the host remembers what we had
         const p = this.player;
         for (const [id, n] of Object.entries(m.taken || {})) for (let i = 0; i < n; i++) { const u = takeUpgrade(p.up, id); if (u) { p.up.refill = 0; p.up.healFull = false; p.applyUpgrade(u); } }
@@ -259,14 +268,16 @@ export class Game {
     this.guestReset(); this.markTouchPlayer();
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
-    this.ui.infinite = this.siege; this.ui.timer(this.toilet ? TOILET.time : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.siege ? '惡霸' : '同學'); this.ui.waveLabelText(this.toilet ? '罐子' : '波次'); this.ui.wet(false);
+    this.ui.infinite = this.siege; this.ui.timer(this.toilet ? TOILET.time : this.lunch ? LUNCH.time : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.lunch ? '搶菜' : this.siege ? '惡霸' : '同學'); this.ui.waveLabelText(this.toilet ? '罐子' : this.lunch ? '角色' : '波次'); this.ui.wet(false); this.ui.soup(null);
+    if (this.lunch) { this.lunchMode = new LunchMode(this); this.message('抬午餐囉！', '推車手：W/S 推煞、A/D 轉彎、F 喇叭。射手：擋住探頭的同學', 4); }
     this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.buff(null);
-    if (this.lockSupported && !this.touch) this.requestLock();
+    if (this.lockSupported && !this.touch) this.requestLock(); else if (this.touch) this.enterFullscreen();
     Audio.bellOut();
     this.clock.getDelta();
   }
   markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.maxHp = this.baseHp(p) + p.up.maxHpBonus; p.hp = p.maxHp; }
   guestReset() {
+    if (this.lunchMode) { this.lunchMode.dispose(); this.lunchMode = null; }
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
     this.students.forEach(s => s.dispose()); this.students = [];
@@ -287,6 +298,7 @@ export class Game {
     for (const s of this.students) s.update(dt);
     for (let i = this.students.length - 1; i >= 0; i--) if (this.students[i].gone) { this.students[i].dispose(); this.students.splice(i, 1); } // leaders who left for the office
     for (const t of this.teachers) t.update(dt);
+    if (this.lunchMode) for (const k of this.lunchMode.kids) k.update(dt);
     if (this.bully) this.bully.update(dt); if (this.monitor) this.monitor.update(dt); if (this.ball) this.ball.update(dt);
     if (this.hostFigure) this.hostFigure.update(dt);
     for (const o of this.others.values()) o.update(dt);
@@ -299,7 +311,9 @@ export class Game {
     this.inputTimer -= dt;
     if (this.transport && this.inputTimer <= 0) {
       this.inputTimer = 1 / NET.inputHz; const p = this.player;
-      this.transport.send(JSON.stringify({ t: 'input', x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), yaw: +p.yaw.toFixed(2), eye: +p.eye.toFixed(2), c: p.crouching ? 1 : 0, ammo: p.ammo, res: p.reserve, sh: p.shots, rtt: Math.round(this.net.rtt) }), undefined, true);
+      const msg = { t: 'input', x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), yaw: +p.yaw.toFixed(2), eye: +p.eye.toFixed(2), c: p.crouching ? 1 : 0, ammo: p.ammo, res: p.reserve, sh: p.shots, rtt: Math.round(this.net.rtt) };
+      if (this.lunch && this.lunchMode && this.lunchMode.driver === this.mySlot) { const k = p.keys, tc = this.touchCtl, tm = tc && tc.on ? tc.move : null; msg.cf = +((k['KeyW'] || k['ArrowUp'] ? 1 : 0) - (k['KeyS'] || k['ArrowDown'] ? 1 : 0) + (tm ? -tm.z : 0)).toFixed(2); msg.ct = +((k['KeyD'] || k['ArrowRight'] ? 1 : 0) - (k['KeyA'] || k['ArrowLeft'] ? 1 : 0) + (tm ? tm.x : 0)).toFixed(2); msg.hn = this.hornSeq || 0; }
+      this.transport.send(JSON.stringify(msg), undefined, true);
     }
   }
   resize() {
@@ -323,6 +337,7 @@ export class Game {
       this.player.keys[e.code] = true;
       if (e.code === 'KeyR') this.player.reload();
       if (e.code === 'KeyE') this.tryRevive();
+      if (e.code === 'KeyF' && this.lunch) this.horn();
       if (e.code === 'KeyN') { this.showNet = !this.showNet; if (!this.showNet) this.ui.net(''); }
       if (/^Digit[1-4]$/.test(e.code)) this.emote(+e.code[5]);
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ControlLeft', 'ShiftLeft'].includes(e.code)) e.preventDefault();
@@ -373,10 +388,14 @@ export class Game {
   }
   // fullscreen + Keyboard Lock (Chrome/Edge) is the only way a page receives Ctrl+W / Ctrl+T / Ctrl+N,
   // so crouch+forward can't close the tab. Leaving fullscreen (F11 or holding Esc) pauses; a short Esc still pauses too.
-  enterFullscreen() {
+  enterFullscreen(fromButton = false) {
     const el = document.documentElement;
-    if (document.fullscreenElement || !el.requestFullscreen) return;
-    el.requestFullscreen().then(() => {
+    if (document.fullscreenElement) { if (fromButton) document.exitFullscreen().catch(() => {}); return; }
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) { if (this.touch) this.ui.message('這個瀏覽器不支援全螢幕', 'iPhone：Safari 分享 → 加入主畫面，從主畫面開就是全螢幕', 4); return; }
+    const p = req.call(el); if (!p || !p.then) return;
+    p.then(() => {
+      if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
       if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(() => {});
     }).catch(() => {}); // no user gesture (e.g. offer closed by the partner) or refused: just stay windowed
   }
@@ -399,25 +418,30 @@ export class Game {
   start() {
     if (!this.isHost) return this.startGuest();
     Audio.init(); Audio.resume();
-    this.siege = this.mode === 'siege'; this.toilet = this.mode === 'toilet'; this.ui.infinite = this.siege;
+    if (this.mode === 'lunch' && this.remoteList().length !== 1) { const n = this.remoteList().length; const txt = n ? '午餐大作戰只能兩個人：房間裡只留一位隊友' : '午餐大作戰要兩個人：開房間找一位隊友再按開始'; this.ui.message(txt, '', 3); const el = $('lobby-status'); if (el) el.textContent = txt; const mn = $('menu-note'); if (mn && !n) mn.textContent = txt; return; }
+    this.siege = this.mode === 'siege'; this.toilet = this.mode === 'toilet'; this.lunch = this.mode === 'lunch'; this.ui.infinite = this.siege;
     this.diff = this.siege ? { ...DIFFICULTY[this.level], waves: SIEGE.waves } : DIFFICULTY[this.level]; // 守校門：十波，其餘照難度
-    this.setLayout(this.toilet ? 'toilet' : this.siege ? 'yard' : this.pickLayout(), this.siege);
+    this.setLayout(this.lunch ? 'corridor' : this.toilet ? 'toilet' : this.siege ? 'yard' : this.pickLayout(), this.siege);
     this.reset(); this.markTouchPlayer();
     this.coop = this.isHost && this.remoteList().length > 0; this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
-    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0 }));
+    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0 }));
     if (this.coop) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
     this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false);
-    if (this.lockSupported && !this.touch) this.requestLock();
+    if (this.lockSupported && !this.touch) this.requestLock(); else if (this.touch) this.enterFullscreen();
     Audio.bellOut();
     this.ui.timer(this.toilet ? TOILET.time : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.siege ? '惡霸' : '同學'); this.ui.waveLabelText(this.toilet ? '罐子' : '波次'); this.ui.wet(false);
-    if (this.toilet) { // 搶廁所：清潔隊已經在裡面打掃；倒數開始
+    if (this.lunch) { // 午餐大作戰：餐車在三年二班門口，開房的人先推
+      this.lunchMode = new LunchMode(this); this.ui.timer(LUNCH.time); this.ui.soup(null); this.ui.leftLabel('搶菜'); this.ui.waveLabelText('角色'); this.ui.wave(this.waveLabel(0));
+      this.message('抬午餐囉！', '推車手：W/S 推煞、A/D 轉彎、F 喇叭。射手：擋住探頭的同學', 4);
+      this.nextWavePending = false; this.ui.left(0);
+    } else if (this.toilet) { // 搶廁所：清潔隊已經在裡面打掃；倒數開始
       this.message('下課了，快去廁所！', `清潔隊在打掃……${TOILET.time} 秒內射破全部 ${this.world.cans.length} 個罐子`, 3.5);
       this.timeLeft = TOILET.time; this.refillT = TOILET.refill;
-      const spots = (this.world.layout.crewSpots || []).slice(); for (let i = 0; i < TOILET.crew && spots.length; i++) { const [x, z] = spots.splice(Math.floor(Math.random() * spots.length), 1)[0]; this.students.push(new Student(this, { x, z })); }
+      const spots = (this.world.layout.crewSpots || []).slice(); for (let i = 0; i < TOILET.crew + MP.crew * this.extraPlayers() && spots.length; i++) { const [x, z] = spots.splice(Math.floor(Math.random() * spots.length), 1)[0]; this.students.push(new Student(this, { x, z })); }
       this.ui.left(this.students.length); this.nextWavePending = false;
     } else {
       if (this.siege) this.message('隔壁學校的惡霸軍團來了！', `守住${this.world.layout.name}十波，彈藥無限`, 3.5);
@@ -434,8 +458,9 @@ export class Game {
     this.debris.forEach(d => this.scene.remove(d.mesh)); this.debris = []; this.rings.forEach(r => this.scene.remove(r.mesh)); this.rings = [];
     if (this.bully) this.bully.dispose(); if (this.monitor) this.monitor.dispose(); if (this.ball) this.ball.dispose();
     this.bully = null; this.monitor = null; this.ball = null;
-    const f = this.toilet ? { bully: false, ball: false, monitor: false } : this.siege ? { bully: false, ball: Math.random() < CFG.features.ball, monitor: false } : { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
-    const enabled = this.siege || this.toilet ? [] : Object.keys(f).filter(k => CFG.features[k] > 0);
+    if (this.lunchMode) { this.lunchMode.dispose(); this.lunchMode = null; }
+    const f = this.toilet || this.lunch ? { bully: false, ball: false, monitor: false } : this.siege ? { bully: false, ball: Math.random() < CFG.features.ball, monitor: false } : { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
+    const enabled = this.siege || this.toilet || this.lunch ? [] : Object.keys(f).filter(k => CFG.features[k] > 0);
     if (enabled.length && !enabled.some(k => f[k])) f[pick(enabled)] = true; // at least one surprise per game, but never a switched-off one
     this.features = f;
     if (f.bully) this.bully = new Bully(this);
@@ -446,7 +471,7 @@ export class Game {
     this.props.forEach(p => p.dispose()); this.props = (this.world.layout.props || []).map((d, i) => new Prop(this, d, i));
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
-    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null; this.timeLeft = 0; this.refillT = 0; this.hintT = 0; this.ui.wet(false);
+    this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null; this.timeLeft = 0; this.refillT = 0; this.hintT = 0; this.ui.wet(false); this.ui.soup(null);
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
@@ -473,8 +498,8 @@ export class Game {
   startWave() {
     this.wave++; this.ui.wave(this.waveLabel(this.wave)); Audio.wave();
     for (const p of this.props) if (p.kind === 'bucket' && p.state !== 'up') { p.reset(); this.netEvent({ t: 'prop', id: p.id, st: 'up' }); }
-    const np = this.players().length, base = this.diff.waves[this.wave - 1], count = this.coop ? Math.round(base * (1 + (COOP.waveMul - 1) * (np - 1))) : base;
-    this.difficultySpread = Math.max(this.diff.minSpread, this.diff.spread - (this.wave - 1) * 0.1);
+    const ex = this.extraPlayers(), base = this.diff.waves[this.wave - 1], count = Math.round(base * (1 + MP.count * ex));
+    this.difficultySpread = Math.max(this.diff.minSpread * (1 - MP.spread * ex), (this.diff.spread - (this.wave - 1) * 0.1) * (1 - MP.spread * ex));
     const doors = this.world.layout.doors;
     if (this.siege) { // 守校門：三種入口輪流；第 3、6、9、10 波的頭目晚幾秒跟進
       const bossId = SIEGE.bosses[this.wave];
@@ -509,7 +534,7 @@ export class Game {
     return stageOk && Math.random() < 0.5 ? COMMITTEE : pick(BOSSES);
   }
   spawnTeacher(def = this.pickBoss()) {
-    const door = this.world.layout.doors[0], extra = this.coop ? Math.min(2, this.players().length - 1) : 0;
+    const door = this.world.layout.doors[0], extra = Math.min(3, this.extraPlayers()) * MP.bossWp;
     if (def.members) { // the whole committee walks in together
       def.members.forEach((m, i) => this.teachers.push(new Teacher(this, { x: door.x, z: door.z + (i - 1) * 0.7 }, { def: m, wpHp: def.wpHp + extra })));
       this.bellT = CFG.committee.bellEvery;
@@ -611,6 +636,7 @@ export class Game {
   }
   // ---------- pencil-case ammo supply (boss fight only: no students means no darts flying in) ----------
   spawnSupply(nearPlayer = false) {
+    if (!this.tables().length || this.lunch) return; // no tables (the corridor): no boxes
     // a box lands near whoever is running dry (in co-op that is often the partner, not the host)
     const who = nearPlayer ? this.players().slice().sort((x, y) => (x.ammo + x.reserve) - (y.ammo + y.reserve))[0] : this.player;
     const pp = who.pos;
@@ -710,7 +736,7 @@ export class Game {
   // tables a carton or a box can land on: anything higher than 1.2 m (a tree, the swing frame, the slide tower) is out of reach from the floor
   tables() { return this.world.desks.filter(d => (d.h || DESK.h) <= 1.2); }
   spawnMilk() {
-    if (this.milks.length >= CFG.milk.max) return;
+    if (this.milks.length >= CFG.milk.max || !this.tables().length) return;
     const pp = this.player.pos;
     const far = this.tables().filter(d => Math.abs((d.floor || 0) - (pp.y || 0)) < 0.5 && Math.hypot(d.x - pp.x, d.z - pp.z) > CFG.milk.minDistFromPlayer && Math.hypot(d.x - pp.x, d.z - pp.z) < 9 && !this.milks.some(m => m.desk === d));
     const desk = pick(far.length ? far : this.tables());
@@ -795,7 +821,7 @@ export class Game {
     Audio.itemSpawn(); this.message('牆上出現了特殊物品', '射中它拿獎勵', 1.6);
   }
   updateItems(dt, realDt) {
-    if (this.state === 'playing') { this.itemTimer -= dt; if (this.itemTimer <= 0 && this.items.length < 1) { this.itemTimer = rand(CFG.items.interval[0], CFG.items.interval[1]); this.spawnItem(); } }
+    if (this.state === 'playing' && !this.lunch) { this.itemTimer -= dt; if (this.itemTimer <= 0 && this.items.length < 1) { this.itemTimer = rand(CFG.items.interval[0], CFG.items.interval[1]); this.spawnItem(); } }
     for (let i = this.items.length - 1; i >= 0; i--) if (!this.items[i].update(dt)) { this.items[i].dispose(); this.items.splice(i, 1); }
     for (const k of Object.keys(this.buffs)) { const b = this.buffs[k]; b.t -= realDt; if (b.t <= 0) { delete this.buffs[k]; if (k === this.mySlot) this.ui.buff(null); } else if (k === this.mySlot) this.ui.buff(b); }
     if (this.slowT > 0) this.slowT -= realDt;
@@ -804,6 +830,13 @@ export class Game {
   hitmark() { const who = this.lastShooter || 'host'; this.stat(who, 'hits'); if (who !== 'host') { const r = this.remotes.get(who); if (r) r.hits++; this.netEvent({ t: 'hitmark' }, who); } else { this.ui.hitmark(); this.player.hits++; } }
   onLose() {
     this.state = 'over'; Audio.lose();
+    if (this.lunch) {
+      const LM = this.lunchMode, timeUp = LM.timeLeft <= 0, dry = LM.cart.loaded && LM.cart.soup <= 0;
+      const title = timeUp ? '午休鐘響了，午餐沒回來' : dry ? '湯全灑光了' : '兩個人都被打倒了', sub = timeUp ? '全班餓著肚子等。' : dry ? '回到班上只剩空桶，全班餓肚子。' : '餐車被搶菜的推走了。';
+      this.overInfo = { win: 0, title, sub, stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
+      if (document.pointerLockElement) document.exitPointerLock();
+      this.showOver(title, sub, false); return;
+    }
     if (this.toilet) { // 搶廁所：時間到，或被趕出去
       const timeUp = this.timeLeft <= 0, title = timeUp ? '時間到，憋不住了……' : '被清潔隊趕出廁所了！', sub = timeUp ? `清潔隊還在拖地，罐子還剩 ${this.cansLeft()} 個。` : `三滴血用完，先去保健室。罐子還剩 ${this.cansLeft()} 個。`;
       this.overInfo = { win: 0, title, sub, stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
@@ -817,6 +850,15 @@ export class Game {
   }
   onWin() {
     this.addScore(CFG.score.win); this.state = 'won'; Audio.bellOut(); setTimeout(() => Audio.win(), 1800);
+    if (this.lunch) {
+      const LM = this.lunchMode, soup = Math.round(LM.cart.soup), left = Math.ceil(LM.timeLeft), stars = LM.stars();
+      this.addScore(soup * 50 + left * 10);
+      const title = stars === 3 ? '全班吃飽了！★★★' : stars === 2 ? '半飽，★★' : '只剩白飯，★', sub = `湯剩 ${soup}%，剩 ${left} 秒，打倒 ${LM.kills} 個搶菜的。`;
+      this.message('午餐送到了！！！', stars === 3 ? '全班歡呼' : stars === 2 ? '還夠吃' : '大家默默吃白飯', 4);
+      this.overInfo = { win: 1, title, sub, stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
+      setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); this.showOver(title, sub, true); }, 3200);
+      return;
+    }
     if (this.toilet) {
       const left = Math.ceil(this.timeLeft); this.addScore(left * TOILET.timeBonus);
       const title = '搶到廁所了！', sub = `${this.world.cans.length} 個罐子全破，剩 ${left} 秒。清潔隊讓路，廁所是你的了。`;
@@ -841,7 +883,7 @@ export class Game {
   showOver(title, sub, win, remoteStats = null) {
     $('over').hidden = false; $('hud').hidden = true;
     $('over-title').textContent = title; $('over-title').classList.toggle('red-pen', !win); $('over-sub').textContent = sub;
-    $('st-score').textContent = this.score; $('st-wave').textContent = this.bossPhase ? '老師' : this.waveLabel(this.wave);
+    $('st-score').textContent = this.score; $('st-wave').textContent = this.lunch && this.lunchMode ? '★'.repeat(this.lunchMode.stars()) || '—' : this.bossPhase ? '老師' : this.waveLabel(this.wave);
     const st = remoteStats || this.coopStats();
     if (st) {
       const acc = (h, s) => s ? Math.min(100, Math.round(h / s * 100)) + '%' : '0%';
@@ -881,17 +923,18 @@ export class Game {
     this.updateItems(dt, realDt);
     // spawning & waves
     if (this.state === 'playing') {
+      if (this.lunch && this.lunchMode) { this.lunchMode.step(dt); if (this.lunchMode.cart.loaded) this.ui.soup(this.lunchMode.cart.soup); if (this.state !== 'playing') return; }
       if (this.toilet) { // 搶廁所：倒數；清潔隊少於四個就從側門再進一個
         this.timeLeft -= dt; this.ui.timer(this.timeLeft);
         if (this.timeLeft <= 0) { this.timeLeft = 0; this.onLose(); return; }
-        if (this.students.filter(s => s.alive).length + this.spawnQueue.length < TOILET.minCrew) { this.refillT -= dt; if (this.refillT <= 0) { this.refillT = TOILET.refill; const doors = this.world.layout.doors; this.spawnQueue.push({ door: doors[Math.random() < 0.5 ? 0 : 1] }); this.spawnTimer = Math.min(this.spawnTimer, 0.2); this.message('又來一個清潔隊員', '', 1.2); } }
+        if (this.students.filter(s => s.alive).length + this.spawnQueue.length < TOILET.minCrew + MP.crew * this.extraPlayers()) { this.refillT -= dt; if (this.refillT <= 0) { this.refillT = TOILET.refill; const doors = this.world.layout.doors; this.spawnQueue.push({ door: doors[Math.random() < 0.5 ? 0 : 1] }); this.spawnTimer = Math.min(this.spawnTimer, 0.2); this.message('又來一個清潔隊員', '', 1.2); } }
       }
       if (this.bossDue > 0) { this.bossDue -= dt; if (this.bossDue <= 0 && this.bossDef) { this.spawnTeacher(this.bossDef); this.bossDef = null; } }
       for (let i = this.teachers.length - 1; i >= 0; i--) { const t = this.teachers[i]; if (t.goneT === undefined) continue; t.goneT -= dt; if (t.goneT <= 0) { t.dispose(); this.teachers.splice(i, 1); this.updateBossHud(); if (!this.teachers.length) this.ui.boss(false); } }
       if (this.spawnQueue.length) {
         this.spawnTimer -= dt;
-        if (this.spawnTimer <= 0) { const e = this.spawnQueue.shift(), door = e.door || e, at = e.at || { x: door.x - 0.3, z: door.z }; this.students.push(new Student(this, at, { leader: !!e.leader, entry: e.entry || null })); if (e.leader) { if (this.siege) this.message('惡霸老大帶頭衝進來了！', '先打倒他，其他人會慌', 2); else this.message('班長帶隊進來了！', '先打倒她，其他人會慌', 2); Audio.tattle(); this.netEvent({ t: 'sfx', n: 'tattle' }); } this.spawnTimer = this.diff.spawnGap; this.ui.left(this.students.filter(s => s.alive).length + this.spawnQueue.length); }
-      } else if (!this.bossPhase && !this.toilet) {
+        if (this.spawnTimer <= 0) { const e = this.spawnQueue.shift(), door = e.door || e, at = e.at || { x: door.x - 0.3, z: door.z }; this.students.push(new Student(this, at, { leader: !!e.leader, entry: e.entry || null })); if (e.leader) { if (this.siege) this.message('惡霸老大帶頭衝進來了！', '先打倒他，其他人會慌', 2); else this.message('班長帶隊進來了！', '先打倒她，其他人會慌', 2); Audio.tattle(); this.netEvent({ t: 'sfx', n: 'tattle' }); } this.spawnTimer = this.diff.spawnGap / (1 + MP.gap * this.extraPlayers()); this.ui.left(this.students.filter(s => s.alive).length + this.spawnQueue.length); }
+      } else if (!this.bossPhase && !this.toilet && !this.lunch) {
         const alive = this.students.filter(s => s.alive).length, bossUp = this.bossDue > 0 || this.teachers.some(t => !t.defeated);
         if (alive === 0 && !bossUp) {
           if (this.nextWavePending) {
@@ -912,7 +955,7 @@ export class Game {
       }
     }
     if (this.offerTimer > 0) { this.offerTimer -= dt; if (this.offerTimer <= 0) this.openOffer(); }
-    this.panicT = Math.max(0, (this.panicT || 0) - dt); this.hintT = Math.max(0, (this.hintT || 0) - dt);
+    this.panicT = Math.max(0, (this.panicT || 0) - dt); this.hintT = Math.max(0, (this.hintT || 0) - dt); this.spillT = Math.max(0, (this.spillT || 0) - dt);
     this.updateMilk(dt); this.updateProps(dt); this.updateZones(dt); for (const p of this.props) p.update(dt); this.world.tick(dt);
     for (const s of this.students) s.update(dt);
     for (let i = this.students.length - 1; i >= 0; i--) if (this.students[i].gone) { this.students[i].dispose(); this.students.splice(i, 1); } // leaders who left for the office
@@ -929,6 +972,8 @@ export class Game {
       if (d.kind === 'dart' && this.ball && this.ball.testDart(d)) return true;
       if (d.kind === 'dart' && this.bully && this.bully.testHit(p)) { this.bully.poke(d.owner, d.shooter, d.who); return true; }
       if (d.owner === 'player' && this.monitor && this.monitor.testHit(p)) { this.monitor.hitByDart(); return true; }
+      if (this.lunch && d.owner === 'player' && this.lunchMode.hitKid(p, d.who || 'host')) return true;
+      if (this.lunch && d.owner !== 'player' && this.lunchMode.hitPot(p)) return true;
       if (this.toilet && d.owner === 'player') { // 搶廁所：打破罐子；全部破了就贏
         for (let i = 0; i < this.world.cans.length; i++) { const c = this.world.cans[i]; if (!c.alive) continue; const dx = p.x - c.x, dz = p.z - c.z; if (dx * dx + dz * dz < TOILET.canRadius * TOILET.canRadius && Math.abs(p.y - c.y) < 0.26) { this.breakCan(i, d.who || 'host'); return true; } }
       }

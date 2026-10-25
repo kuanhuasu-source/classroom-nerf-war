@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, rand, pick, clamp } from './config.js';
+import { CFG, rand, pick, clamp, MP } from './config.js';
 import { Audio } from './audio.js';
 import { Draw } from './draw.js';
 import { PaperFigure } from './paperfigure.js';
@@ -41,7 +41,7 @@ export class Teacher extends PaperFigure {
   }
   has(k) { return this.wp[k] && this.wp[k].hp > 0; }
   // seconds between erasers: bosses throw fewer, the gang king has his own (mad) rate
-  eraserEvery() { return this.def.eraserEvery || CFG.teacher.eraserEvery * (this.def.boss ? 1.4 : 1); }
+  eraserEvery() { return (this.def.eraserEvery || CFG.teacher.eraserEvery * (this.def.boss ? 1.4 : 1)) * Math.max(0.5, 1 - MP.bossRate * (this.game.extraPlayers ? this.game.extraPlayers() : 0)); }
   wpWorld(k) { return this.mesh.localToWorld(this.wp[k].local.clone()); }
   hudEntries() { return this.def.wp.map(w => ({ label: w.label, hp: this.wp[w.key].hp })); }
   serialize() {
@@ -90,7 +90,7 @@ export class Teacher extends PaperFigure {
     this.throwTimer -= (this.rage > 0 ? 2.2 : 1) * dt;
     if (this.throwTimer <= 0 && !(this.special && this.special.phase === 'go')) {
       const fired = this.attack(player);
-      let iv = this.def.interval * (this.game.diff ? this.game.diff.teacherMul : 1);
+      let iv = this.def.interval * (this.game.diff ? this.game.diff.teacherMul : 1) * Math.max(0.5, 1 - MP.bossRate * (this.game.extraPlayers ? this.game.extraPlayers() : 0));
       if (this.def.id === 'music' && !this.has('sheet')) iv *= 1.6;
       if (this.def.id === 'math' && !this.has('glasses')) iv *= 1.35;
       if (this.def.id === 'stamper' && !this.has('badge')) iv *= 1.5;

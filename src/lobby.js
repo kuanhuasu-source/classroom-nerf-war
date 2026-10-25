@@ -23,9 +23,9 @@ export function initLobby(game) {
   if (import.meta.env.VITE_SOLO_ONLY === '1') { $('btn-host').hidden = true; $('btn-join-open').hidden = true; $('menu-note').textContent = '建議用電腦與滑鼠遊玩。連線模式（最多四人）在網站版才有。'; }
 
   // mode: the classroom war or the gate siege; remembered per browser
-  const MODE_NOTES = { class: '下課大戰：六波同學加一位老師，撿地上的泡棉彈補充。', siege: '守校門：惡霸軍團從校門、圍牆、水溝蓋闖進操場，守住十波。彈藥無限，第 3、6、9 波有頭目，第 10 波是會瘋狂丟板擦的大王。', toilet: '搶廁所：下課想上廁所，清潔隊卻在打掃。只有三滴血、90 秒；被水潑到慢 5 秒，通馬桶一連 3 到 5 支。射破最裡面小便斗架上和洗手台上的 8 個罐子就贏。' };
+  const MODE_NOTES = { class: '下課大戰：六波同學加一位老師，撿地上的泡棉彈補充。', siege: '守校門：惡霸軍團從校門、圍牆、水溝蓋闖進操場，守住十波。彈藥無限，第 3、6、9 波有頭目，第 10 波是會瘋狂丟板擦的大王。', toilet: '搶廁所：下課想上廁所，清潔隊卻在打掃。只有三滴血、90 秒；被水潑到慢 5 秒，通馬桶一連 3 到 5 支。射破最裡面小便斗架上和洗手台上的 8 個罐子就贏。', lunch: '午餐大作戰（兩人限定）：一個推餐車去蒸飯室裝菜再推回三年二班，一個站在車上擋搶菜的同學；裝完菜換手。回程撞到、被打中、被搶都會灑湯，回班時剩多少湯決定星星。開房間找剛好一位隊友再開始。' };
   let mode = 'class'; try { const saved = localStorage.getItem('cnw-mode'); if (saved && MODE_NOTES[saved]) mode = saved; } catch (e) { /* ignore */ }
-  const applyMode = (m) => { mode = m; game.mode = m; document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('mode-note').textContent = MODE_NOTES[m]; $('map-row').classList.toggle('dim', m !== 'class'); $('map-note').textContent = m === 'siege' ? '守校門固定在操場' : m === 'toilet' ? '搶廁所固定在廁所' : ''; try { localStorage.setItem('cnw-mode', m); } catch (e) { /* ignore */ } };
+  const applyMode = (m) => { mode = m; game.mode = m; document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('mode-note').textContent = MODE_NOTES[m]; $('map-row').classList.toggle('dim', m !== 'class'); $('map-note').textContent = m === 'siege' ? '守校門固定在操場' : m === 'toilet' ? '搶廁所固定在廁所' : m === 'lunch' ? '午餐大作戰固定在走廊' : ''; try { localStorage.setItem('cnw-mode', m); } catch (e) { /* ignore */ } };
   document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { b.setAttribute('role', 'radio'); b.addEventListener('click', () => applyMode(b.dataset.mode)); });
   applyMode(mode);
   // difficulty: remembered per browser

@@ -66,6 +66,16 @@ export const DIFFICULTY = {
 export const SIEGE = { waves: [4, 5, 6, 7, 8, 9, 10, 11, 12, 10], bosses: { 3: 'gang1', 6: 'gang2', 9: 'gang3', 10: 'king' }, hpBonus: 1, entries: ['gate', 'drain', 'wall', 'gate'], bossDelay: 2.5 };
 // 搶廁所：下課要去廁所，清潔隊正在打掃。三滴血、倒數 90 秒；潑水中了慢 5 秒、通馬桶連發 3 到 5 支；射中小便斗裡的紅心就贏
 export const TOILET = { time: 90, hp: 3, crew: 5, minCrew: 4, refill: 6, wetSeconds: 5, wetSpeed: 0.5, plungerBurst: [3, 5], plungerGap: 0.25, waterChance: 0.4, waterSpeed: 13, canRadius: 0.2, timeBonus: 20 };
+// 午餐大作戰（兩人限定）：推車手推餐車去蒸飯室裝菜再推回來，車頂射手擋搶菜的同學。回程撞到、被打中、被搶都會灑湯。
+export const LUNCH = {
+  time: 150, broadcastAt: 130, loadSeconds: 10, ammo: 60, downSeconds: 6, stars: [80, 50],
+  cart: { empty: { max: 4.5, accel: 3.0, brake: 4.0, turn: 2.2 }, loaded: { max: 3.2, accel: 1.6, brake: 2.2, turn: 1.3 }, radius: 0.7, drag: 0.8 },
+  soup: { hit: 3, grab: 8, splash: 3, impactMul: 4, impactMax: 12, bucket: 6 }, splashR: { standing: 1.6, knocked: 3.0 },
+  horn: { range: 3, cone: 0.52, cd: 6, scare: 2, push: 2 },
+  kid: { hp: 2, trigger: 8, peekOut: 0.7 }, grabber: { hp: 3, speed: 3.4, reach: 0.8 },
+};
+// 多人加碼（單人固定不變）：每多一個人，小怪人數 +60%、同時開火 +1.5 個、生怪間隔縮短 25%、準度 +10%、老師弱點 +1 格、老師出手快 12%；每多兩個人小怪多 1 滴血；搶廁所清潔隊 +1。
+export const MP = { count: 0.6, shooters: 1.5, gap: 0.25, spread: 0.1, bossWp: 1, bossRate: 0.12, hpEvery: 2, crew: 1 };
 export const COOP = { offerSeconds: 10, waveMul: 1.4, supplyAmount: 30, lowInterval: 8, maxGuests: 3, starters: { host: 'mag', g1: 'magnet', g2: 'rapid', g3: 'bag' }, waves: [4, 6, 6, 8, 8, 9], teacherWpHp: 4, reinforcements: 3, sitSeconds: 12, reviveRadius: 1.2, reviveHp: 2, invuln: 1.5 };
 export const EMOTES = ['', '掩護我！', '我沒彈了！', '惡霸醒了！', '班長來了！'];
 export const BUFFS = [

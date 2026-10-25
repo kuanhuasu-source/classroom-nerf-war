@@ -15,6 +15,8 @@ export class UI {
   timer(t) { const el = $('hud-time'); if (t === null || t === undefined) { el.hidden = true; return; } el.hidden = false; $('time').textContent = Math.max(0, Math.ceil(t)); el.classList.toggle('low', t <= 10); }
   leftLabel(text) { $('left').previousElementSibling.textContent = text; }
   waveLabelText(text) { $('wave').previousElementSibling.textContent = text; }
+  soup(pct) { const el = $('hud-soup'); if (pct === null || pct === undefined) { el.hidden = true; return; } el.hidden = false; $('soup').textContent = Math.round(pct) + '%'; el.classList.toggle('low', pct < 30); }
+  roleLabel(role) { $('wave').textContent = role === 'driver' ? '推車手' : '射手'; }
   wet(on) { $('wet').classList.toggle('on', !!on); }
   score(n) { $('score').textContent = n; }
   left(n) { $('left').textContent = n; }

@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#2f6fd1">
+  <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="課桌大戰">
@@ -50,7 +53,7 @@ body {
 #hud-top b { font-family: var(--font-hand); font-weight: 400; color: var(--pencil); font-size: 15px; margin-right: 6px; }
 #hud-hp { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); letter-spacing: 4px; font-size: 26px; }
 #hud-hp .lost { opacity: .22; }
-#hud-time.low { background: var(--red-pen); color: var(--paper); } #hud-time.low b { color: var(--paper); }
+#hud-time.low, #hud-soup.low { background: var(--red-pen); color: var(--paper); } #hud-time.low b, #hud-soup.low b { color: var(--paper); }
 #wet { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; background: radial-gradient(ellipse at center, rgba(111,183,239,0) 35%, rgba(111,183,239,.55) 100%); }
 #wet.on { opacity: 1; }
 #hud-ammo { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; font-family: var(--font-num); font-size: 30px; font-variant-numeric: tabular-nums; min-width: 110px; }
@@ -156,6 +159,7 @@ body.touch #hud-ammo small kbd { display: none; }
 #tc-crouch { right: calc(37px + env(safe-area-inset-right, 0px)); bottom: calc(204px + env(safe-area-inset-bottom, 0px)); }
 #tc-revive { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(190px + env(safe-area-inset-bottom, 0px)); display: none; background: #cfe6ff; }
 #tc-pause { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 44px; height: 44px; font-size: 18px; }
+#tc-full { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(128px + env(safe-area-inset-right, 0px)); width: 44px; height: 44px; font-size: 20px; }
 #tc-gyro { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(62px + env(safe-area-inset-right, 0px)); width: 58px; height: 44px; font-size: 13px; border-radius: 22px; }
 #tc-emote { position: absolute; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); display: none; gap: 8px; }
 body.touch.coop #tc-emote { display: flex; }
@@ -221,6 +225,7 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
   #tc-crouch { right: calc(23px + env(safe-area-inset-right, 0px)); bottom: calc(130px + env(safe-area-inset-bottom, 0px)); }
   #tc-revive { right: calc(86px + env(safe-area-inset-right, 0px)); bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
   #tc-pause { width: 34px; height: 34px; font-size: 14px; top: calc(6px + env(safe-area-inset-top, 0px)); right: calc(6px + env(safe-area-inset-right, 0px)); }
+  #tc-full { width: 34px; height: 34px; font-size: 16px; top: calc(6px + env(safe-area-inset-top, 0px)); right: calc(98px + env(safe-area-inset-right, 0px)); }
   #tc-gyro { width: 46px; height: 34px; font-size: 11px; top: calc(6px + env(safe-area-inset-top, 0px)); right: calc(46px + env(safe-area-inset-right, 0px)); }
   body.touch #hud-ammo { right: calc(200px + env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
   body.touch #hud-net { top: calc(44px + env(safe-area-inset-top, 0px)); }
@@ -268,6 +273,7 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
     <div class="sticker"><b>分數</b><span id="score">0</span></div>
     <div class="sticker"><b>同學</b><span id="left">0</span></div>
     <div class="sticker" id="hud-time" hidden><b>倒數</b><span id="time">90</span></div>
+    <div class="sticker" id="hud-soup" hidden><b>湯</b><span id="soup">100%</span></div>
   </div>
   <div id="wet"></div>
   <div id="hud-boss"></div>
@@ -305,6 +311,7 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
         <button type="button" class="seg-btn on" data-mode="class">下課大戰</button>
         <button type="button" class="seg-btn" data-mode="siege">守校門</button>
         <button type="button" class="seg-btn" data-mode="toilet">搶廁所</button>
+        <button type="button" class="seg-btn" data-mode="lunch">午餐大作戰</button>
       </div>
       <span class="note" id="mode-note">下課大戰：六波同學加一位老師。</span>
     </div>

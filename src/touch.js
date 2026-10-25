@@ -20,6 +20,7 @@ export class TouchControls {
       <button class="tc-btn" id="tc-revive" type="button">救！</button>
       <button class="tc-btn" id="tc-pause" type="button">Ⅱ</button>
       <button class="tc-btn" id="tc-gyro" type="button">陀螺儀</button>
+      <button class="tc-btn" id="tc-full" type="button" aria-label="全螢幕">⛶</button>
       <div id="tc-emote">${[1, 2, 3, 4].map(i => `<button class="mini" type="button" data-n="${i}">${EMOTES[i].replace('！', '')}</button>`).join('')}</div>`;
     $('hud').appendChild(layer);
     this.layer = layer; this.stickEl = $('tc-stick'); this.knob = this.stickEl.firstElementChild;
@@ -30,6 +31,7 @@ export class TouchControls {
     hold('tc-crouch', () => { this.crouch = !this.crouch; $('tc-crouch').classList.toggle('held', this.crouch); });
     hold('tc-revive', () => g.tryRevive());
     hold('tc-pause', () => g.pause());
+    hold('tc-full', () => g.enterFullscreen(true));
     // gyroscope: small turns of the device fine-tune the aim; drags still do the big turns. iOS asks for permission on a tap.
     this.gyro = false; try { this.gyro = localStorage.getItem('cnw-gyro') === '1'; } catch (e) { /* ignore */ }
     const gyroBtn = $('tc-gyro'); const showGyro = () => gyroBtn.classList.toggle('held', this.gyro);

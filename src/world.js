@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, rand, pick, clamp } from './config.js';
+import { CFG, rand, pick, clamp, LUNCH } from './config.js';
 import { Draw } from './draw.js';
 import { layoutById } from './layouts.js';
 
@@ -18,7 +18,7 @@ export class World {
     this.objects = [];        // everything we add to the scene, so the room can be torn down
     this.gradient = Draw.gradientMap();
     this.inkMat = new THREE.LineBasicMaterial({ color: 0x3a2e2a });
-    this.animated = []; this.drains = [];
+    this.animated = []; this.drains = []; this.buckets = [];
     this.build();
     this.buildGrid();
   }
@@ -68,11 +68,11 @@ export class World {
     if (!World.indoorBg && s.background) World.indoorBg = s.background.clone();
     s.background = outdoor ? new THREE.Color(0xc9e6ff) : (World.indoorBg || new THREE.Color(0xfbf6e6));
     // floor / ceiling / walls by style
-    const floorTex = outdoor ? Draw.tex(Draw.grass(), [w / 3, d / 3]) : st === 'lab' || st === 'toilet' ? Draw.tex(Draw.tiles(), [w / 2, d / 2]) : Draw.tex(Draw.floor(), st === 'gym' ? [w / 2.5, d / 2.5] : [w / 4, d / 4]);
+    const floorTex = outdoor ? Draw.tex(Draw.grass(), [w / 3, d / 3]) : st === 'lab' || st === 'toilet' || st === 'corridor' ? Draw.tex(Draw.tiles(), [w / 2, d / 2]) : Draw.tex(Draw.floor(), st === 'gym' ? [w / 2.5, d / 2.5] : [w / 4, d / 4]);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: floorTex, gradientMap: this.gradient }));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; this.add(floor);
     if (!outdoor) { const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ color: 0xf3eee0, gradientMap: this.gradient })); ceil.rotation.x = Math.PI / 2; ceil.position.y = h; this.add(ceil); }
-    const wallCanvas = st === 'music' ? Draw.staffWall() : Draw.paperWall(st === 'lab' ? '#eef5e8' : st === 'toilet' ? '#e6f0f4' : st === 'gym' ? '#f6efd9' : outdoor ? '#f3e2c8' : '#fbf6e6');
+    const wallCanvas = st === 'music' ? Draw.staffWall() : Draw.paperWall(st === 'lab' ? '#eef5e8' : st === 'toilet' ? '#e6f0f4' : st === 'corridor' ? '#f3ead8' : st === 'gym' ? '#f6efd9' : outdoor ? '#f3e2c8' : '#fbf6e6');
     const wallMat = new THREE.MeshToonMaterial({ map: Draw.tex(wallCanvas, [w / 4, 1]), gradientMap: this.gradient });
     const wallH = outdoor ? 4.2 : h;
     const mk = (pw, px, pz, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, wallH), wallMat); m.position.set(px, wallH / 2, pz); m.rotation.y = ry; m.receiveShadow = true; this.add(m); };
@@ -91,9 +91,11 @@ export class World {
     this.blackboardMat = new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.blackboard(0, this.boardStyle)) });
     const bb = new THREE.Mesh(new THREE.PlaneGeometry(L.board.w, L.board.h), this.blackboardMat);
     const by = L.boardY || 0;
-    bb.position.set(0, 1.65 + by, -d / 2 + 0.06); this.add(bb);
-    this.box(L.board.w + 0.3, L.board.h + 0.3, 0.05, 0, 1.65 + by, -d / 2 + 0.02, this.boardStyle === 'chalk' ? 0x7a4a22 : 0xb8c0c8, { collide: false, shadow: false });
-    this.box(L.board.w + 0.3, 0.08, 0.14, 0, 0.72 + by, -d / 2 + 0.07, this.boardStyle === 'chalk' ? 0x7a4a22 : 0xb8c0c8, { collide: false });
+    bb.position.set(0, 1.65 + by, -d / 2 + 0.06); if (!L.noBoard) this.add(bb);
+    if (!L.noBoard) {
+      this.box(L.board.w + 0.3, L.board.h + 0.3, 0.05, 0, 1.65 + by, -d / 2 + 0.02, this.boardStyle === 'chalk' ? 0x7a4a22 : 0xb8c0c8, { collide: false, shadow: false });
+      this.box(L.board.w + 0.3, 0.08, 0.14, 0, 0.72 + by, -d / 2 + 0.07, this.boardStyle === 'chalk' ? 0x7a4a22 : 0xb8c0c8, { collide: false });
+    }
     // windows (-x wall) and doors (+x wall)
     const winTex = Draw.tex(Draw.window());
     for (const z of L.windows) {
@@ -139,10 +141,49 @@ export class World {
     // furniture
     for (const f of L.furniture) this.furniture(f);
     if (this.siege && L.siege) this.buildSiege(L.siege);
+    if (L.style === 'corridor') this.buildCorridor(L);
     this.cans = (L.cans || []).map(([x, y, z], i) => this.can(x, y, z, i)); // 搶廁所：要射破的罐子
     // logical cover entries
     for (const dsk of L.desks) this.desks.push({ x: dsk.x, z: dsk.z, w: dsk.w, d: dsk.d, h: dsk.h, floor: dsk.floor || 0, seat: { x: dsk.seat.x, z: dsk.seat.z }, occupant: null, covered: null });
     this.bounds = { minX: -w / 2 + 0.3, maxX: w / 2 - 0.3, minZ: -d / 2 + 0.3, maxZ: d / 2 - 0.3 };
+  }
+  // 午餐大作戰的走廊：實心填充塊、教室門與門牌、飲水機、水桶、蒸飯室與三年二班的門
+  buildCorridor(L) {
+    const { w, d } = this.room;
+    for (const f of L.filler) this.box(f.maxX - f.minX, this.room.h, f.maxZ - f.minZ, (f.minX + f.maxX) / 2, this.room.h / 2, (f.minZ + f.maxZ) / 2, 0xf0e6d2);
+    const plate = (text, x, y, z, ry, bg = '#fbf6e6', fg = '#2b2622') => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.3), new THREE.MeshBasicMaterial({ map: Draw.tex(Draw.nameTag(text, bg, fg)), transparent: true })); m.position.set(x, y, z); m.rotation.y = ry; this.add(m); return m; };
+    for (const dr of L.doors2) { // a door panel flush with its face, the kid stands in front of it when peeking
+      const alongX = dr.nz !== 0, px = alongX ? dr.x : dr.x - dr.nx * 0.32, pz = alongX ? dr.z - dr.nz * 0.32 : dr.z;
+      const door = this.box(alongX ? 1.0 : 0.06, 2.1, alongX ? 0.06 : 1.0, px, 1.05, pz, 0x8fb98a, { collide: false, shadow: false });
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), this.toon(0xf4e27a)); knob.position.set(alongX ? 0.35 : dr.nx * 0.05, 0, alongX ? dr.nz * 0.05 : -0.35); door.add(knob);
+      plate(dr.label, alongX ? dr.x : dr.x - dr.nx * 0.3, 2.4, alongX ? dr.z - dr.nz * 0.3 : dr.z, alongX ? (dr.nz < 0 ? Math.PI : 0) : (dr.nx > 0 ? Math.PI / 2 : -Math.PI / 2));
+    }
+    // home: 三年二班 at the west end of segment A
+    const home = this.box(0.06, 2.1, 1.0, -w / 2 + 0.04, 1.05, L.home.z, 0x8fb98a, { collide: false, shadow: false }); home.add(new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), this.toon(0xf4e27a))).position.set(0.05, 0, -0.35);
+    plate('三年二班', -w / 2 + 0.08, 2.4, L.home.z, Math.PI / 2, '#d8432b', '#ffffff');
+    const zone = (c, color) => { const r = new THREE.Mesh(new THREE.RingGeometry(c.r - 0.08, c.r, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide })); r.rotation.x = -Math.PI / 2; r.position.set(c.x, 0.015, c.z); this.add(r); };
+    zone(L.home, 0xd8432b); zone(L.kitchen, 0xf4e27a);
+    // the kitchen (蒸飯室): a counter with pots along the north wall and a sign
+    this.box(3.4, 0.9, 0.6, 12, 0.45, 13.6, 0xcfd8dc);
+    for (let i = 0; i < 3; i++) this.cylinder(0.26, 0.3, 11 + i, 1.05, 13.6, 0xb8c0c8, { collide: false, seg: 14 });
+    plate('蒸飯室', 12, 2.5, d / 2 - 0.05, Math.PI, '#2f6fd1', '#ffffff');
+    this.box(0.6, 1.1, 0.6, L.fountain.x, 0.55, L.fountain.z, 0xcfd8dc); this.cylinder(0.02, 0.2, L.fountain.x, 1.2, L.fountain.z, 0xb8b8b8, { collide: false, seg: 6 }); // the drinking fountain at the inner corner
+    L.buckets.forEach(([x, z], i) => this.bucket(x, z));
+  }
+  // a mop bucket: hard to the cart until knocked over, then only its puddle matters (the cart slides on it)
+  bucket(x, z) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); this.add(g);
+    this.cylinder(0.25, 0.45, 0, 0.225, 0, 0xf4e27a, { collide: false, parent: g, seg: 14 }); this.cylinder(0.2, 0.03, 0, 0.44, 0, 0x6fb7ef, { collide: false, parent: g, seg: 14 });
+    const mop = this.cylinder(0.015, 1.3, 0.1, 0.9, 0, 0xb98556, { collide: false, parent: g, seg: 6 }); mop.rotation.z = -0.2;
+    const splash = new THREE.Mesh(new THREE.CircleGeometry(2, 28), new THREE.MeshBasicMaterial({ color: 0x9fd3f2, transparent: true, opacity: 0.45 })); splash.rotation.x = -Math.PI / 2; splash.position.set(x, 0.012, z); this.add(splash);
+    this.collide(x, z, 0.5, 0.5, 0.6); const box = this.boxes[this.boxes.length - 1];
+    splash.scale.setScalar(LUNCH.splashR.standing / 2);
+    this.buckets.push({ x, z, mesh: g, splash, box, knocked: false, splashR: LUNCH.splashR.standing });
+  }
+  knockBucket(i) {
+    const b = this.buckets[i]; if (!b || b.knocked) return;
+    b.knocked = true; b.splashR = LUNCH.splashR.knocked; b.splash.scale.setScalar(LUNCH.splashR.knocked / 2); b.mesh.rotation.z = 1.35; b.mesh.position.y = 0.25;
+    const k = this.boxes.indexOf(b.box); if (k >= 0) this.boxes.splice(k, 1);
   }
   // 搶廁所：一罐清潔劑。身體、瓶蓋、標籤；不擋人也不擋彈，命中由 Game 判定
   can(x, y, z, i) {

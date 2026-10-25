@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, SIEGE, TOILET, rand, pick, clamp } from './config.js';
+import { CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, SIEGE, TOILET, MP, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { Draw } from './draw.js';
 import { PaperFigure } from './paperfigure.js';
@@ -19,7 +19,7 @@ export class Student extends PaperFigure {
     super(game.scene, () => Draw.kid(v, 'normal'), 0.9, 1.35);
     this.game = game; this.v = v; this.world = game.world;
     this.leader = leader;
-    this.hp = (game.diff ? game.diff.enemyHp : CFG.enemy.hp) + (leader ? CFG.leader.hpBonus : 0) + (game.siege ? SIEGE.hpBonus : 0); this.state = 'enter'; this.timer = 0; this.path = []; this.crouch = 0; this.alive = true;
+    this.hp = (game.diff ? game.diff.enemyHp : CFG.enemy.hp) + (leader ? CFG.leader.hpBonus : 0) + (game.siege ? SIEGE.hpBonus : 0) + (game.extraPlayers ? Math.floor(game.extraPlayers() / MP.hpEvery) : 0); this.state = 'enter'; this.timer = 0; this.path = []; this.crouch = 0; this.alive = true;
     this.group.position.set(spawn.x, game.world.heightAt(spawn.x, spawn.z), spawn.z);
     this.entry = entry;
     if (entry && entry.kind === 'wall') this.group.position.y += 1.35; // on top of the fence, about to drop
