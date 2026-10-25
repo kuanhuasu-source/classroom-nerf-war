@@ -25,6 +25,7 @@ export class Teacher extends PaperFigure {
     // the blackboard eraser: every teacher and boss except the exam committee throws one now and then
     this.eraserOk = def.group !== 'committee'; this.eraserT = this.eraserEvery() * rand(0.5, 0.9); this.retaliateT = 0;
     if (def.scale) this.group.scale.setScalar(def.scale);
+    this.team(0xd8432b);
     this.defeated = false;
     this.wp = {};
     for (const w of def.wp) this.wp[w.key] = { hp: CFG.teacher.wpHp, local: new THREE.Vector3(...w.local), r: w.r, label: w.label, def: w };

@@ -14,14 +14,15 @@ export class RemotePlayer extends PaperFigure {
     this.sitting = false; this.sitT = 0; this.invuln = 0; this.hurtCd = 0; this.seat = null; this.texState = 'normal'; this.sayT = 0; this.bubble = null; this.offline = false; this.shots = 0; this.hits = 0;
     this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: RemotePlayer.tagTex(skin.name), transparent: true, depthTest: false }));
     this.tag.scale.set(0.64, 0.2, 1); this.tag.position.set(0, 1.6, 0); this.group.add(this.tag);
+    this.team(0x2f6fd1); // a teammate: blue ring, blue tag
     this.group.visible = false;
   }
   static tagTex(name) {
     const c = Draw.canvas(256, 80), ctx = c.getContext('2d');
-    ctx.fillStyle = '#fbf6e6'; ctx.strokeStyle = '#2b2622'; ctx.lineWidth = 6; ctx.beginPath();
+    ctx.fillStyle = '#2f6fd1'; ctx.strokeStyle = '#2b2622'; ctx.lineWidth = 6; ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(8, 8, 240, 64, 14); else ctx.rect(8, 8, 240, 64);
     ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#2b2622'; ctx.font = 'bold 40px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(name, 128, 42);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 40px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(name, 128, 42);
     return Draw.tex(c);
   }
   // a different typed name or picked look (reconnect from another browser, or just a change): redraw body and tag

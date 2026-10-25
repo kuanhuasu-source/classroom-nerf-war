@@ -14,12 +14,20 @@ export class PaperFigure {
     const geo = new THREE.PlaneGeometry(w, h); geo.translate(0, h / 2, 0);
     this.mesh = new THREE.Mesh(geo, this.mat); this.mesh.castShadow = true;
     this.group = new THREE.Group(); this.group.add(this.mesh); scene.add(this.group);
-    this.flash = 0; this.wobble = 0;
+    this.flash = 0; this.wobble = 0; this.dim = 1;
   }
+  // a ring at the feet says which side this figure is on: red enemies, blue teammates, grey bystanders
+  team(color) {
+    if (!this.ringMesh) { this.ringMesh = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.4, 28), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })); this.ringMesh.rotation.x = -Math.PI / 2; this.ringMesh.position.y = 0.02; this.group.add(this.ringMesh); }
+    else this.ringMesh.material.color.setHex(color);
+    this.ringMesh.visible = true;
+  }
+  // out of the fight (knocked out, sitting, leaving): pale and see-through, no ring
+  fade(on) { this.dim = on ? 0.72 : 1; this.mat.opacity = on ? 0.5 : 1; if (this.ringMesh) this.ringMesh.visible = !on; }
   setTexture(canvas) { this.tex.dispose(); this.tex = Draw.tex(canvas); this.mat.map = this.tex; this.mat.needsUpdate = true; }
   face(camPos) { const dx = camPos.x - this.group.position.x, dz = camPos.z - this.group.position.z; this.group.rotation.y = Math.atan2(dx, dz); }
   tick(dt, moving) {
-    if (this.flash > 0) { this.flash -= dt; const f = clamp(this.flash / 0.15, 0, 1); this.mat.color.setRGB(1 + f * 1.5, 1 + f * 0.6, 1 + f * 0.6); } else this.mat.color.setRGB(1, 1, 1);
+    if (this.flash > 0) { this.flash -= dt; const f = clamp(this.flash / 0.15, 0, 1); this.mat.color.setRGB(1 + f * 1.5, 1 + f * 0.6, 1 + f * 0.6); } else this.mat.color.setRGB(this.dim, this.dim, this.dim);
     if (moving) { this.wobble += dt * 11; this.mesh.rotation.z = Math.sin(this.wobble) * 0.09; this.mesh.position.y = Math.abs(Math.sin(this.wobble)) * 0.05; }
     else { this.mesh.rotation.z *= 0.85; this.mesh.position.y *= 0.85; }
   }

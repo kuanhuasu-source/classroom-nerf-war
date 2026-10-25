@@ -8,6 +8,7 @@ export class Monitor extends PaperFigure {
   constructor(game, opts = {}) {
     super(game.scene, () => Draw.monitor('normal'), 0.9, 1.4);
     this.game = game; this.world = game.world; this.remote = !!opts.remote; this.texState = 'normal';
+    this.team(0xd8432b);
     const L = this.world.layout; this.L = L;
     this.group.position.set(opts.x ?? rand(-3, 3), 0, opts.z ?? rand(L.front - 0.65, L.front + 0.15));
     this.state = 'pause'; this.timer = 1; this.path = []; this.strokes = 0; this.strokeCd = 0; this.rest = 0;

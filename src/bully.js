@@ -21,6 +21,7 @@ export class Bully extends PaperFigure {
     this.group.position.set(d.seat.x, this.world.heightAt(d.seat.x, d.seat.z), d.seat.z);
     this.state = 'sleep'; this.timer = 0; this.target = null; this.pack = null; this.snoreT = 0; this.deep = 0; this.deepMsgCd = 0;
     this.group.scale.set(1.2, 0.58, 1.2);
+    this.team(0x7a8794); // asleep: a bystander until someone pokes him
     const c = Draw.canvas(128, 96), ctx = c.getContext('2d');
     ctx.fillStyle = '#2b2622'; ctx.font = 'bold 34px "Patrick Hand", sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('z', 30, 80); ctx.font = 'bold 44px "Patrick Hand", sans-serif'; ctx.fillText('Z', 64, 62); ctx.font = 'bold 54px "Patrick Hand", sans-serif'; ctx.fillText('Z', 102, 44);
@@ -36,7 +37,7 @@ export class Bully extends PaperFigure {
     if (owner === 'player') this.target = new THREE.Vector3(p.x, 0, p.z);
     else if (shooter && shooter.alive) this.target = shooter.group.position.clone().setY(0);
     else { const s = this.game.students.filter(x => x.alive); this.target = s.length ? pick(s).group.position.clone().setY(0) : new THREE.Vector3(p.x, 0, p.z); }
-    this.state = 'wake'; this.timer = CFG.bully.windup; this.flash = 0.15;
+    this.state = 'wake'; this.timer = CFG.bully.windup; this.flash = 0.15; this.team(0xd8432b);
     this.setTexture(Draw.bully('angry')); this.zz.visible = false; this.bang.visible = true;
     Audio.growl();
     this.game.message(owner === 'player' ? '你吵醒惡霸了！' : '同學吵醒惡霸了！', '他要丟書包了，快跑', 1.6);

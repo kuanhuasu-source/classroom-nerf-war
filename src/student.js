@@ -26,6 +26,7 @@ export class Student extends PaperFigure {
     if (entry && entry.kind === 'drain') { this.group.position.y -= 1.45; game.world.popDrain(entry.index); } // under the lid, about to climb out
     this.desk = null; this.shotsLeft = 0; this.shotTimer = 0; this.speedMul = rand(0.85, 1.15);
     this.id = opts.id ?? game.nextId(); this.texState = 'normal'; this.remote = !!opts.remote; this.age = 0; this.shotsFired = 0;
+    this.team(0xd8432b);
     // the "!" that warns you she is about to fire
     if (!Student.alertTex) Student.alertTex = Draw.tex(Draw.alertIcon());
     this.alert = new THREE.Sprite(new THREE.SpriteMaterial({ map: Student.alertTex, transparent: true, depthTest: false })); this.alert.scale.set(0.28, 0.42, 1); this.alert.position.set(0, 1.75, 0); this.alert.visible = false; this.group.add(this.alert);
@@ -43,7 +44,7 @@ export class Student extends PaperFigure {
   }
   static unpack(a) { return { id: a[0], x: a[1], y: a[2], z: a[3], sx: a[4], sy: a[5], rz: a[6], st: a[7], a: a[8], f: a[9], al: a[10], v: a[11] }; }
   applyState(s) {
-    this.setTarget(s.x, s.y, s.z); this.alive = !!s.a;
+    this.setTarget(s.x, s.y, s.z); if (this.alive && !s.a) this.fade(true); this.alive = !!s.a;
     const prev = this.texState; this.setTex(s.st);
     if (prev !== s.st) { if (s.st === 'hurt') Audio.hitEnemy(); else if (s.st === 'out') Audio.out(); }
     this.group.scale.set(s.sx, s.sy, s.sx); this.remoteRz = s.rz; if (s.f && this.flash <= 0) this.flash = 0.15; this.alert.visible = !!s.al;
@@ -189,7 +190,7 @@ export class Student extends PaperFigure {
     return false;
   }
   knockOut() {
-    this.alive = false; Audio.out(); this.alert.visible = false;
+    this.alive = false; Audio.out(); this.alert.visible = false; this.fade(true);
     this.game.darts.drop(this.group.position, this.leader ? CFG.leader.drop : CFG.gun.dropOnKnockout);
     if (this.tag) this.tag.visible = false;
     if (this.leader) { // the wave leader is sent to the office instead of a seat: she leaves through the nearest door

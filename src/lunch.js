@@ -115,13 +115,13 @@ export class LunchKid extends PaperFigure {
     if (!LunchKid.alertTex) LunchKid.alertTex = Draw.tex(Draw.alertIcon());
     this.alert = new THREE.Sprite(new THREE.SpriteMaterial({ map: LunchKid.alertTex, transparent: true, depthTest: false })); this.alert.scale.set(0.28, 0.42, 1); this.alert.position.set(0, 1.75, 0); this.alert.visible = false; this.group.add(this.alert);
     if (this.kind === 'grab') { if (!LunchKid.grabTag) LunchKid.grabTag = Draw.tex(Draw.nameTag('搶菜王', '#d8432b', '#ffffff')); const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: LunchKid.grabTag, transparent: true, depthTest: false })); tag.scale.set(0.7, 0.2, 1); tag.position.set(0, 1.55, 0); this.group.add(tag); this.tag = tag; }
-    this.group.visible = this.kind === 'grab';
+    this.group.visible = this.kind === 'grab'; this.team(0xd8432b);
     if (this.remote) this.state = 'remote';
   }
   setTex(st) { if (this.texState === st) return; this.texState = st; this.setTexture(Draw.kid(this.v, st)); }
   serialize(withVariant) { const p = this.group.position; const a = [this.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2), +this.group.scale.y.toFixed(2), this.texState, this.alive ? 1 : 0, this.group.visible ? 1 : 0, this.alert.visible ? 1 : 0, this.flash > 0 ? 1 : 0]; if (withVariant || this.age === undefined || this.age < 1.2) a.push(this.v); return a; }
   static unpack(a) { return { id: a[0], x: a[1], y: a[2], z: a[3], sy: a[4], st: a[5], a: a[6], vis: a[7], al: a[8], f: a[9], v: a[10] }; }
-  applyState(s) { this.setTarget(s.x, s.y, s.z); this.alive = !!s.a; const prev = this.texState; this.setTex(s.st); if (prev !== s.st) { if (s.st === 'hurt') Audio.hitEnemy(); else if (s.st === 'out') Audio.out(); } this.group.scale.y = s.sy; this.group.visible = !!s.vis; this.alert.visible = !!s.al; if (s.f && this.flash <= 0) this.flash = 0.15; }
+  applyState(s) { this.setTarget(s.x, s.y, s.z); if (this.alive && !s.a) this.fade(true); this.alive = !!s.a; const prev = this.texState; this.setTex(s.st); if (prev !== s.st) { if (s.st === 'hurt') Audio.hitEnemy(); else if (s.st === 'out') Audio.out(); } this.group.scale.y = s.sy; this.group.visible = !!s.vis; this.alert.visible = !!s.al; if (s.f && this.flash <= 0) this.flash = 0.15; }
   eye() { return new THREE.Vector3(this.group.position.x, this.group.position.y + 1.1 * this.group.scale.y, this.group.position.z); }
   nearestTarget() { const list = this.game.activeTargets(), p = this.group.position; let best = list[0], bd = 1e9; for (const t of list) { const d = Math.hypot(t.pos.x - p.x, t.pos.z - p.z); if (d < bd) { bd = d; best = t; } } return best; }
   canSee(t) { const from = this.eye(), to = t.eyePos ? t.eyePos() : new THREE.Vector3(t.pos.x, t.pos.y + 1.2, t.pos.z); return from.distanceTo(to) < 14 && !this.world.segmentBlocked(from, to); }
@@ -181,7 +181,7 @@ export class LunchKid extends PaperFigure {
   // a player's dart landed: true when this knocked the kid out
   hit() {
     this.hp--; this.flash = 0.15; this.game.addScore(CFG.score.hit); this.game.hitmark();
-    if (this.hp <= 0) { this.alive = false; this.setTex('out'); this.alert.visible = false; this.group.visible = true; this.group.scale.y = 0.6; Audio.out(); this.game.addScore(CFG.score.out); if (this.tag) this.tag.visible = false; return true; }
+    if (this.hp <= 0) { this.alive = false; this.setTex('out'); this.alert.visible = false; this.group.visible = true; this.group.scale.y = 0.6; this.fade(true); Audio.out(); this.game.addScore(CFG.score.out); if (this.tag) this.tag.visible = false; return true; }
     this.setTex('hurt'); this.state = 'hurt'; this.timer = 0.6; return false;
   }
 }
