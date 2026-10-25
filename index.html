@@ -98,11 +98,13 @@ body {
 
 /* ---- Overlays ---- */
 .overlay {
-  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center;
   background: repeating-linear-gradient(transparent 0 29px, var(--paper-line) 29px 31px), var(--paper);
   padding-block: 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   overflow: auto;
 }
+/* a card taller than the screen (phone held upright) must start at the top and scroll, not get its top cut off by centering */
+.overlay > .card { margin: auto; }
 .overlay[hidden] { display: none !important; }
 .overlay.translucent { background: rgba(251, 246, 230, .82); }
 .card {
@@ -135,7 +137,7 @@ body {
 .stats span { color: var(--pencil); font-size: 14px; }
 .red-pen { color: var(--red-pen); }
 #upgrade.compact { background: none; align-items: flex-end; pointer-events: none; padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
-#upgrade.compact .card { max-width: 720px; padding: 12px 18px; transform: none; pointer-events: auto; }
+#upgrade.compact .card { max-width: 720px; padding: 12px 18px; transform: none; pointer-events: auto; margin: auto auto 0; }
 #upgrade.compact .card::before { display: none; }
 #upgrade.compact h2 { font-size: 22px; margin: 0 0 2px; }
 #upgrade.compact .sub { display: none; }
