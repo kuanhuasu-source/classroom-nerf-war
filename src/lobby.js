@@ -2,6 +2,7 @@ import { PeerTransport, roomCode, normalizeCode } from './net/peer.js';
 import { $ } from './ui.js';
 import { LOOKS } from './config.js';
 import { Draw } from './draw.js';
+import QRCode from 'qrcode';
 
 // The front page: solo, open a room, or join one by code.
 export function initLobby(game) {
@@ -15,6 +16,10 @@ export function initLobby(game) {
   };
   const leave = () => { if (transport) { transport.close(); transport = null; } game.detachTransport(); show('menu'); };
   // the single-file build (Claude Artifact) runs in a sandbox without WebRTC: solo only
+  // QR codes: the front page shows the game's own address (phones scan it to open the game); a room shows a link with its code
+  const siteUrl = location.origin + location.pathname;
+  const drawQr = (id, text) => { QRCode.toCanvas($(id), text, { width: 132, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#2b2622', light: '#fbf6e6' } }, () => {}); };
+  if (import.meta.env.VITE_SOLO_ONLY !== '1' && /^https?:/.test(location.protocol)) { $('qr-site-wrap').hidden = false; drawQr('qr-site', siteUrl); }
   if (import.meta.env.VITE_SOLO_ONLY === '1') { $('btn-host').hidden = true; $('btn-join-open').hidden = true; $('menu-note').textContent = '建議用電腦與滑鼠遊玩。連線模式（最多四人）在網站版才有。'; }
 
   // mode: the classroom war or the gate siege; remembered per browser
@@ -49,7 +54,7 @@ export function initLobby(game) {
 
   $('btn-host').addEventListener('click', () => {
     leave(); show('host');
-    const code = roomCode(); $('lobby-code').textContent = code; status('正在開房間……');
+    const code = roomCode(); $('lobby-code').textContent = code; status('正在開房間……'); drawQr('qr-room', `${siteUrl}?room=${code}`);
     transport = new PeerTransport(peerOpts);
     const roster = () => {
       const names = game.lobbyNames();
@@ -96,5 +101,5 @@ export function initLobby(game) {
 
   // ?room=CODE opens the join panel with the code filled in (share-link friendly)
   const pre = normalizeCode(q.get('room'));
-  if (pre.length === 4) { show('join'); $('join-code').value = pre; status('房號已填好，按「加入」。'); }
+  if (pre.length === 4) { show('join'); $('join-code').value = pre; status('房號已填好，正在加入……'); setTimeout(join, 300); } // a scanned QR joins by itself
 }
