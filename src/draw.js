@@ -81,6 +81,9 @@ export const Draw = (() => {
       ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.save(); ctx.translate(85, 250); ctx.rotate(-0.25); ctx.fillText(v.bully ? '老大' : '班長', 0, 0); ctx.restore();
       shape(ctx, [[cx - 8, 224], [cx + 8, 224], [cx, 250]], '#f4e27a', '#2b2622', 2);
     }
+    if (v.bag) { // backpack straps over the shoulders
+      shape(ctx, [[90, 204], [106, 204], [114, 300], [100, 302]], v.bag, '#2b2622', 2); shape(ctx, [[150, 204], [166, 204], [156, 302], [142, 300]], v.bag, '#2b2622', 2);
+    }
     // head
     shape(ctx, ellipsePts(cx, headY, headR, headR + 4), v.skin);
     // hair
@@ -103,6 +106,11 @@ export const Draw = (() => {
     if (v.bully) { // the gang's red bandana, knotted at the side
       shape(ctx, [[cx - 66, headY - 16], [cx + 66, headY - 16], [cx + 64, headY + 2], [cx - 64, headY + 2]], '#d8432b', '#2b2622', 2);
       shape(ctx, [[cx + 60, headY - 10], [cx + 92, headY - 22], [cx + 88, headY + 4], [cx + 62, headY + 2]], '#d8432b', '#2b2622', 2);
+    }
+    if (v.cap) { // a cap worn backwards: crown over the hair, brim sticking out behind
+      shape(ctx, [[cx - 66, headY - 22], [cx - 58, headY - 64], [cx - 20, headY - 84], [cx + 24, headY - 84], [cx + 60, headY - 64], [cx + 66, headY - 22]], v.cap, '#2b2622', 3);
+      shape(ctx, [[cx + 56, headY - 34], [cx + 104, headY - 30], [cx + 102, headY - 14], [cx + 60, headY - 20]], v.cap, '#2b2622', 3);
+      shape(ctx, ellipsePts(cx + 2, headY - 84, 7, 7, 10), '#2b2622', null);
     }
     // face
     const ey = headY + 6;

@@ -43,7 +43,9 @@ export class UI {
     if (sub) { const s = document.createElement('small'); s.textContent = sub; this.msgEl.appendChild(s); }
     this.msgEl.classList.add('show'); this.msgTimer = dur;
   }
-  tick(dt) { if (this.msgTimer > 0) { this.msgTimer -= dt; if (this.msgTimer <= 0) this.msgEl.classList.remove('show'); } }
+  tick(dt) { if (this.msgTimer > 0) { this.msgTimer -= dt; if (this.msgTimer <= 0) this.msgEl.classList.remove('show'); } if (this.buddyT > 0) { this.buddyT -= dt; if (this.buddyT <= 0) $('hud-buddy').classList.remove('on'); } }
+  // 小美's speech bubble (story mode)
+  buddy(text, secs = 4) { const el = $('hud-buddy'); if (!el) return; $('buddy-text').textContent = text; el.classList.add('on'); this.buddyT = secs; }
   hitmark() { const h = $('hitmark'); h.classList.add('show'); clearTimeout(this._hm); this._hm = setTimeout(() => h.classList.remove('show'), 60); }
   vignette() { const v = $('vignette'); v.classList.add('hit'); clearTimeout(this._vg); this._vg = setTimeout(() => v.classList.remove('hit'), 80); }
   dust(t, canvas) { const el = $('dust'); el.style.opacity = t > 0 ? Math.min(0.85, t / 1.4).toFixed(2) : 0; canvas.style.filter = t > 0 ? `blur(${Math.min(6, t * 4).toFixed(1)}px)` : ''; }

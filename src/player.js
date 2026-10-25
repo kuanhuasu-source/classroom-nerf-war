@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Ach } from './achievements.js';
 import { COOP, TOILET, CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { freshUp } from './upgrades.js';
@@ -83,7 +84,7 @@ export class Player {
     if (this.ammo === 0 && this.reloading <= 0) { this.emptyTime += dt; if (this.emptyTime > CFG.gun.autoReloadDelay && !this.firing) this.reload(); } else this.emptyTime = 0;
     // scavenge darts lying around
     const got = this.game.isHost ? this.game.darts.pickupNear(this.pos, CFG.gun.pickupRadius * this.up.pickupMul, this.reserveCap() - this.reserve) : 0;
-    if (got > 0) { this.reserve += got; Audio.pickup(); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); this.game.ui.pickFlash(); }
+    if (got > 0) { this.reserve += got; Ach.add('darts', got); Audio.pickup(); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); this.game.ui.pickFlash(); }
     if (this.firing && !this.sitting) this.tryFire();
   }
   // --- penalty sitting (co-op): knocked out, waiting for a rescue ---
@@ -153,7 +154,7 @@ export class Player {
   }
   hurt() {
     if (this.hurtCd > 0 || this.sitting || this.invuln > 0) return;
-    this.hurtCd = 0.7; this.hp--; Audio.hurt(); this.game.ui.hp(this.hp, this.maxHp); this.game.ui.vignette();
+    this.hurtCd = 0.7; this.hp--; this.game.damageTaken = (this.game.damageTaken || 0) + 1; Audio.hurt(); this.game.ui.hp(this.hp, this.maxHp); this.game.ui.vignette();
     if (this.hp <= 0) this.game.onPlayerDown(this);
   }
 }

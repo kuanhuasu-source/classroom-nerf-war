@@ -41,6 +41,7 @@ export const PLAYERS = [
 export const skinOf = (slot) => PLAYERS.find(p => p.slot === slot) || PLAYERS[0];
 // looks a player can pick for a room (name is typed separately); the slot defaults above stay as fallbacks
 export const LOOKS = [
+  { id: 'jason', label: 'Jason', v: { skin: '#f3c9ad', shirt: '#f28a1a', hair: 2, hairColor: '#2b2622', cap: '#2f6fd1', bag: '#d8432b' } },
   { id: 'l1', label: '藍衣', v: { skin: '#f6d6b8', shirt: '#9fd3f2', hair: 0, hairColor: '#2b2622' } },
   { id: 'l2', label: '黃衣', v: { skin: '#f3c9ad', shirt: '#f4e27a', hair: 1, hairColor: '#4a2f1d' } },
   { id: 'l3', label: '綠衣', v: { skin: '#e9c39c', shirt: '#b7e3a1', hair: 2, hairColor: '#2b2622' } },

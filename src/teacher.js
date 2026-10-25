@@ -387,6 +387,7 @@ export class Teacher extends PaperFigure {
   }
   hitWeak(k) {
     const w = this.wp[k]; w.hp--; this.flash = 0.15; this.ringFlash = { k, t: 0.2 }; this.game.hitmark(); this.game.addScore(CFG.score.hit * 2);
+    if (w.hp <= 0 && this.def.id === 'king' && k === 'cap' && Object.values(this.wp).filter(x => x.hp <= 0).length === 1) this.game.unlock('crown');
     if (this.eraserOk && !this.remote && this.retaliateT <= 0 && !(this.special && this.special.phase === 'go')) {
       this.retaliateT = CFG.teacher.eraserRetaliate; const who = this.game.lastShooter, g = this.game;
       const shooter = (who && who !== 'host' && g.remoteBySlot(who)) || g.player;
@@ -408,7 +409,7 @@ export class Teacher extends PaperFigure {
     }
   }
   defeat() {
-    this.defeated = true; this.special = null; this.flags.mood = 'cry'; this.setTexture(Draw.teacher(this.def, this.flags)); this.path = [];
+    this.defeated = true; this.special = null; this.flags.mood = 'cry'; this.setTexture(Draw.teacher(this.def, this.flags)); this.path = []; this.fade(true);
     Audio.teacher();
     this.game.onTeacherDefeated(this);
   }

@@ -180,6 +180,23 @@ body.touch #hud-net { top: calc(62px + env(safe-area-inset-top, 0px)); }
 .qr canvas { width: 96px; height: 96px; border: 2px solid var(--ink); border-radius: 8px; background: var(--paper); box-shadow: 2px 2px 0 var(--pencil); image-rendering: pixelated; }
 .qr .note { line-height: 1.3; text-align: left; }
 #lobby-code-wrap .qr { margin: 8px 0 0 0; display: flex; justify-content: center; }
+#story-row { margin: -4px 0 12px; gap: 10px; align-items: center; }
+#story-list, #album-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 14px; max-height: 52vh; overflow: auto; }
+.chapter { font: inherit; font-size: 19px; text-align: left; display: grid; grid-template-columns: 7.5em 1.6em 1fr auto; gap: 10px; align-items: center; padding: 8px 14px; border: 2px solid var(--ink); border-radius: 12px 14px 10px 16px / 16px 10px 14px 12px; background: var(--paper); color: var(--ink); cursor: pointer; box-shadow: 2px 2px 0 var(--pencil); }
+.chapter:hover { background: #fff; } .chapter[disabled] { opacity: .5; cursor: default; } .chapter .stars { font-family: var(--font-num); color: var(--nerf-orange); letter-spacing: 2px; } .chapter .day { color: var(--pencil); }
+.card.diary { background: repeating-linear-gradient(transparent 0 30px, rgba(60,120,200,.18) 30px 31px), #fffdf5; max-width: 640px; }
+.diary-head { display: flex; justify-content: space-between; font-family: var(--font-hand); color: var(--pencil); font-size: 18px; }
+.diary-text { font-size: 20px; line-height: 31px; margin: 8px 0; white-space: pre-line; }
+.diary-goal { font-size: 18px; line-height: 31px; margin: 0 0 8px; } .diary-goal b { color: var(--red-pen); margin-right: 8px; font-weight: 400; }
+#sticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 14px; max-height: 56vh; overflow: auto; }
+.sticker-cell { border: 2px dashed var(--pencil); border-radius: 50% 48% 52% 50% / 48% 52% 48% 52%; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 10px; background: #f3efe4; color: var(--pencil); gap: 2px; }
+.sticker-cell .icon { font-size: 34px; filter: grayscale(1); opacity: .5; } .sticker-cell b { font-size: 15px; } .sticker-cell small { font-size: 11px; line-height: 1.2; }
+.sticker-cell.got { border-style: solid; border-color: var(--ink); background: var(--paper); color: var(--ink); box-shadow: 2px 2px 0 var(--pencil); transform: rotate(-2deg); } .sticker-cell.got .icon { filter: none; opacity: 1; }
+#hud-buddy { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-width: 46vw; background: #fff; border: 2px solid var(--ink); border-radius: 16px 18px 18px 4px / 18px 16px 18px 4px; padding: 6px 12px; font-size: 17px; box-shadow: 2px 2px 0 var(--pencil); opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; }
+#hud-buddy.on { opacity: 1; transform: none; } #hud-buddy b { color: var(--nerf-blue); font-weight: 400; margin-right: 6px; }
+body.touch #hud-buddy { bottom: auto; top: calc(100px + env(safe-area-inset-top, 0px)); font-size: 14px; }
+#ach-toast { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(90px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 10px; background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; padding: 8px 14px; box-shadow: 3px 3px 0 var(--pencil); transform: translateX(120%) rotate(3deg); transition: transform .4s; pointer-events: none; z-index: 20; }
+#ach-toast.on { transform: none; } #ach-toast span { font-size: 30px; } #ach-toast small { display: block; color: var(--pencil); font-size: 12px; } #ach-toast b { font-size: 18px; }
 #mode-row { margin: -6px 0 10px; gap: 10px; }
 #difficulty-row { margin: 0 0 10px; gap: 10px; }
 #map-row.dim .seg { opacity: .45; }
@@ -276,6 +293,8 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
     <div class="sticker" id="hud-soup" hidden><b>湯</b><span id="soup">100%</span></div>
   </div>
   <div id="wet"></div>
+  <div id="hud-buddy"><b>小美</b><span id="buddy-text"></span></div>
+  <div id="ach-toast"><span id="ach-toast-icon">🎯</span><div><small>貼紙解鎖！</small><b id="ach-toast-name"></b></div></div>
   <div id="hud-boss"></div>
   <div class="sticker" id="hud-buff"><b id="buff-name">滿分考卷</b> <span id="buff-effect">分數雙倍</span> <span id="buff-time">12</span></div>
   <div class="sticker" id="hud-up"></div>
@@ -305,6 +324,11 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
       <dt><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></dt><dd>連線模式：喊話泡泡（掩護我、我沒彈了、惡霸醒了、班長來了）</dd>
       <dt><kbd>Esc</kbd></dt><dd>暫停（遊戲會進入全螢幕，按 <kbd>F11</kbd> 離開全螢幕會暫停，再按一次就繼續）</dd>
     </dl>
+    <div class="row" id="story-row">
+      <button class="btn blue" id="btn-story" type="button">故事模式：Jason 的畢業週</button>
+      <button class="btn" id="btn-stickers" type="button" style="background:var(--nerf-orange)">貼紙簿</button>
+      <span class="note" id="story-note"></span>
+    </div>
     <div class="row" id="mode-row">
       <span class="note">玩法</span>
       <div class="seg" role="radiogroup" aria-label="玩法">
@@ -376,6 +400,40 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
   </div>
 </div>
 
+<div class="overlay" id="story" hidden>
+  <div class="card">
+    <h2>Jason 的畢業週</h2>
+    <p class="sub">六年二班的 Jason，畢業前最後一週。每天一章，過了才開下一章；星星可以回頭再拿。</p>
+    <div id="story-list"></div>
+    <div class="row"><button class="btn" id="btn-story-close" type="button" style="background:var(--pencil)">返回</button></div>
+  </div>
+</div>
+<div class="overlay" id="diary" hidden>
+  <div class="card diary">
+    <div class="diary-head"><span id="diary-day">星期一</span><span id="diary-weather">☀️</span></div>
+    <h2 id="diary-title"></h2>
+    <p class="diary-text" id="diary-text"></p>
+    <p class="diary-goal"><b>今天的目標</b><span id="diary-goal"></span></p>
+    <p class="note" id="diary-stars"></p>
+    <div class="row"><button class="btn" id="btn-diary-go" type="button">出發</button><button class="btn" id="btn-diary-back" type="button" style="background:var(--pencil)">返回</button></div>
+  </div>
+</div>
+<div class="overlay" id="album" hidden>
+  <div class="card diary">
+    <h2>畢業紀念冊</h2>
+    <p class="diary-text" id="album-text"></p>
+    <div id="album-list"></div>
+    <p class="note" id="album-stickers"></p>
+    <div class="row"><button class="btn" id="btn-album-close" type="button">回首頁</button></div>
+  </div>
+</div>
+<div class="overlay" id="stickers" hidden>
+  <div class="card">
+    <h2>貼紙簿 <small id="sticker-count" class="note"></small></h2>
+    <div id="sticker-grid"></div>
+    <div class="row"><button class="btn" id="btn-stickers-close" type="button" style="background:var(--pencil)">返回</button></div>
+  </div>
+</div>
 <div class="overlay" id="over" hidden>
   <div class="card">
     <h2 id="over-title">你被罰坐了！</h2>
@@ -386,7 +444,7 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
       <div><b id="st-wave">0</b><span>撐到第幾波</span></div>
       <div><b id="st-acc">0%</b><span>命中率</span></div>
     </div>
-    <div class="row"><button class="btn" id="btn-again">再來一局</button><button class="btn" id="btn-menu-over" style="background:var(--pencil)">回到主選單</button></div>
+    <div class="row"><button class="btn blue" id="btn-next" hidden>下一章</button><button class="btn" id="btn-again">再來一局</button><button class="btn" id="btn-menu-over" style="background:var(--pencil)">回到主選單</button></div>
   </div>
 </div>
 

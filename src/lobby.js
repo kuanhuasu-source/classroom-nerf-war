@@ -3,6 +3,8 @@ import { $ } from './ui.js';
 import { LOOKS } from './config.js';
 import { Draw } from './draw.js';
 import QRCode from 'qrcode';
+import { STORY, Progress, starText } from './story.js';
+import { Ach } from './achievements.js';
 
 // The front page: solo, open a room, or join one by code.
 export function initLobby(game) {
@@ -51,6 +53,41 @@ export function initLobby(game) {
   }
   applyLook(LOOKS.some(l => l.id === game.profile.look) ? game.profile.look : LOOKS[0].id);
   $('btn-start').addEventListener('click', () => { leave(); game.start(); });
+
+  // ---------- 故事模式：Jason 的畢業週 ----------
+  const storyNote = () => { const total = STORY.chapters.filter(c => !c.hidden).reduce((a, c) => a + Progress.stars(c.id), 0); $('story-note').textContent = total ? `★ ${total}/18${Progress.allThree() ? '　隱藏章已解鎖' : ''}` : ''; };
+  const renderStory = () => {
+    const list = $('story-list'); list.innerHTML = '';
+    for (const ch of STORY.chapters) {
+      if (ch.hidden && !Progress.allThree()) { const row = document.createElement('button'); row.type = 'button'; row.className = 'chapter'; row.disabled = true; row.innerHTML = '<span class="day">？？？</span><span>🔒</span><span>五章全三星才會出現的一章</span><span class="stars"></span>'; list.appendChild(row); continue; }
+      const open = Progress.unlocked(ch), st = Progress.stars(ch.id), row = document.createElement('button'); row.type = 'button'; row.className = 'chapter'; row.disabled = !open;
+      row.innerHTML = '<span class="day"></span><span class="w"></span><span class="t"></span><span class="stars"></span>';
+      row.querySelector('.day').textContent = ch.day; row.querySelector('.w').textContent = open ? ch.weather : '🔒'; row.querySelector('.t').textContent = ch.title; row.querySelector('.stars').textContent = open ? starText(st) : '';
+      row.addEventListener('click', () => showDiary(ch)); list.appendChild(row);
+    }
+  };
+  let diaryChapter = null;
+  const showDiary = (ch) => {
+    diaryChapter = ch; $('story').hidden = true; $('diary').hidden = false;
+    $('diary-day').textContent = ch.day; $('diary-weather').textContent = ch.weather; $('diary-title').textContent = ch.title; $('diary-text').textContent = ch.diary.join('\n'); $('diary-goal').textContent = ch.goal;
+    const st = Progress.stars(ch.id); $('diary-stars').textContent = st ? `上次：${starText(st)}` : '';
+  };
+  const showAlbum = () => {
+    $('album').hidden = false; $('album-text').textContent = STORY.epilogue.join('\n');
+    const list = $('album-list'); list.innerHTML = '';
+    for (const ch of STORY.chapters) { if (ch.hidden && !Progress.stars(ch.id)) continue; const row = document.createElement('div'); row.className = 'chapter'; row.innerHTML = '<span class="day"></span><span class="w"></span><span class="t"></span><span class="stars"></span>'; row.querySelector('.day').textContent = ch.day; row.querySelector('.w').textContent = ch.weather; row.querySelector('.t').textContent = ch.end; row.querySelector('.stars').textContent = starText(Progress.stars(ch.id)); list.appendChild(row); }
+    $('album-stickers').textContent = `貼紙 ${Ach.count()} / 24${Progress.allThree() ? '　全章三星！' : ''}`;
+  };
+  $('btn-story').addEventListener('click', () => { leave(); renderStory(); $('story').hidden = false; });
+  $('btn-story-close').addEventListener('click', () => { $('story').hidden = true; });
+  $('btn-diary-back').addEventListener('click', () => { $('diary').hidden = true; renderStory(); $('story').hidden = false; });
+  $('btn-diary-go').addEventListener('click', () => { if (!diaryChapter) return; $('diary').hidden = true; game.startStory(diaryChapter); if (game.state !== 'playing') { renderStory(); $('story').hidden = false; } });
+  $('btn-next').addEventListener('click', () => { const ch = game.story; const nx = ch ? Progress.next(ch) : null; const album = !ch || ch.finale || ch.hidden || !nx; game.toMenu(); storyNote(); if (album) showAlbum(); else showDiary(nx); });
+  $('btn-album-close').addEventListener('click', () => { $('album').hidden = true; storyNote(); });
+  // ---------- 貼紙簿 ----------
+  $('btn-stickers').addEventListener('click', () => { Ach.renderBook(); $('stickers').hidden = false; });
+  $('btn-stickers-close').addEventListener('click', () => { $('stickers').hidden = true; });
+  storyNote();
 
   $('btn-host').addEventListener('click', () => {
     leave(); show('host');

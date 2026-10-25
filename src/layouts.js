@@ -229,7 +229,7 @@ function corridor() {
     id: 'corridor', name: '走廊', w: W, d: D, h: 3.4, style: 'corridor', modeOnly: true, noBoard: true,
     doors: [], windows: [], start: { x: -12, z: -11, yaw: -Math.PI / 2 }, front: -6.0, board: { w: 2, h: 0.8, style: 'lab' },
     filler: [{ minX: -14, maxX: 10, minZ: -9, maxZ: 14 }],
-    home: { x: -12, z: -11, r: 1.6 }, kitchen: { x: 12, z: 10.6, r: 1.6 }, cartStart: { x: -11, z: -11, heading: 0 },
+    home: { x: -12, z: -11, r: 1.8 }, kitchen: { x: 12, z: 10.8, r: 2.0 }, cartStart: { x: -11, z: -11, heading: 0 },
     fountain: { x: 10.4, z: -9.4 },
     buckets: [[-5, -10.0], [1, -12.0], [7, -10.2], [12.9, -3], [11.2, 4]],
     doors2,

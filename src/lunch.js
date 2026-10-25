@@ -3,6 +3,8 @@ import { CFG, LUNCH, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { Draw } from './draw.js';
 import { PaperFigure } from './paperfigure.js';
+import { RemotePlayer } from './remoteplayer.js';
+import { skinFor } from './config.js';
 
 // ============================================================
 //  午餐大作戰 (two-player corridor run)
@@ -191,9 +193,12 @@ export class LunchMode {
     this.game = game; const L = game.world.layout;
     this.cart = new Cart(game, L.cartStart);
     this.kids = []; this.phase = 'out'; this.loadT = 0; this.timeLeft = LUNCH.time; this.driver = 'host'; this.hornCd = 0; this.broadcast = false; this.grabbing = 0; this.spawned = new Set(); this.msgT = 0; this.kills = 0;
+    // solo (story): 小美 rides along as an AI partner, taking whichever role Jason is not in
+    this.ai = game.isHost && !game.remoteList().length;
+    if (this.ai) { this.buddy = new RemotePlayer(game, skinFor('g1', '小美', 'l2')); this.buddy.group.visible = true; this.buddy.pos.copy(this.cart.pose('shooter')); this.aiT = 0; this.aiWp = 0; }
     if (game.isHost) this.arm('out');
   }
-  shooterSlot() { const other = this.game.remoteList()[0]; return this.driver === 'host' ? (other ? other.slot : 'g1') : 'host'; }
+  shooterSlot() { if (this.ai) return this.driver === 'host' ? 'ai' : 'host'; const other = this.game.remoteList()[0]; return this.driver === 'host' ? (other ? other.slot : 'g1') : 'host'; }
   roleOf(slot) { return slot === this.driver ? 'driver' : 'shooter'; }
   pose(slot) { return this.cart.pose(this.roleOf(slot)); }
   // door kids for a phase: knocked-out ones are swept away, the phase's doors get fresh kids
@@ -208,10 +213,30 @@ export class LunchMode {
     if (slot !== this.driver || this.hornCd > 0) return false;
     this.hornCd = LUNCH.horn.cd; Audio.whistle(); this.game.netEvent({ t: 'sfx', n: 'whistle' }); this.game.message('叭叭！', '', 0.8);
     const c = this.cart, f = c.forward();
-    for (const k of this.kids) { if (!k.alive) continue; const dx = k.group.position.x - c.pos.x, dz = k.group.position.z - c.pos.z, d = Math.hypot(dx, dz); if (d > LUNCH.horn.range + 0.7) continue; const cos = (dx * f.x + dz * f.z) / (d || 1); if (cos < Math.cos(LUNCH.horn.cone) && k.kind === 'door') continue; k.scare(c); }
+    for (const k of this.kids) { if (!k.alive) continue; const dx = k.group.position.x - c.pos.x, dz = k.group.position.z - c.pos.z, d = Math.hypot(dx, dz); if (d > LUNCH.horn.range + 0.7) continue; const cos = (dx * f.x + dz * f.z) / (d || 1); if (cos < Math.cos(LUNCH.horn.cone) && k.kind === 'door') continue; k.scare(c); this.game.hornHits = (this.game.hornHits || 0) + 1; }
     return true;
   }
-  swap() { this.driver = this.shooterSlot(); this.game.ui.wave(this.game.waveLabel(0)); this.game.message('換手！', this.driver === 'host' ? `${this.game.profile.name || '你'}推車，隊友上車` : '隊友推車，你上車射擊', 2.5); }
+  swap() { this.driver = this.shooterSlot(); this.game.ui.wave(this.game.waveLabel(0)); this.game.message('換手！', this.driver === 'host' ? `${this.game.profile.name || '你'}推車，隊友上車` : this.ai ? '換小美推，你上車射擊' : '隊友推車，你上車射擊', 2.5); if (this.buddy && this.driver === 'ai') this.buddy.say('換我推！'); this.game.storyHint('back'); }
+  // 小美 behind the handle: follows the route home, slows for the corner, brakes near the door, honks at grabbers
+  aiDrive(dt) {
+    const c = this.cart, L = this.game.world.layout, route = [[12, -9.6], [8.6, -11], [L.home.x + 0.8, L.home.z]];
+    const [tx, tz] = route[Math.min(this.aiWp, route.length - 1)], dx = tx - c.pos.x, dz = tz - c.pos.z, dist = Math.hypot(dx, dz);
+    if (dist < 1.2 && this.aiWp < route.length - 1) this.aiWp++;
+    let err = Math.atan2(dz, dx) - c.heading; while (err > Math.PI) err -= 2 * Math.PI; while (err < -Math.PI) err += 2 * Math.PI;
+    const last = this.aiWp >= route.length - 1, cap = Math.abs(err) > 0.5 ? 1.4 : last && dist < 4 ? 1.6 : 2.6;
+    const f = c.v > cap ? -0.6 : Math.abs(err) < 1.2 ? 1 : 0.2, t = clamp(err * 1.8, -1, 1);
+    if (this.hornCd <= 0 && this.kids.some(k => k.alive && k.kind === 'grab' && Math.hypot(k.group.position.x - c.pos.x, k.group.position.z - c.pos.z) < 2.6)) this.horn('ai');
+    return { f, t };
+  }
+  // 小美 on the cart: every half second a shot at the nearest kid she can see; she misses one in four
+  aiShoot(dt) {
+    this.aiT -= dt; if (this.aiT > 0) return; this.aiT = 0.5;
+    const g = this.game, from = this.cart.pose('shooter'); from.y += 1.2; let best = null, bd = 12;
+    for (const k of this.kids) { if (!k.alive || !k.group.visible) continue; const to = new THREE.Vector3(k.group.position.x, k.group.position.y + 0.8, k.group.position.z), d = from.distanceTo(to); if (d < bd && !g.world.segmentBlocked(from, to)) { bd = d; best = to; } }
+    if (!best) return;
+    const dir = best.clone().sub(from); dir.y += bd * bd * CFG.gun.gravity / (2 * CFG.gun.speed * CFG.gun.speed); if (Math.random() < 0.25) dir.x += rand(-0.3, 0.3); dir.normalize();
+    const d = g.darts.fire(from, dir, CFG.gun.speed, 'player'); d.who = 'ai'; Audio.pew();
+  }
   // host step
   step(dt) {
     const g = this.game, L = g.world.layout, c = this.cart;
@@ -225,9 +250,11 @@ export class LunchMode {
       if (this.driver === 'host') input = g.driveInput();
       else input = drv.cartIn || input;
     }
+    if (this.ai && this.driver === 'ai') input = this.aiDrive(dt);
     c.step(dt, input);
     // the riders follow the cart
     for (const pl of g.players()) { const pose = this.pose(pl.slot || 'host'); if (pl === g.player) { pl.pos.copy(pose); } else { pl.pos.copy(pose); pl.clearHist(); pl.target = null; } }
+    if (this.buddy) { this.buddy.pos.copy(this.pose('ai')); this.buddy.yaw = c.heading; this.buddy.update(dt); if (this.driver !== 'ai') this.aiShoot(dt); }
     // phases
     if (this.phase === 'out') {
       const dk = Math.hypot(c.pos.x - L.kitchen.x, c.pos.z - L.kitchen.z);
@@ -253,9 +280,10 @@ export class LunchMode {
   }
   // an enemy dart vs the pot
   hitPot(p) { const c = this.cart; if (!c.loaded) return false; const f = c.forward(), dx = p.x - c.pos.x, dz = p.z - c.pos.z, along = dx * f.x + dz * f.z, side = -dx * f.z + dz * f.x; if (Math.abs(along) < 0.65 && Math.abs(side) < 0.45 && p.y > 0.85 && p.y < 1.45) { c.spill(LUNCH.soup.hit, 'dart'); return true; } return false; }
+  buddySay(text) { if (this.buddy) this.buddy.say(text); else this.game.ui.buddy(text); }
   stars() { const s = this.cart.soup; return s >= LUNCH.stars[0] ? 3 : s >= LUNCH.stars[1] ? 2 : s > 0 ? 1 : 0; }
   serialize() { return { ...this.cart.serialize(), ph: this.phase, dr: this.driver, lt: +this.loadT.toFixed(1), tl: +this.timeLeft.toFixed(1), hc: +this.hornCd.toFixed(1) }; }
   // guest: apply the host's cart and roles
   applyState(s) { this.cart.applyState(s, PaperFigure.stamp); const swapped = this.driver !== s.dr; this.phase = s.ph; this.driver = s.dr; this.timeLeft = s.tl; this.hornCd = s.hc; if (swapped && this.gotRole) this.game.ui.roleLabel(this.roleOf(this.game.mySlot)); this.gotRole = true; }
-  dispose() { this.cart.dispose(); for (const k of this.kids) k.dispose(); this.kids = []; }
+  dispose() { this.cart.dispose(); for (const k of this.kids) k.dispose(); this.kids = []; if (this.buddy) { this.buddy.dispose(); this.buddy = null; } }
 }
