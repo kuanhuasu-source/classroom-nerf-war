@@ -13,7 +13,7 @@ function classroom() {
   furniture.push({ kind: 'cupboard', x: 5.4, z: 5.95, w: 1.4, d: 0.5, h: 1.9 });
   furniture.push({ kind: 'bulletin', x: -2.8, z: 6.23 });
   return {
-    id: 'classroom', name: '三年二班', w: 14, d: 12.5, h: 3.2, style: 'classroom',
+    id: 'classroom', name: '六年二班', w: 14, d: 12.5, h: 3.2, style: 'classroom',
     doors: [{ x: 6.6, z: -4.5 }, { x: 6.6, z: 4.5 }], windows: [-4.4, -2.2, 0, 2.2, 4.4],
     start: { x: -6.1, z: 5.3, yaw: -0.55 }, front: -4.4, board: { w: 5.6, h: 1.5, style: 'chalk' },
     desks, furniture, props: [{ kind: 'trash', x: -6.3, z: -5.6 }, { kind: 'trash', x: 6.1, z: 0.3 }, { kind: 'bucket', door: 0 }],
@@ -217,14 +217,14 @@ function toilet() {
   };
 }
 
-// 走廊（午餐大作戰專用）：L 形。段 A 從三年二班門口（西端）往東 24 m，轉角後段 B 往北 18 m 到蒸飯室。
+// 走廊（午餐大作戰專用）：L 形。段 A 從六年二班門口（西端）往東 24 m，轉角後段 B 往北 18 m 到蒸飯室。
 // 房間本身是 28 × 28 的方形，走廊以外的部分用一大塊實心「教室」填滿（filler），所以導航格、碰撞都照舊。
 function corridor() {
   const W = 28, D = 28, furniture = [], desks = [];
   const doors2 = [];
-  ['一', '二', '三', '四', '五'].forEach((n, i) => doors2.push({ name: 'A' + i, label: `三年${n}班`, x: -10 + i * 4, z: -9.35, nx: 0, nz: -1 }));          // segment A, the classrooms' side (z = -9 face)
-  ['一', '二', '三', '四'].forEach((n, i) => doors2.push({ name: 'B' + i, label: `四年${n}班`, x: 10.35, z: -5 + i * 4, nx: 1, nz: 0 }));             // segment B, inner face (x = 10)
-  ['五', '六', '七'].forEach((n, i) => doors2.push({ name: 'C' + i, label: `四年${n}班`, x: 13.65, z: -3 + i * 4, nx: -1, nz: 0 }));                 // segment B, outer wall (x = 14)
+  ['一', '三', '四', '五', '六'].forEach((n, i) => doors2.push({ name: 'A' + i, label: `六年${n}班`, x: -10 + i * 4, z: -9.35, nx: 0, nz: -1 }));          // segment A, the classrooms' side (z = -9 face)
+  ['一', '二', '三', '四'].forEach((n, i) => doors2.push({ name: 'B' + i, label: `五年${n}班`, x: 10.35, z: -5 + i * 4, nx: 1, nz: 0 }));             // segment B, inner face (x = 10)
+  ['五', '六', '七'].forEach((n, i) => doors2.push({ name: 'C' + i, label: `五年${n}班`, x: 13.65, z: -3 + i * 4, nx: -1, nz: 0 }));                 // segment B, outer wall (x = 14)
   return {
     id: 'corridor', name: '走廊', w: W, d: D, h: 3.4, style: 'corridor', modeOnly: true, noBoard: true,
     doors: [], windows: [], start: { x: -12, z: -11, yaw: -Math.PI / 2 }, front: -6.0, board: { w: 2, h: 0.8, style: 'lab' },

@@ -210,7 +210,7 @@ export class LunchMode {
       if (dk < L.kitchen.r && Math.abs(c.v) < 0.6 && this.grabbing <= 0) {
         if (this.loadT === 0) { g.message('到蒸飯室了！停好，裝菜中……', '守住 10 秒', 2); this.arm('load'); }
         this.loadT += dt; const tick = Math.ceil(LUNCH.loadSeconds - this.loadT); if (tick !== this.loadTick) { this.loadTick = tick; if (tick > 0 && tick < LUNCH.loadSeconds) g.ui.message(`裝菜中 ${tick}`, '車不要動，搶菜王來了就打', 1.1); }
-        if (this.loadT >= LUNCH.loadSeconds) { c.loaded = true; c.soup = 100; this.phase = 'back'; this.swap(); this.arm('back'); g.refillShooter(); setTimeout(() => g.message('裝好了！推回三年二班', '車變重了，轉彎要提前，撞到會灑湯', 3), 2600); }
+        if (this.loadT >= LUNCH.loadSeconds) { c.loaded = true; c.soup = 100; this.phase = 'back'; this.swap(); this.arm('back'); g.refillShooter(); setTimeout(() => g.message('裝好了！推回六年二班', '車變重了，轉彎要提前，撞到會灑湯', 3), 2600); }
         if (!this.spawned.has('load') && this.loadT > 3) { this.spawned.add('load'); const d = L.grabberSpawns.load; this.spawnGrabber({ x: d[0], z: d[1] }); }
       } else if (this.loadT > 0 && dk > L.kitchen.r + 0.5) { this.loadT = 0; g.message('車跑出裝菜區了', '推回圈圈裡重新裝', 1.5); }
     } else if (this.phase === 'back') {

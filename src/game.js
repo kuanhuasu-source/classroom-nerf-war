@@ -434,7 +434,7 @@ export class Game {
     if (this.lockSupported && !this.touch) this.requestLock(); else if (this.touch) this.enterFullscreen();
     Audio.bellOut();
     this.ui.timer(this.toilet ? TOILET.time : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.siege ? '惡霸' : '同學'); this.ui.waveLabelText(this.toilet ? '罐子' : '波次'); this.ui.wet(false);
-    if (this.lunch) { // 午餐大作戰：餐車在三年二班門口，開房的人先推
+    if (this.lunch) { // 午餐大作戰：餐車在六年二班門口，開房的人先推
       this.lunchMode = new LunchMode(this); this.ui.timer(LUNCH.time); this.ui.soup(null); this.ui.leftLabel('搶菜'); this.ui.waveLabelText('角色'); this.ui.wave(this.waveLabel(0));
       this.message('抬午餐囉！', '推車手：W/S 推煞、A/D 轉彎、F 喇叭。射手：擋住探頭的同學', 4);
       this.nextWavePending = false; this.ui.left(0);
@@ -875,7 +875,7 @@ export class Game {
       return;
     }
     const tn = this.bossName || '老師', trio = this.teachers.length > 1;
-    const sub = trio ? '三位監考官同時崩潰，會考取消。你是全校的傳說。' : '三個道具全掉，全班自由。你是三年二班的傳說。';
+    const sub = trio ? '三位監考官同時崩潰，會考取消。你是全校的傳說。' : '三個道具全掉，全班自由。你是六年二班的傳說。';
     this.message('下課！！！', `${tn}崩潰，宣布今天不用上課`, 4);
     this.overInfo = { win: 1, title: `下課！${tn}${trio ? '全員' : ''}投降了`, sub, stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
     setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); this.showOver(`下課！${tn}${trio ? '全員' : ''}投降了`, sub, true); }, 3200);

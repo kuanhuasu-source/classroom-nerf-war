@@ -147,7 +147,7 @@ export class World {
     for (const dsk of L.desks) this.desks.push({ x: dsk.x, z: dsk.z, w: dsk.w, d: dsk.d, h: dsk.h, floor: dsk.floor || 0, seat: { x: dsk.seat.x, z: dsk.seat.z }, occupant: null, covered: null });
     this.bounds = { minX: -w / 2 + 0.3, maxX: w / 2 - 0.3, minZ: -d / 2 + 0.3, maxZ: d / 2 - 0.3 };
   }
-  // 午餐大作戰的走廊：實心填充塊、教室門與門牌、飲水機、水桶、蒸飯室與三年二班的門
+  // 午餐大作戰的走廊：實心填充塊、教室門與門牌、飲水機、水桶、蒸飯室與六年二班的門
   buildCorridor(L) {
     const { w, d } = this.room;
     for (const f of L.filler) this.box(f.maxX - f.minX, this.room.h, f.maxZ - f.minZ, (f.minX + f.maxX) / 2, this.room.h / 2, (f.minZ + f.maxZ) / 2, 0xf0e6d2);
@@ -158,9 +158,9 @@ export class World {
       const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), this.toon(0xf4e27a)); knob.position.set(alongX ? 0.35 : dr.nx * 0.05, 0, alongX ? dr.nz * 0.05 : -0.35); door.add(knob);
       plate(dr.label, alongX ? dr.x : dr.x - dr.nx * 0.3, 2.4, alongX ? dr.z - dr.nz * 0.3 : dr.z, alongX ? (dr.nz < 0 ? Math.PI : 0) : (dr.nx > 0 ? Math.PI / 2 : -Math.PI / 2));
     }
-    // home: 三年二班 at the west end of segment A
+    // home: 六年二班 at the west end of segment A
     const home = this.box(0.06, 2.1, 1.0, -w / 2 + 0.04, 1.05, L.home.z, 0x8fb98a, { collide: false, shadow: false }); home.add(new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), this.toon(0xf4e27a))).position.set(0.05, 0, -0.35);
-    plate('三年二班', -w / 2 + 0.08, 2.4, L.home.z, Math.PI / 2, '#d8432b', '#ffffff');
+    plate('六年二班', -w / 2 + 0.08, 2.4, L.home.z, Math.PI / 2, '#d8432b', '#ffffff');
     const zone = (c, color) => { const r = new THREE.Mesh(new THREE.RingGeometry(c.r - 0.08, c.r, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide })); r.rotation.x = -Math.PI / 2; r.position.set(c.x, 0.015, c.z); this.add(r); };
     zone(L.home, 0xd8432b); zone(L.kitchen, 0xf4e27a);
     // the kitchen (蒸飯室): a counter with pots along the north wall and a sign
