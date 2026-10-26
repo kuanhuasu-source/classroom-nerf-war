@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('http://localhost:8766/index.html?map=classroom', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:8766/index.html', { waitUntil: 'networkidle' }); // a plain open: the news popup only shows without query params
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   // news: open on a fresh browser, closed stays closed after a reload
   const news1 = await page.evaluate(() => !document.getElementById('news').hidden);
@@ -13,6 +13,7 @@ const { chromium } = require('playwright');
   await page.reload({ waitUntil: 'networkidle' }); await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   const news2 = await page.evaluate(() => !document.getElementById('news').hidden);
   console.log('news', JSON.stringify({ firstVisit: news1, afterClose: news2 }));
+  await page.goto('http://localhost:8766/index.html?map=classroom', { waitUntil: 'networkidle' }); await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   await page.evaluate(() => { localStorage.removeItem('cnw-badges'); localStorage.removeItem('cnw-story'); localStorage.removeItem('cnw-ach'); window.__badges.data = null; window.__progress.data = null; window.__ach.data = null; window.__game.renderer.setAnimationLoop(null); });
   const r = await page.evaluate(() => { const g = window.__game, B = window.__badges, P = window.__progress, A = window.__ach, out = {};
     out.labels = [B.label({ type: 'hp', tier: 3 }), B.label({ type: 'rate', tier: 0 }), B.name({ type: 'speed', tier: 2 })];

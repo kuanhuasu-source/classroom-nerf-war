@@ -7,6 +7,7 @@ const { chromium } = require('playwright');
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   await page.goto('http://localhost:8766/index.html', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
+  await page.evaluate(() => { const n = document.getElementById('news'); if (n) n.hidden = true; }); // the what's-new card would sit over the menu buttons
   await page.evaluate(() => { window.__game.renderer.setPixelRatio(0.6); window.__game.renderer.setAnimationLoop(null); });
   const ev = (fn, a) => page.evaluate(fn, a);
   const sim = (secs) => ev((secs) => { const g = window.__game; for (let i = 0; i < secs * 60; i++) { g.step(1 / 60); g.ui.tick(1 / 60); } }, secs);

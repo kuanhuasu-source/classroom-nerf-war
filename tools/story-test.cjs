@@ -6,6 +6,7 @@ const { chromium } = require('playwright');
   const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
   await page.goto('http://localhost:8766/index.html', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
+  await page.evaluate(() => { const n = document.getElementById('news'); if (n) n.hidden = true; }); // the what's-new card would sit over the menu buttons
   await page.evaluate(() => { localStorage.removeItem('cnw-story'); localStorage.removeItem('cnw-ach'); window.__game.renderer.setAnimationLoop(null); });
   await page.click('#btn-story'); await page.waitForTimeout(100);
   const list = await page.evaluate(() => [...document.querySelectorAll('#story-list .chapter')].map(b => [b.querySelector('.day').textContent, b.disabled, b.querySelector('.stars').textContent]));

@@ -156,7 +156,7 @@ export class LunchKid extends PaperFigure {
       if (this.state === 'hidden') { if (near && this.timer <= 0 && this.scared <= 0) { this.state = 'peek'; this.group.visible = true; this.timer = 0.35; this.shotsLeft = 1 + Math.floor(Math.random() * 2); this.alert.visible = true; } }
       else if (this.state === 'peek') { // step out of the door
         const d = this.door, ox = d.x + d.nx * LUNCH.kid.peekOut, oz = d.z + d.nz * LUNCH.kid.peekOut; p.x += (ox - p.x) * Math.min(1, dt * 8); p.z += (oz - p.z) * Math.min(1, dt * 8);
-        if (this.timer <= 0) { this.alert.visible = false; if (this.canSee(target)) { this.state = 'throw'; this.shotT = 0.1; } else { this.hide(); } }
+        if (this.timer <= 0) { this.alert.visible = false; if (this.canSee(target) && L.throwers() < 2 + this.game.extraPlayers()) { this.state = 'throw'; this.shotT = 0.1; } else { this.hide(); } } // 同時最多兩個探頭丟（多人每多一人 +1），其他的等
       } else if (this.state === 'throw') {
         this.shotT -= dt;
         if (this.shotT <= 0) { this.fireAt(target); this.shotsLeft--; this.shotT = 0.45; if (this.shotsLeft <= 0) this.hide(); }
@@ -198,6 +198,7 @@ export class LunchMode {
     if (this.ai) { this.buddy = new RemotePlayer(game, skinFor('g1', '小美', 'l2')); this.buddy.group.visible = true; this.buddy.pos.copy(this.cart.pose('shooter')); this.aiT = 0; this.aiWp = 0; }
     if (game.isHost) this.arm('out');
   }
+  throwers() { let n = 0; for (const k of this.kids) if (k.alive && k.kind === 'door' && k.state === 'throw') n++; return n; }
   shooterSlot() { if (this.ai) return this.driver === 'host' ? 'ai' : 'host'; const other = this.game.remoteList()[0]; return this.driver === 'host' ? (other ? other.slot : 'g1') : 'host'; }
   roleOf(slot) { return slot === this.driver ? 'driver' : 'shooter'; }
   pose(slot) { return this.cart.pose(this.roleOf(slot)); }
@@ -216,7 +217,7 @@ export class LunchMode {
     for (const k of this.kids) { if (!k.alive) continue; const dx = k.group.position.x - c.pos.x, dz = k.group.position.z - c.pos.z, d = Math.hypot(dx, dz); if (d > LUNCH.horn.range + 0.7) continue; const cos = (dx * f.x + dz * f.z) / (d || 1); if (cos < Math.cos(LUNCH.horn.cone) && k.kind === 'door') continue; k.scare(c); this.game.hornHits = (this.game.hornHits || 0) + 1; }
     return true;
   }
-  swap() { this.driver = this.shooterSlot(); this.game.ui.wave(this.game.waveLabel(0)); this.game.message('換手！', this.driver === 'host' ? `${this.game.profile.name || '你'}推車，隊友上車` : this.ai ? '換小美推，你上車射擊' : '隊友推車，你上車射擊', 2.5); if (this.buddy && this.driver === 'ai') this.buddy.say('換我推！'); this.game.storyHint('back'); }
+  swap() { this.driver = this.shooterSlot(); this.game.ui.wave(this.game.waveLabel(0)); for (const pl of this.game.players()) { pl.hp = pl.maxHp; if (pl === this.game.player) this.game.ui.hp(pl.hp, pl.maxHp); } this.game.message('換手！愛心回滿', this.driver === 'host' ? `${this.game.profile.name || '你'}推車，隊友上車` : this.ai ? '換小美推，你上車射擊' : '隊友推車，你上車射擊', 2.5); if (this.buddy && this.driver === 'ai') this.buddy.say('換我推！'); this.game.storyHint('back'); } // 裝菜那十秒喘口氣：換手時兩個人都回滿血
   // 小美 behind the handle: follows the route home, slows for the corner, brakes near the door, honks at grabbers
   aiDrive(dt) {
     const c = this.cart, L = this.game.world.layout, route = [[12, -9.6], [8.6, -11], [L.home.x + 0.8, L.home.z]];
@@ -271,7 +272,7 @@ export class LunchMode {
     }
     for (const k of this.kids) k.update(dt);
     g.ui.left(this.kids.filter(k => k.alive && k.group.visible).length);
-    if (g.players().every(p => p.sitting)) return g.onLose();
+    if (g.players().every(p => p.sitting)) { if (!this.ai) return g.onLose(); if (!this.downSaid) { this.downSaid = true; this.buddySay(this.driver === 'ai' ? '撐住！我繼續推！' : '撐住！我來擋！'); } } else this.downSaid = false; // 小美在的話，倒下 6 秒再爬起來，不會直接輸
   }
   // a player's dart vs the kids
   hitKid(p, who, volley) {

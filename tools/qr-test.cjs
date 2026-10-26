@@ -6,6 +6,7 @@ const { chromium } = require('playwright'); const path = require('path');
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto('http://localhost:8766/index.html', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
+  await page.evaluate(() => { const n = document.getElementById('news'); if (n) n.hidden = true; }); // the what's-new card would sit over the menu buttons
   await page.addScriptTag({ path: path.join(__dirname, 'node_modules/jsqr/dist/jsQR.js') });
   const decode = (id) => page.evaluate((id) => { const c = document.getElementById(id); const ctx = c.getContext('2d'); const d = ctx.getImageData(0, 0, c.width, c.height); const r = window.jsQR(d.data, d.width, d.height); return r ? r.data : null; }, id);
   console.log('site QR visible:', await page.evaluate(() => !document.getElementById('qr-site-wrap').hidden), '| decodes to:', await decode('qr-site'));

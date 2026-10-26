@@ -100,7 +100,7 @@ export function initLobby(game) {
   const closeNews = () => { $('news').hidden = true; try { localStorage.setItem('cnw-news', NEWS_VER); } catch (e) { /* ignore */ } };
   $('btn-news-close').addEventListener('click', closeNews);
   $('btn-news-badges').addEventListener('click', () => { closeNews(); $('btn-badges').click(); });
-  if (seenNews !== NEWS_VER && !new URLSearchParams(location.search).get('room')) $('news').hidden = false;
+  if (seenNews !== NEWS_VER && !location.search) $('news').hidden = false; // only on a plain open: not through a room link, not on the ?map= / ?role= debug and test links
   $('btn-stickers-close').addEventListener('click', () => { $('stickers').hidden = true; });
   storyNote();
 
