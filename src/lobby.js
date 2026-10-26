@@ -77,7 +77,7 @@ export function initLobby(game) {
     $('album').hidden = false; $('album-text').textContent = STORY.epilogue.join('\n');
     const list = $('album-list'); list.innerHTML = '';
     for (const ch of STORY.chapters) { if (ch.hidden && !Progress.stars(ch.id)) continue; const row = document.createElement('div'); row.className = 'chapter'; row.innerHTML = '<span class="day"></span><span class="w"></span><span class="t"></span><span class="stars"></span>'; row.querySelector('.day').textContent = ch.day; row.querySelector('.w').textContent = ch.weather; row.querySelector('.t').textContent = ch.end; row.querySelector('.stars').textContent = starText(Progress.stars(ch.id)); list.appendChild(row); }
-    $('album-stickers').textContent = `貼紙 ${Ach.count()} / 24${Progress.allThree() ? '　全章三星！' : ''}`;
+    $('album-stickers').textContent = `貼紙 ${Ach.count()} / 25${Progress.allThree() ? '　全章三星！' : ''}`;
   };
   $('btn-story').addEventListener('click', () => { leave(); renderStory(); $('story').hidden = false; });
   $('btn-story-close').addEventListener('click', () => { $('story').hidden = true; });
@@ -86,13 +86,21 @@ export function initLobby(game) {
   $('btn-next').addEventListener('click', () => { const ch = game.story; const nx = ch ? Progress.next(ch) : null; const album = !ch || ch.finale || ch.hidden || !nx; game.toMenu(); storyNote(); if (album) showAlbum(); else showDiary(nx); });
   $('btn-album-close').addEventListener('click', () => { $('album').hidden = true; storyNote(); });
   // ---------- 徽章 ----------
-  const badgeNote = () => { const w = Badges.worn(); $('badge-note').textContent = w.length ? w.map(b => Badges.label(b)).join('・') : (Badges.load().list.length ? '還沒佩戴' : ''); };
-  $('btn-badges').addEventListener('click', () => { Badges.render(game.badgeSlots(), badgeNote); $('badge-status').textContent = `可以佩戴 ${game.badgeSlots()} 枚${game.badgeSlots() < 2 ? '（破完故事模式開第二格）' : ''}`; $('badges').hidden = false; });
+  const badgeNote = () => { const w = Badges.worn(), sets = Badges.activeSets(); $('badge-note').textContent = sets.length ? sets.map(s => s.name).join('＋') : w.length ? w.map(b => Badges.label(b)).join('・') : (Badges.load().list.length ? '還沒佩戴' : ''); };
+  const slotHint = () => { const n = game.badgeSlots(); return `可以佩戴 ${n} 枚` + (n < 2 ? '（破完故事模式開第二格）' : n < 3 ? '（故事每章三顆星，或集滿 12 張貼紙，開第三格）' : ''); };
+  $('btn-badges').addEventListener('click', () => { Badges.render(game.badgeSlots(), badgeNote); $('badge-status').textContent = slotHint(); $('badges').hidden = false; });
   $('btn-badges-close').addEventListener('click', () => { $('badges').hidden = true; badgeNote(); });
   $('btn-badge-merge').addEventListener('click', () => { const n = Badges.merge(); $('badge-status').textContent = n ? `合成了 ${n} 枚，同類型升了一級！` : '沒有三枚同類同級的。'; Badges.render(game.badgeSlots(), badgeNote); badgeNote(); });
   badgeNote();
   // ---------- 貼紙簿 ----------
   $('btn-stickers').addEventListener('click', () => { Ach.renderBook(); $('stickers').hidden = false; });
+  // what's new: shown once per NEWS_VER, the first time this browser opens the new build
+  const NEWS_VER = 'badges2';
+  let seenNews = null; try { seenNews = localStorage.getItem('cnw-news'); } catch (e) { /* ignore */ }
+  const closeNews = () => { $('news').hidden = true; try { localStorage.setItem('cnw-news', NEWS_VER); } catch (e) { /* ignore */ } };
+  $('btn-news-close').addEventListener('click', closeNews);
+  $('btn-news-badges').addEventListener('click', () => { closeNews(); $('btn-badges').click(); });
+  if (seenNews !== NEWS_VER && !new URLSearchParams(location.search).get('room')) $('news').hidden = false;
   $('btn-stickers-close').addEventListener('click', () => { $('stickers').hidden = true; });
   storyNote();
 

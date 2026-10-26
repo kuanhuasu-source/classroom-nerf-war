@@ -44,7 +44,7 @@ export class Player {
     this.eye += (targetEye - this.eye) * Math.min(1, dt * 10);
     const run = (k['ShiftLeft'] || k['ShiftRight']) && !this.crouching;
     if (this.wet > 0) { this.wet -= dt; if (this.wet <= 0) { this.wet = 0; this.game.ui.wet(false); } }
-    const speed = (this.crouching ? CFG.player.crouchSpeed : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1) * (this.wet > 0 ? TOILET.wetSpeed : 1) * (1 + (this.badge ? this.badge.speed : 0));
+    const speed = (this.crouching ? (this.badge && this.badge.crouchFull ? CFG.player.walk : CFG.player.crouchSpeed) : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1) * (this.wet > 0 ? TOILET.wetSpeed : 1) * (1 + (this.badge ? this.badge.speed : 0));
     this.badgeTick(dt);
     const LM = this.game.lunch ? this.game.lunchMode : null; // 午餐大作戰：兩個人都綁在餐車上
     if (LM) { if (!this.game.isHost) { if (LM.driver === this.game.mySlot && !this.sitting) LM.cart.predict(dt, this.game.driveInput()); else LM.cart.smooth(dt); } this.pos.copy(LM.pose(this.game.mySlot || 'host')); }
@@ -135,7 +135,8 @@ export class Player {
     const speed = CFG.gun.speed * this.up.speedMul;
     const volley = ++Player.volleySeq;
     const dirs = [dir]; if (this.up.twin) { const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion); dirs.push(dir.clone().addScaledVector(side, 0.035).normalize()); dirs[0] = dir.clone().addScaledVector(side, -0.035).normalize(); }
-    for (let i = 0, extra = this.badge ? this.badge.multi : 0; i < extra && dirs.length < 3; i++) dirs.push(dir.clone().add(new THREE.Vector3(rand(-0.07, 0.07), rand(-0.04, 0.04), rand(-0.07, 0.07))).normalize()); // 連發徽章：多的子彈不耗彈，散得開
+    const sp = this.badge && this.badge.spreadMul ? this.badge.spreadMul : 1; // 躲避球校隊套裝：散得比較集中
+    for (let i = 0, extra = this.badge ? this.badge.multi : 0; i < extra && dirs.length < 3; i++) dirs.push(dir.clone().add(new THREE.Vector3(rand(-0.07, 0.07) * sp, rand(-0.04, 0.04) * sp, rand(-0.07, 0.07) * sp)).normalize()); // 連發徽章：多的子彈不耗彈，散得開
     for (const dd of dirs) {
       if (this.game.isHost) { const d = this.game.darts.fire(muzzle, dd, speed, 'player'); d.who = 'host'; d.volley = 'h' + volley; }
       else if (this.game.transport) { const pv = ++this.game.pvSeq; this.game.darts.firePreview(muzzle, dd, speed, this.game.mySlot, pv); this.game.transport.send(JSON.stringify({ t: 'fire', p: [+muzzle.x.toFixed(3), +muzzle.y.toFixed(3), +muzzle.z.toFixed(3)], d: [+dd.x.toFixed(4), +dd.y.toFixed(4), +dd.z.toFixed(4)], s: +speed.toFixed(1), pv, vy: volley })); }
@@ -147,7 +148,7 @@ export class Player {
   reload() {
     if (this.reloading > 0 || this.ammo >= this.magSize()) return;
     if (this.reserve <= 0) { Audio.empty(); this.game.message('沒有備用彈了！', '地上的泡棉彈走過去就能撿', 1.6); return; }
-    this.reloadTotal = (this.ammo === 0 ? CFG.gun.reloadEmpty : CFG.gun.reloadPartial) * this.up.reloadMul;
+    this.reloadTotal = (this.ammo === 0 ? CFG.gun.reloadEmpty : CFG.gun.reloadPartial) * this.up.reloadMul * (this.badge && this.badge.reloadMul ? this.badge.reloadMul : 1);
     this.reloading = this.reloadTotal; Audio.reload(this.reloadTotal); this.game.ui.reloading(true);
     if (this.reserve <= 5 && !this.lowWarned) { this.lowWarned = true; this.game.message('備用彈快沒了', '撿地上的泡棉彈補充', 2); }
   }
@@ -163,7 +164,7 @@ export class Player {
   }
   hurt() {
     if (this.hurtCd > 0 || this.sitting || this.invuln > 0) return;
-    this.hurtCd = 0.7; this.hp--; this.game.damageTaken = (this.game.damageTaken || 0) + 1; Audio.hurt(); this.game.ui.hp(this.hp, this.maxHp); this.game.ui.vignette();
+    this.hurtCd = 0.7 + (this.badge && this.badge.invulnBonus ? this.badge.invulnBonus : 0); this.hp--; this.game.damageTaken = (this.game.damageTaken || 0) + 1; Audio.hurt(); this.game.ui.hp(this.hp, this.maxHp); this.game.ui.vignette();
     if (this.hp <= 0) this.game.onPlayerDown(this);
   }
 }

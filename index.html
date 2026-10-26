@@ -314,10 +314,15 @@ details.help .keys { margin: 10px 0 4px; font-size: 15px; gap: 4px 12px; }
 .badge .icon { font-size: 28px; } .badge .txt { flex: 1; min-width: 0; } .badge b { display: block; font-size: 16px; } .badge small { color: var(--pencil); font-size: 13px; }
 .badge .acts { display: flex; flex-direction: column; gap: 4px; } .badge .mini { font-size: 13px; padding: 1px 8px; }
 #badge-draw { margin: 6px 0 10px; text-align: center; } #badge-draw .note { margin: 4px 0; }
-.badge-card { --tier: #9aa0a6; width: 170px; height: 96px; position: relative; perspective: 700px; cursor: pointer; margin: 4px auto; }
+.badge-card { --tier: #9aa0a6; width: 190px; height: 112px; position: relative; perspective: 700px; cursor: pointer; margin: 4px auto; }
 .badge-card .back, .badge-card .front { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; transition: transform .6s; border: 3px solid var(--tier); border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px; }
 .badge-card .back { background: var(--nerf-blue); color: #fff; font-size: 44px; font-family: var(--font-num); }
-.badge-card .front { transform: rotateY(180deg); background: var(--paper); } .badge-card .front span { font-size: 30px; } .badge-card .front b { font-size: 16px; } .badge-card .front small { font-size: 12px; color: var(--pencil); line-height: 1.2; }
+.badge-card .front { transform: rotateY(180deg); background: var(--paper); } .badge-card .front span { font-size: 28px; } .badge-card .front b { font-size: 16px; } .badge-card .front small { font-size: 11px; color: var(--pencil); line-height: 1.2; white-space: pre-line; }
+#badge-sets { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin: 6px 0 12px; max-height: 40vh; overflow: auto; }
+.bset { border: 2px dashed var(--pencil); border-radius: 12px; padding: 6px 10px; background: var(--paper); display: grid; gap: 1px; opacity: .8; }
+.bset.on { opacity: 1; border-style: solid; border-color: var(--nerf-orange); background: #fff; box-shadow: 2px 2px 0 var(--pencil); }
+.bset b { font-size: 15px; } .bset small { font-size: 12px; color: var(--pencil); line-height: 1.25; } .bset .bonus { color: var(--ink); } .bset.on .st { color: var(--nerf-orange); }
+#news .card { max-width: 600px; } #news ul { margin: 6px 0 12px; padding-left: 22px; font-size: 16px; line-height: 1.5; } #news li { margin: 0 0 6px; } #news li b { color: var(--nerf-blue); }
 .badge-card.open .back { transform: rotateY(180deg); } .badge-card.open .front { transform: none; }
 .badge-card.shine .front { box-shadow: 0 0 20px var(--tier), 0 0 4px var(--tier); }
 #hud-badge { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); font-size: 14px; color: var(--pencil); background: #fff; }
@@ -435,11 +440,28 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
   </div>
 </div>
 
+<div class="overlay" id="news" hidden>
+  <div class="card">
+    <h2>更新了！徽章系統 2.0</h2>
+    <p class="sub">這個版本徽章換了新面貌，第一次連上先看一下：</p>
+    <ul>
+      <li><b>七位校園傳奇</b>：每一種徽章都是學校裡的一個人物，校犬小黑、福利社陳阿姨、天才鋼琴家林小妍、躲避球王阿豪、保健室王阿姨、工友阿勇伯、飛毛腿張飛翔。普通到稀有是他們留下的東西，傳說級就是本人。</li>
+      <li><b>套裝</b>：戴著的徽章湊到指定的兩種類型，就多一個固定的小加成，像「躲避球校隊」（快手＋連發）、「福利社 VIP」（大彈匣＋自動補彈）。三種不同、全稀有以上是「畢業生代表」。徽章面板最下面有全部七組。</li>
+      <li><b>第三格</b>：破完故事模式開第二格；故事每章三顆星，或集滿 12 張貼紙，再開第三格。</li>
+      <li><b>合成</b>：三枚同類同級合成的，一定是同類型、高一級的。</li>
+      <li><b>新貼紙</b>「校園名人堂」：第一次湊到套裝。</li>
+      <li>順便：操場的溜滑梯下面現在是空的，可以躲、可以蹲著穿過去。</li>
+    </ul>
+    <div class="row"><button class="btn" id="btn-news-badges" type="button" style="background:#8e44ad">去看徽章</button><button class="btn" id="btn-news-close" type="button">知道了</button></div>
+  </div>
+</div>
 <div class="overlay" id="badges" hidden>
   <div class="card">
     <h2>徽章 <small id="badge-count" class="note"></small></h2>
-    <p class="sub">每打完一場抽一枚，難度越高越容易抽到稀有的。佩戴的徽章給一點小加成；三枚同類同級可以合成一枚同類型、高一級的。</p>
+    <p class="sub">每一種徽章都是一位校園傳奇，每打完一場抽一枚，難度越高越容易抽到稀有的。佩戴的徽章給一點小加成；三枚同類同級可以合成一枚同類型、高一級的。戴著的徽章湊成指定的兩種類型就是一組套裝，多一個固定的小加成。</p>
     <div id="badge-list"></div>
+    <h3 class="menu-h">套裝</h3>
+    <div id="badge-sets"></div>
     <div class="row"><button class="btn small" id="btn-badge-merge" type="button" style="background:#8e44ad">合成（三枚同類同級 → 同類高一級）</button><button class="btn small" id="btn-badges-close" type="button" style="background:var(--pencil)">返回</button></div>
     <p class="note" id="badge-status"></p>
   </div>

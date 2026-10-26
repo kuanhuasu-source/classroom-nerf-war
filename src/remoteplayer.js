@@ -45,7 +45,7 @@ export class RemotePlayer extends PaperFigure {
   // host side: damage and penalty sitting for the guest
   hurt() {
     if (this.hurtCd > 0 || this.sitting || this.invuln > 0 || this.offline) return;
-    this.hurtCd = 0.7; this.hp--; this.flash = 0.15;
+    this.hurtCd = 0.7 + (this.badge && this.badge.invulnBonus ? this.badge.invulnBonus : 0); this.hp--; this.flash = 0.15; // 保健室常客套裝：保護時間多一點
     if (this.hp <= 0) this.game.onPlayerDown(this);
   }
   sitDown(seat, secs = COOP.sitSeconds) { const sy = this.game.world.heightAt(seat.x, seat.z); this.clearHist(); this.sitting = true; this.sitT = secs; this.seat = seat; this.setTarget(seat.x, sy, seat.z); this.group.position.set(seat.x, sy, seat.z); this.setTex('out'); this.targetSy = 0.72; }

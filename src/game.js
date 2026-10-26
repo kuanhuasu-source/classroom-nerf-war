@@ -20,7 +20,7 @@ import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES,
 import { LunchMode } from './lunch.js';
 import { STORY, Progress, starsFor, starText } from './story.js';
 import { Ach } from './achievements.js';
-import { Badges } from './badges.js';
+import { Badges, TYPES } from './badges.js';
 import { TEACHERS, BOSSES, COMMITTEE, GANG } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
@@ -106,8 +106,9 @@ export class Game {
   sendTo(slot, msg) { const c = this.connOf(slot); if (c && this.transport) this.transport.send(JSON.stringify(msg), c); }
   lobbyNames() { return [...this.remotes.values()].filter(r => !r.offline && this.connOf(r.slot)).map(r => r.skin.name + (r.touch ? '📱' : '')); }
   sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid, touch: this.touch ? 1 : 0, name: this.profile.name, look: this.profile.look, badge: Badges.effects() })); }
-  badgeSlots() { return Badges.slots(Progress.finished()); }
-  badgeHud() { this.ui.badge(Badges.worn().map(b => Badges.label(b)).join('・')); }
+  // 1 slot; the 2nd after the story is done; the 3rd for three stars everywhere or 12 stickers
+  badgeSlots() { return Badges.slots(Progress.finished(), Progress.allThree() || Ach.count() >= 12); }
+  badgeHud() { const sets = Badges.activeSets().map(s => `【${s.name}】`).join(''), worn = Badges.worn(); this.ui.badge(sets ? sets + worn.map(b => TYPES[b.type].icon).join('') : worn.map(b => Badges.label(b)).join('・')); } // with a set on, the HUD shows the set names and just the icons
   mySkin() { return skinFor(this.mySlot, this.profile.name, this.profile.look); }
   touchOf(who) { if (!who || who === 'host') return !!this.touch; const r = this.remotes.get(who); return !!(r && r.touch); }
   hitMul(who) { return this.touchOf(who) ? CFG.assist.hitMul : 1; }
@@ -471,7 +472,8 @@ export class Game {
     if (this.story && this.story.waves) this.diff = { ...this.diff, waves: this.story.waves }; // 故事：章節自己的波次表
     this.setLayout(this.lunch ? 'corridor' : this.toilet ? 'toilet' : this.siege ? 'yard' : this.pickLayout(), this.siege);
     this.reset(); this.markTouchPlayer();
-    this.coop = this.isHost && this.remoteList().length > 0; this.fullSnapNext = true; this.sentRestVersion = -1;
+    this.coop = this.isHost && this.remoteList().length > 0;
+    for (const pl of this.players()) if (pl.badge && pl.badge.grad) this.applyBuff({ id: 'speed', name: '畢業生代表', effect: '開場衝刺', dur: 10 }, pl === this.player ? this.mySlot : pl.slot); // 套裝：開場 10 秒加速 this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
     if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, level: this.level }));
@@ -547,6 +549,7 @@ export class Game {
   }
   startWave() {
     this.wave++; this.ui.wave(this.waveLabel(this.wave)); Audio.wave();
+    for (const pl of this.players()) if (pl.badge && pl.badge.bellRush) { const who = pl === this.player ? this.mySlot : pl.slot, cur = this.buffs[who]; if (!cur || cur.id === 'speed') this.applyBuff({ id: 'speed', name: '遲到大王', effect: '鐘響衝刺', dur: pl.badge.bellRush }, who); } // 套裝：每波開始加速
     for (const p of this.props) if (p.kind === 'bucket' && p.state !== 'up') { p.reset(); this.netEvent({ t: 'prop', id: p.id, st: 'up' }); }
     const ex = this.extraPlayers(), base = this.diff.waves[this.wave - 1], count = Math.round(base * (1 + MP.count * ex));
     this.difficultySpread = Math.max(this.diff.minSpread * (1 - MP.spread * ex), (this.diff.spread - (this.wave - 1) * 0.1) * (1 - MP.spread * ex));
@@ -1004,7 +1007,7 @@ export class Game {
             this.addScore(CFG.score.wave); this.nextWavePending = true; this.waveTimer = 2.5;
             const heal = this.diff.healPerWave;
             this.message('這波清光了！', heal ? `+500，回 ${heal} ♥` : '+500', 1.8); this.storyHint('clear');
-            if (heal) for (const pl of this.players()) { if (!pl.sitting) { pl.hp = Math.min(pl.maxHp, pl.hp + heal); if (pl === this.player) this.ui.hp(pl.hp, pl.maxHp); } }
+            for (const pl of this.players()) { const h = heal + (pl.badge && pl.badge.grad ? 1 : 0); if (h && !pl.sitting) { pl.hp = Math.min(pl.maxHp, pl.hp + h); if (pl === this.player) this.ui.hp(pl.hp, pl.maxHp); } } // 畢業生代表套裝：每波多回 1
             if (this.player.hp < this.player.maxHp) this.spawnMilk();
             this.offerTimer = 1.6; this.waveTimer = 6.5; // time to breathe: scavenge darts, drink milk, pick an upgrade
           }
