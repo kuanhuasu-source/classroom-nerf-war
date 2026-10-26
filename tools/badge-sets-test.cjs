@@ -41,6 +41,10 @@ const { chromium } = require('playwright');
     wear(['hp', 2, 2], ['rate', 2, 0.15], ['speed', 2, 0.08]); g.toMenu(); g.start(); out.gradStart = g.buffs.host && [g.buffs.host.id, g.buffs.host.name, g.buffs.host.t, document.getElementById('hud-badge').textContent];
     // hurt protection with the nurse set
     wear(['hp', 0, 1], ['regenHp', 1, 40]); g.toMenu(); g.start(); g.player.hurtCd = 0; g.player.hurt(); out.nurseHurtCd = g.player.hurtCd;
+    // 傳說每種只能一枚：own the hp legend, roll 2000 exam wins, never a second one; the reroll is flagged; three 稀有 hp cannot merge, three 稀有 mag still can
+    { const d0 = B.load(); d0.list = [{ id: 'L', type: 'hp', tier: 3, val: 2, ts: 1, src: 'test' }]; d0.worn = []; B.save(); let dupLegend = 0, rerolled = 0, legends = 0; for (let i = 0; i < 2000; i++) { const b = B.roll('exam', true, false); if (b.tier === 3) { legends++; if (b.type === 'hp') dupLegend++; } if (b.rerolledFrom) rerolled++; } out.legendOnce = { legends, dupLegend, rerolled };
+      B.showDraw({ id: 'x', type: 'mag', tier: 1, val: 4, ts: 2, src: 'test', rerolledFrom: 'hp' }, null, 3, () => {}); out.rerollNote = document.getElementById('badge-card-note').textContent;
+      const d1 = B.load(); for (let k = 0; k < 3; k++) { d1.list.push({ id: 'h' + k, type: 'hp', tier: 2, val: 2, ts: k, src: 'test' }); d1.list.push({ id: 'm' + k, type: 'mag', tier: 2, val: 6, ts: k, src: 'test' }); } B.save(); out.mergeBlocked = [B.merge(), B.load().list.filter(b => b.tier === 3).map(b => b.type).sort(), B.load().list.filter(b => b.type === 'hp' && b.tier === 2).length]; }
     // the sticker comes with the first set worn through the panel
     A.data = null; localStorage.removeItem('cnw-TEST:ach'); wear(['hp', 0, 1]); const d = B.load(); d.list.push({ id: 'Tregen', type: 'regenHp', tier: 1, val: 40, ts: 1, src: 'test' }); B.save(); B.wear('Tregen', 3); out.hallSticker = A.has('hall');
     // the panel lists seven sets with one done

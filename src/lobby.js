@@ -5,7 +5,7 @@ import { Draw } from './draw.js';
 import QRCode from 'qrcode';
 import { STORY, Progress, starText } from './story.js';
 import { Ach } from './achievements.js';
-import { Badges } from './badges.js';
+import { Badges, TYPES } from './badges.js';
 import { Profile } from './profile.js';
 import { Records } from './records.js';
 
@@ -94,7 +94,7 @@ export function initLobby(game) {
   const slotHint = () => { const n = game.badgeSlots(); return `可以佩戴 ${n} 枚` + (n < 2 ? '（破完故事模式開第二格）' : n < 3 ? '（故事每章三顆星，或集滿 12 張貼紙，開第三格）' : ''); };
   $('btn-badges').addEventListener('click', () => { Badges.render(game.badgeSlots(), badgeNote); $('badge-status').textContent = slotHint(); $('badges').hidden = false; });
   $('btn-badges-close').addEventListener('click', () => { $('badges').hidden = true; badgeNote(); });
-  $('btn-badge-merge').addEventListener('click', () => { const n = Badges.merge(); $('badge-status').textContent = n ? `合成了 ${n} 枚，同類型升了一級！` : '沒有三枚同類同級的。'; Badges.render(game.badgeSlots(), badgeNote); badgeNote(); });
+  $('btn-badge-merge').addEventListener('click', () => { const n = Badges.merge(); const blocked = Object.values(Badges.load().list.filter(b => b.tier === 2 && Badges.ownsLegend(b.type)).reduce((m, b) => { (m[b.type] = m[b.type] || []).push(b); return m; }, {})).filter(g => g.length >= 3).map(g => TYPES[g[0].type].legend); $('badge-status').textContent = n ? `合成了 ${n} 枚，同類型升了一級！` : blocked.length ? `${blocked.join('、')}已經有了，傳說每種只能一枚，那三枚不能再合。` : '沒有三枚同類同級的。'; Badges.render(game.badgeSlots(), badgeNote); badgeNote(); });
   badgeNote();
   // ---------- 貼紙簿 ----------
   $('btn-stickers').addEventListener('click', () => { Ach.renderBook(); $('stickers').hidden = false; });

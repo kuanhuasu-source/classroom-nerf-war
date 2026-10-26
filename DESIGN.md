@@ -283,6 +283,7 @@
 - 介面：結算卡的翻牌（稀有以上發光）、首頁徽章面板（佩戴、丟掉、合成：三枚同類同級合成一枚同類型高一級的，數值照該級隨機）、HUD 左下顯示佩戴中的徽章。收藏上限 40，滿了自動丟最舊最低且沒佩戴的；一次戴一枚，`Progress.finished()` 開第二格。
 - 驗證：`tools/badges-test.cjs`：機率抽樣、贏後翻牌佩戴、七種效果各自生效、合成、上限、隊友徽章到主機。
 - 徽章 2.0（校園傳奇與套裝）：`TYPES` 每種多 `legend / line / tiers[4]`，卡片大字是該級的名字（小黑的腳印…校犬小黑），小字是稀有度加效果，傳說級翻牌多一行人物的話。`SETS` 七組：`need` 是兩種類型，`grad` 是三種不同且全部稀有以上；`Badges.activeSets(list)` 算出啟動的套裝，`effects()` 把 `fx` 合進效果物件（`spreadMul / invulnBonus / reloadMul / crouchFull / bellRush / regenMul / grad`，`regenMul` 直接乘進回復秒數），所以 hello 送的效果物件自然帶著套裝旗標，主機不用另外算。套用點：player 的連發散射、換彈時間、蹲走速度、`hurt` 的 hurtCd（remoteplayer 同）、`startWave` 的鐘響加速（沒有別的 buff 時才給）、`start` 的開場加速、清波回血多 1。格數 `Badges.slots(storyDone, third)`：1 ＋ 破故事 ＋（全章三星或 12 張貼紙）。面板 `renderSets` 列七組（✅、還缺什麼）；HUD 有套裝時顯示套裝名加圖示。貼紙「校園名人堂」在 `wear` 湊到套裝時解鎖。更新說明：`lobby.js` 的 `NEWS_VER`，`cnw-news` 不等於它就開 `#news`（用 `?room=` 進來的不跳），關掉就記住。驗證：`tools/badge-sets-test.cjs`。
+- 傳說每種只能一枚：`roll` 抽到已擁有的傳說就整個重抽（同樣的機率表，最多十次，仍重複就給該種的稀有），結果帶 `rerolledFrom` 讓翻牌卡說明；`canMerge` 擋掉已有傳說那一種的三枚稀有，面板按鈕與合成都用它，按了會說哪一種不能合。驗證在 `badge-sets-test` 的 legend 段。
 
 **平衡檢查（`tools/badge-balance-test.cjs`，單人機器人，每組兩局）**
 - 第一版的連發是真的三倍傷害：守校門會考無徽章撐到第 4 到 5 波，戴傳說連發直接守住十波（兩局一勝、命中率 79% 到 94%）；教室會考無徽章第 3 到 4 波，戴連發贏了一局、命中率算出 144%。其他徽章（愛心、快手、回血）兩局內看不出差異，都在雜訊裡。

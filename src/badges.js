@@ -51,8 +51,16 @@ export const Badges = {
     for (let i = 0; i < 4; i++) { r -= odds[i]; if (r <= 0) { tier = i; break; } }
     if (multiplayer && tier < 3 && Math.random() < 0.1) tier++;
     if (!win) tier = Math.max(0, tier - 1);
-    return this.make(tier, level);
+    let b = this.make(tier, level), dup = null;
+    // 傳說每種只能有一枚：抽到已經有的就重抽（整個重抽，機率一樣），最多十次
+    for (let k = 0; k < 10 && b.tier === 3 && this.ownsLegend(b.type); k++) { dup = dup || b.type; let r2 = Math.random() * 100, t2 = 0; for (let i = 0; i < 4; i++) { r2 -= odds[i]; if (r2 <= 0) { t2 = i; break; } } if (!win) t2 = Math.max(0, t2 - 1); b = this.make(t2, level); }
+    if (b.tier === 3 && this.ownsLegend(b.type)) b = this.make(2, level, b.type); // ten dupes in a row: a 稀有 of it instead
+    if (dup) b.rerolledFrom = dup;
+    return b;
   },
+  ownsLegend(type) { return this.load().list.some(b => b.type === type && b.tier === 3); },
+  // three 稀有 of a type whose 傳說 is already owned cannot merge (there can only be one of each)
+  canMerge(b) { return b.tier < 3 && !(b.tier === 2 && this.ownsLegend(b.type)); },
   // type given: that type (merging keeps the type); otherwise a random type that comes in this tier
   make(tier, src = '', type = null) {
     const pool = Object.keys(TYPES).filter(k => TYPES[k].vals[tier] !== null);
@@ -74,7 +82,7 @@ export const Badges = {
   merge() {
     const d = this.load(); let n = 0;
     for (let guard = 0; guard < 50; guard++) {
-      const groups = {}; for (const b of d.list) if (b.tier < 3) (groups[b.type + ':' + b.tier] = groups[b.type + ':' + b.tier] || []).push(b);
+      const groups = {}; for (const b of d.list) if (this.canMerge(b)) (groups[b.type + ':' + b.tier] = groups[b.type + ':' + b.tier] || []).push(b);
       const g = Object.values(groups).find(x => x.length >= 3); if (!g) break;
       const three = g.sort((a, c) => a.ts - c.ts).slice(0, 3); d.list = d.list.filter(b => !three.includes(b)); d.worn = d.worn.filter(w => !three.some(t => t.id === w));
       d.list.push(this.make(three[0].tier + 1, 'merge', three[0].type)); n++;
@@ -114,7 +122,7 @@ export const Badges = {
       el.querySelector('.drop').addEventListener('click', () => { this.remove(b.id); this.render(slots, onChange); if (onChange) onChange(); });
       box.appendChild(el);
     }
-    const mergeable = Object.values(d.list.filter(b => b.tier < 3).reduce((m, b) => { (m[b.type + ':' + b.tier] = m[b.type + ':' + b.tier] || []).push(b); return m; }, {})).some(g => g.length >= 3);
+    const mergeable = Object.values(d.list.filter(b => this.canMerge(b)).reduce((m, b) => { (m[b.type + ':' + b.tier] = m[b.type + ':' + b.tier] || []).push(b); return m; }, {})).some(g => g.length >= 3);
     $('btn-badge-merge').disabled = !mergeable;
   },
   // the set list under the badges: done, or what is still missing
@@ -139,7 +147,7 @@ export const Badges = {
     // what wearing it would complete: the oldest worn badge makes room when the slots are full
     const worn = this.worn(), after = worn.length >= slots ? worn.slice(1).concat([b]) : worn.concat([b]);
     const newSets = this.activeSets(after).filter(s => !this.activeSets(worn).includes(s));
-    const notes = []; if (dropped) notes.push(`收藏滿了，丟掉了一枚${this.name(dropped)}`); if (newSets.length) notes.push(`佩戴後湊到套裝：${newSets.map(s => s.name).join('、')}`);
+    const notes = []; if (b.rerolledFrom) notes.push(`抽到第二枚${TYPES[b.rerolledFrom].legend}，傳說每種只能有一枚，幫你重抽了`); if (dropped) notes.push(`收藏滿了，丟掉了一枚${this.name(dropped)}`); if (newSets.length) notes.push(`佩戴後湊到套裝：${newSets.map(s => s.name).join('、')}`);
     $('badge-card-note').textContent = notes.join('　');
     const wearBtn = $('btn-badge-wear'); wearBtn.hidden = true; wearBtn.textContent = '佩戴這枚';
     card.onclick = () => { if (card.classList.contains('open')) return; card.classList.add('open'); Audio.item(); if (b.tier >= 2) card.classList.add('shine'); wearBtn.hidden = false; };
