@@ -357,7 +357,7 @@ export class Game {
     this.inputTimer -= dt;
     if (this.transport && this.inputTimer <= 0) {
       this.inputTimer = 1 / NET.inputHz; const p = this.player;
-      const msg = { t: 'input', x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2), yaw: +p.yaw.toFixed(2), eye: +p.eye.toFixed(2), c: p.crouching ? 1 : 0, ammo: p.ammo, res: p.reserve, sh: p.shots, rtt: Math.round(this.net.rtt) };
+      const msg = { t: 'input', x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2), yaw: +p.yaw.toFixed(2), eye: +p.eye.toFixed(2), c: p.crouching ? 1 : 0, ammo: p.ammo, res: p.reserve, sh: p.shots, rtt: Math.round(this.net.rtt) };
       if (this.lunch && this.lunchMode && this.lunchMode.driver === this.mySlot) { const di = this.driveInput(); msg.cf = +di.f.toFixed(2); msg.ct = +di.t.toFixed(2); msg.hn = this.hornSeq || 0; }
       this.transport.send(JSON.stringify(msg), undefined, true);
     }

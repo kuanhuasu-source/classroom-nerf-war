@@ -38,7 +38,7 @@ export class RemotePlayer extends PaperFigure {
     if (s.sit !== undefined) { if (s.sit && !this.sitting) { this.sitting = true; this.setTex('out'); } else if (!s.sit && this.sitting) { this.sitting = false; this.setTex('normal'); } }
     const W = this.game.world;
     if (this.sitting) { if (s.sx !== undefined) this.setTarget(s.sx, W.heightAt(s.sx, s.sz), s.sz); return; }
-    if (!this.game.lunch) this.setTarget(s.x, W.heightAt(s.x, s.z), s.z); this.yaw = s.yaw; this.eye = s.eye; this.crouch = !!s.c; this.targetSy = this.crouch ? 0.5 : 1;
+    if (!this.game.lunch) this.setTarget(s.x, W.heightAt(s.x, s.z, s.y), s.z); // y along so a teammate on the slide is drawn on it, not under it this.yaw = s.yaw; this.eye = s.eye; this.crouch = !!s.c; this.targetSy = this.crouch ? 0.5 : 1;
     if (s.hp !== undefined) this.hp = s.hp; if (s.ammo !== undefined) this.ammo = s.ammo; if (s.res !== undefined) this.reserve = s.res; if (s.rtt !== undefined) this.rtt = s.rtt;
   }
   eyePos() { return new THREE.Vector3(this.group.position.x, this.group.position.y + (this.sitting ? 0.8 : this.eye), this.group.position.z); }

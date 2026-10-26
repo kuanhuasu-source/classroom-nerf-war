@@ -153,11 +153,12 @@ function hall() {
 
 // 操場：戶外。溜滑梯（有高台）、盪鞦韆、生態池（走不過去）、輪胎、沙坑、長椅、升旗台、跑道、樹。
 function yard() {
-  const desks = [], furniture = [], W = 20, D = 16, TOWER = 1.6;
+  const desks = [], furniture = [], W = 20, D = 16, TOWER = 1.8;
   const terrain = [
     { kind: 'platform', x: -4, z: -2, w: 1.4, d: 1.4, h: TOWER, color: 0x2f6fd1 },                                   // slide tower
-    { kind: 'ramp', x: -5.3, z: -2, w: 1.2, d: 1.0, h0: 0, h1: TOWER, axis: 'x', dir: 1, color: 0x2f6fd1 },             // steps up from the west
-    { kind: 'ramp', x: -1.8, z: -2, w: 3.0, d: 0.9, h0: 0, h1: TOWER, axis: 'x', dir: -1, smooth: true, color: 0xf4c542 }, // the slide down to the east
+    { kind: 'ramp', x: -5.4, z: -2, w: 1.4, d: 1.0, h0: 0, h1: TOWER, axis: 'x', dir: 1, color: 0x2f6fd1 },             // steps up from the west
+    // the slide down to the east: `over` makes it a deck — the ground under it stays open, so you can duck under it to hide or cut through
+    { kind: 'ramp', x: -1.4, z: -2, w: 3.8, d: 1.1, h0: 0, h1: TOWER, axis: 'x', dir: -1, smooth: true, over: true, color: 0xf4c542 },
     { kind: 'platform', x: 7.5, z: -6.3, w: 2.2, d: 2.2, h: 0.5, color: 0xd9d2c0 },                                    // flag platform
     { kind: 'ramp', x: 7.5, z: -4.8, w: 1.2, d: 0.8, h0: 0, h1: 0.5, axis: 'z', dir: -1, color: 0xd9d2c0 },
   ];

@@ -93,7 +93,7 @@ export class Darts {
           if (d.kind !== 'dart') { Audio.thud(); this.remove(i); hooks({ kind: d.kind + 'Break', pos: p.clone() }); done = true; break; }
           p.y = ground + 0.03; this.settle(d); d.mesh.rotation.set(0, Math.random() * 6.28, 0); if (d.owner === 'player') Audio.thud(); break;
         }
-        const hit = this.world.pointInBox(p);
+        const hit = this.world.pointInBox(p) || (this.world.terrain.length && this.world.overCrossed(prev, p) ? 'wall' : null); // the slide's slab counts as a wall from both sides
         if (hit || (d.life <= 0 && k === n - 1)) {
           this.settle(d); d.mesh.position.copy(prev);
           if (hit === 'wall' || (hit && hit.h - hit.y0 > 0.5)) { /* stays stuck where it hit */ } else { d.mesh.position.y = Math.max(this.world.heightAt(prev.x, prev.z) + 0.03, prev.y); }

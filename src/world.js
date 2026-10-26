@@ -29,24 +29,55 @@ export class World {
   inked(mesh) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 20), this.inkMat); mesh.add(e); return mesh; }
   // soft: stops feet (walking, the nav grid) but not darts or sight — for open frames like the swing's A-legs and the pond's water
   collide(x, z, w, d, h, y0 = 0, soft = false) { this.boxes.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h, y0, soft }); }
-  // floor height at a point: 0 on the ground, the platform height on a stage or balcony, in between on stairs
-  heightAt(x, z) {
+  // floor height at a point: 0 on the ground, the platform height on a stage or balcony, in between on stairs.
+  // An `over` piece (the slide) is a deck with open ground under it: it only counts as the floor for someone
+  // already up at its level (y given and within 0.5 m of it); everyone else is underneath, on whatever is below.
+  surfaceOf(t, x, z) {
+    if (t.kind === 'platform') return t.h;
+    const along = t.axis === 'x' ? (x - (t.x - t.w / 2)) / t.w : (z - (t.z - t.d / 2)) / t.d;
+    const f = t.dir < 0 ? 1 - along : along; return t.h0 + (t.h1 - t.h0) * Math.min(1, Math.max(0, f));
+  }
+  inTerrain(t, x, z) { return !(x < t.x - t.w / 2 || x > t.x + t.w / 2 || z < t.z - t.d / 2 || z > t.z + t.d / 2); }
+  heightAt(x, z, y) {
     let h = 0;
     for (const t of this.terrain) {
-      if (x < t.x - t.w / 2 || x > t.x + t.w / 2 || z < t.z - t.d / 2 || z > t.z + t.d / 2) continue;
-      if (t.kind === 'platform') { if (t.h > h) h = t.h; continue; }
-      const along = t.axis === 'x' ? (x - (t.x - t.w / 2)) / t.w : (z - (t.z - t.d / 2)) / t.d;
-      const f = t.dir < 0 ? 1 - along : along, th = t.h0 + (t.h1 - t.h0) * Math.min(1, Math.max(0, f));
+      if (!this.inTerrain(t, x, z)) continue;
+      const th = this.surfaceOf(t, x, z);
+      if (t.over && (y === undefined || y < th - 0.5)) continue;
       if (th > h) h = th;
     }
     return h;
   }
-  // move a circle by (dx,dz): a step taller than 0.45 m is a wall (platform edges), the rest slides along boxes
-  walk(pos, dx, dz, r) {
+  // the underside of the lowest deck above a point (Infinity when nothing hangs over it)
+  ceilingAt(x, z, y) {
+    let c = Infinity;
+    for (const t of this.terrain) { if (!t.over || !this.inTerrain(t, x, z)) continue; const th = this.surfaceOf(t, x, z); if (y < th - 0.5 && th - 0.06 < c) c = th - 0.06; }
+    return c;
+  }
+  lowCeiling(pos, need) { return this.ceilingAt(pos.x, pos.z, pos.y || 0) - (pos.y || 0) < need; }
+  // does the segment a→b pass through a deck's slab (from above to below or the other way)?
+  overCrossed(a, b) {
+    for (const t of this.terrain) {
+      if (!t.over) continue;
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / 0.15));
+      let last = 0;
+      for (let i = 0; i <= n; i++) {
+        const f = i / n, x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f, z = a.z + (b.z - a.z) * f;
+        if (!this.inTerrain(t, x, z)) { last = 0; continue; }
+        const s = y - (this.surfaceOf(t, x, z) - 0.02) > 0 ? 1 : -1;
+        if (last && s !== last) return true;
+        last = s;
+      }
+    }
+    return false;
+  }
+  // move a circle by (dx,dz): a step taller than 0.45 m is a wall (platform edges), the rest slides along boxes.
+  // need: how tall the walker is right now, so a deck that hangs lower than that stops them
+  walk(pos, dx, dz, r, need = 1.45) {
     const y = pos.y || 0;
-    for (const [ax, v] of [['x', dx], ['z', dz]]) { if (!v) continue; const o = pos[ax]; pos[ax] += v; if (Math.abs(this.heightAt(pos.x, pos.z) - y) > 0.45) pos[ax] = o; }
+    for (const [ax, v] of [['x', dx], ['z', dz]]) { if (!v) continue; const o = pos[ax]; pos[ax] += v; if (Math.abs(this.heightAt(pos.x, pos.z, y) - y) > 0.45 || this.ceilingAt(pos.x, pos.z, y) - y < need) pos[ax] = o; }
     this.collideCircle(pos, r); this.collideCircle(pos, r);
-    pos.y = this.heightAt(pos.x, pos.z);
+    pos.y = this.heightAt(pos.x, pos.z, y);
   }
   box(w, h, d, x, y, z, color, { collide = true, ink = true, shadow = true, parent = null } = {}) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), this.toon(color));
@@ -128,6 +159,10 @@ export class World {
         const slab = this.box(t.axis === 'x' ? len : across, 0.08, t.axis === 'x' ? across : len, t.x, (t.h0 + t.h1) / 2 - 0.02, t.z, t.color || 0xf4c542, { collide: false });
         if (t.axis === 'x') slab.rotation.z = ang; else slab.rotation.x = -ang;
         for (const side of [-1, 1]) { const rail = this.box(t.axis === 'x' ? len : 0.06, 0.22, t.axis === 'x' ? 0.06 : len, t.x + (t.axis === 'x' ? 0 : side * (across / 2 - 0.03)), (t.h0 + t.h1) / 2 + 0.1, t.z + (t.axis === 'x' ? side * (across / 2 - 0.03) : 0), t.railColor || 0xd8432b, { collide: false }); if (t.axis === 'x') rail.rotation.z = ang; else rail.rotation.x = -ang; }
+        if (t.over) for (const f of [0.3, 0.6]) for (const side of [-1, 1]) { // a deck you can get under: two pairs of posts under the rails hold it up
+          const off = (t.dir < 0 ? 1 - f : f) * along - along / 2, px = t.axis === 'x' ? t.x + off : t.x + side * (across / 2 - 0.03), pz = t.axis === 'x' ? t.z + side * (across / 2 - 0.03) : t.z + off;
+          const ph = this.surfaceOf(t, px, pz) - 0.06; this.box(0.06, ph, 0.06, px, ph / 2, pz, 0x2b2622, { collide: false, ink: false });
+        }
         continue;
       }
       const n = Math.max(2, Math.ceil(Math.abs(t.h1 - t.h0) / 0.2));
@@ -429,7 +464,7 @@ export class World {
     const pad = 0.2;
     for (let gz = 0; gz < this.gh; gz++) for (let gx = 0; gx < this.gw; gx++) {
       const { x, z } = this.cellCenter(gx, gz), hc = this.heightAt(x, z); this.gridH[gz * this.gw + gx] = hc;
-      let blocked = Math.abs(x) > this.room.w / 2 - 0.35 || Math.abs(z) > this.room.d / 2 - 0.35;
+      let blocked = Math.abs(x) > this.room.w / 2 - 0.35 || Math.abs(z) > this.room.d / 2 - 0.35 || this.ceilingAt(x, z, hc) - hc < 1.3;
       if (!blocked) for (const b of this.boxes) {
         if (b.h < hc + 0.3 || b.y0 > hc + 1.4) continue; // below the feet or above the head at this floor level
         if (x > b.minX - pad && x < b.maxX + pad && z > b.minZ - pad && z < b.maxZ + pad) { blocked = true; break; }
@@ -519,10 +554,10 @@ export class World {
   // march along a ray until something solid; used to converge the dart on the crosshair
   // extra(p): optional test for things that are not part of the room (kids, teachers), so the crosshair converges on them
   rayDistance(origin, dir, maxDist = 30, extra = null) {
-    const p = origin.clone(), step = 0.1;
+    const p = origin.clone(), prev = origin.clone(), step = 0.1;
     for (let d = step; d < maxDist; d += step) {
-      p.copy(origin).addScaledVector(dir, d);
-      if (p.y < this.heightAt(p.x, p.z) || this.pointInBox(p) || (extra && extra(p))) return d;
+      prev.copy(p); p.copy(origin).addScaledVector(dir, d);
+      if (p.y < this.heightAt(p.x, p.z) || this.pointInBox(p) || (extra && extra(p)) || (this.terrain.length && this.overCrossed(prev, p))) return d;
     }
     return maxDist;
   }
@@ -531,6 +566,7 @@ export class World {
     if (this.terrain.length) { // a stage or a balcony body is solid
       const n = Math.ceil(p0.distanceTo(p1) / 0.3) || 1;
       for (let i = 1; i < n; i++) { const t = i / n, x = p0.x + (p1.x - p0.x) * t, y = p0.y + (p1.y - p0.y) * t, z = p0.z + (p1.z - p0.z) * t; if (y < this.heightAt(x, z) - 0.03) return true; }
+      if (this.overCrossed(p0, p1)) return true; // through the slide's slab
     }
     for (const b of this.boxes) {
       if (b.soft) continue;

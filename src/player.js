@@ -37,7 +37,7 @@ export class Player {
   update(dt) {
     const k = this.keys;
     const tc = this.game.touchCtl, tm = tc && tc.on ? tc.move : null;
-    this.crouching = !!(k['ControlLeft'] || k['ControlRight'] || k['KeyC'] || (tc && tc.crouch));
+    this.crouching = !!(k['ControlLeft'] || k['ControlRight'] || k['KeyC'] || (tc && tc.crouch)) || this.world.lowCeiling(this.pos, CFG.player.standH); // under the slide you stay down until you are out
     const targetEye = this.sitting ? 0.8 : this.crouching ? CFG.player.crouchEye : CFG.player.eye;
     this.invuln = Math.max(0, this.invuln - dt);
     if (this.sitting) this.sitUpdate(dt);
@@ -58,7 +58,7 @@ export class Player {
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
       // forward is -z in camera space rotated by yaw
       const fx = -sin, fz = -cos, rx = cos, rz = -sin;
-      this.world.walk(this.pos, (fx * -mz + rx * mx) * speed * dt, (fz * -mz + rz * mx) * speed * dt, CFG.player.radius);
+      this.world.walk(this.pos, (fx * -mz + rx * mx) * speed * dt, (fz * -mz + rz * mx) * speed * dt, CFG.player.radius, this.crouching ? CFG.player.crouchH : CFG.player.standH);
       this.bob += dt * (run ? 13 : 9);
     }
     this.camera.position.set(this.pos.x, this.pos.y + this.eye + (moving ? Math.sin(this.bob) * 0.025 : 0), this.pos.z);
