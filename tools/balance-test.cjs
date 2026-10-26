@@ -5,7 +5,7 @@ const botSrc = fs.readFileSync(process.argv[2] + '/bot.js', 'utf8');
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('http://localhost:8766/index.html?map=' + (process.env.MAP || 'classroom') + (process.env.TEACHER ? '&teacher=' + process.env.TEACHER : ''), { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:8766/index.html?id=TEST&map=' + (process.env.MAP || 'classroom') + (process.env.TEACHER ? '&teacher=' + process.env.TEACHER : ''), { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   await page.evaluate(() => { window.__game.renderer.setPixelRatio(0.5); window.__game.renderer.setAnimationLoop(null); });
   await page.click('#btn-start');

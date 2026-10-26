@@ -297,6 +297,16 @@
 - 多人：加碼照人數（MP），徽章各戴各的，不再額外縮放；主機套用隊友的愛心與回血。
 - 附帶發現：機器人在活動中心會考完全打不到人（第一波 0 擊殺），是機器人不會上二樓，不是遊戲問題；真人測試正常。
 
+### 4.18 個人 ID 與紀錄
+
+- 需求：個人紀錄，身分用「個人 ID」（最多十碼英數，不分大小寫），一台裝置多人輪流。
+- `src/profile.js`：`Profile.id` 存在 `cnw-id`；每個模組的鍵用 `Profile.key(name)`（`cnw-<ID>:story / ach / badges / records / name / look`），`Profile.get/put` 讀寫 JSON；切換時各模組用 `onSwitch` 登記的函式把快取清掉。第一次 `set` 時把舊的 `cnw-story / cnw-ach / cnw-badges / cnw-name / cnw-look` 搬到那個 ID 底下再刪掉。`known()`（`cnw-ids`）給切換畫面列出這台裝置用過的 ID。`dump / restore` 給搬家代碼。
+- 首頁：沒有 ID 先跳 `#idgate`（在所有覆蓋層最上面），輸入時即時清成大寫英數；`?room=` 的自動加入和更新說明都等 ID 輸入後才做（`whenId`）；`?id=XYZ` 直接設定（測試與除錯連結用）。名字預設等於 ID，名字與造型也跟 ID 存。
+- `src/records.js`：`Records.record(summary)` 更新累計、最佳（`BESTS` 表：每種玩法哪些欄位、取大取小、是否只算贏）與最近 20 局，回傳打破的項目；某一格第一次有成績不算破紀錄。摘要由 `Game.roundSummary` 在 `showOver` 時算（那時加分已進來），連線時用 `coopStats` 裡自己那份；`playT` 在 `step` 累加當遊玩時間。結算卡 `#record-note` 寫新紀錄，貼紙 `record`。
+- 成績卡：`Records.card` 在 640×1000 的 canvas 畫紙片風（紙、線、膠帶、紙片人、ID、這一局或總成績、最佳、佩戴），`toDataURL` 放進 `#cardview` 的 img，手機長按存圖，另有 download 連結。
+- 搬家代碼：`Profile.dump()` 的 JSON 用 `CompressionStream('deflate-raw')` 壓縮再 base64url，前綴 D（沒有壓縮 API 就 P 純 base64）；畫成 `?move=代碼` 的 QR（網址 1800 字內才畫），另一台打開會問一次再 `Profile.restore`；也能貼代碼。一個玩了幾十局、40 枚徽章的 ID 大約 1.5 KB。
+- 驗證：`tools/records-test.cjs`（閘門、舊資料搬移、切換隔離、兩局後的最佳／累計／最近、新紀錄提示與貼紙、紀錄頁、兩種成績卡、搬家代碼經 QR 連結與貼上兩種匯入、房號連結等 ID）。測試用的首頁連結一律帶 `?id=TEST`。
+
 ### 4.16 首頁重排
 - 卡片放寬到 1080 px，左欄是動作（單人開戰、故事模式、開房間、輸入房號、徽章、貼紙簿、房間面板、QR code），右欄是這一局的設定（玩法、難度、教室、連線名字與造型）與收合的「操作說明」。窄螢幕自動變單欄。
 

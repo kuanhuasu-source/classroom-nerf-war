@@ -5,8 +5,8 @@ const runs = +process.argv[2] || 3, fireEvery = process.argv[3] === undefined ? 
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('http://localhost:8766/index.html', { waitUntil: 'networkidle' }); await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
-  await page.evaluate(() => { localStorage.removeItem('cnw-badges'); window.__badges.data = null; window.__game.renderer.setPixelRatio(0.5); window.__game.renderer.setAnimationLoop(null); });
+  await page.goto('http://localhost:8766/index.html?id=TEST', { waitUntil: 'networkidle' }); await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
+  await page.evaluate(() => { localStorage.removeItem('cnw-TEST:badges'); window.__badges.data = null; window.__game.renderer.setPixelRatio(0.5); window.__game.renderer.setAnimationLoop(null); });
   const out = [];
   for (let r = 0; r < runs; r++) {
     const res = await page.evaluate((fireEvery) => { const g = window.__game; g.pause = () => {}; if (g.state === 'paused') g.resume();

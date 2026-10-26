@@ -4,7 +4,7 @@ const { chromium } = require('playwright'); const path = require('path');
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('http://localhost:8766/index.html', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:8766/index.html?id=TEST', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   await page.evaluate(() => { const n = document.getElementById('news'); if (n) n.hidden = true; }); // the what's-new card would sit over the menu buttons
   await page.addScriptTag({ path: path.join(__dirname, 'node_modules/jsqr/dist/jsQR.js') });
@@ -15,7 +15,7 @@ const { chromium } = require('playwright'); const path = require('path');
   console.log('room code', code, '| room QR decodes to:', await decode('qr-room'));
   await page.screenshot({ path: 'qr-lobby.png', clip: { x: 300, y: 560, width: 700, height: 340 } });
   const p2 = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-  await p2.goto('http://localhost:8766/index.html?room=' + code, { waitUntil: 'networkidle' }); await p2.waitForFunction(() => window.__game); await p2.waitForTimeout(1200);
+  await p2.goto('http://localhost:8766/index.html?id=TEST&room=' + code, { waitUntil: 'networkidle' }); await p2.waitForFunction(() => window.__game); await p2.waitForTimeout(1200);
   console.log('scanned link: join panel open', await p2.evaluate(() => !document.getElementById('lobby-join').hidden), '| code filled', await p2.evaluate(() => document.getElementById('join-code').value), '| status:', await p2.evaluate(() => document.getElementById('lobby-status').textContent.slice(0, 24)));
   console.log('ERRORS:', errors.length ? errors : 'none');
   await browser.close();

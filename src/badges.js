@@ -1,6 +1,7 @@
 import { $ } from './ui.js';
 import { Audio } from './audio.js';
 import { Ach } from './achievements.js';
+import { Profile } from './profile.js';
 
 // 徽章：每打完一場抽一枚（贏一定抽，輸一半機率安慰抽，稀有度降一級）。稀有度看這場的難度，多人再加一點。
 // 一枚一種效果，數值在稀有度的範圍內隨機。首頁最多佩戴三枚（破完故事開第二格，全章三星或 12 張貼紙開第三格）。
@@ -40,8 +41,8 @@ export const CAP = 40;
 const r2 = (v) => Math.round(v * 100) / 100;
 export const Badges = {
   data: null,
-  load() { if (this.data) return this.data; try { this.data = JSON.parse(localStorage.getItem('cnw-badges') || 'null') || {}; } catch (e) { this.data = {}; } this.data.list = this.data.list || []; this.data.worn = this.data.worn || []; this.data.seq = this.data.seq || 0; return this.data; },
-  save() { try { localStorage.setItem('cnw-badges', JSON.stringify(this.data)); } catch (e) { /* ignore */ } },
+  load() { if (this.data) return this.data; this.data = Profile.get('badges') || {}; this.data.list = this.data.list || []; this.data.worn = this.data.worn || []; this.data.seq = this.data.seq || 0; return this.data; },
+  save() { Profile.put('badges', this.data); },
   slots(storyDone, third) { return 1 + (storyDone ? 1 : 0) + (storyDone && third ? 1 : 0); },
   // roll a badge for a finished round; null when the loss coin flip fails
   roll(level, win, multiplayer) {
@@ -146,3 +147,4 @@ export const Badges = {
     wearBtn.disabled = false;
   },
 };
+Profile.onSwitch(() => { Badges.data = null; });

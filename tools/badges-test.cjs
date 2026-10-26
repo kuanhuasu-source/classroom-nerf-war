@@ -4,9 +4,9 @@ const { chromium } = require('playwright');
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('http://localhost:8766/index.html?map=classroom', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:8766/index.html?id=TEST&map=classroom', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
-  await page.evaluate(() => { localStorage.removeItem('cnw-badges'); window.__badges.data = null; window.__game.renderer.setAnimationLoop(null); });
+  await page.evaluate(() => { localStorage.removeItem('cnw-TEST:badges'); window.__badges.data = null; window.__game.renderer.setAnimationLoop(null); });
   // roll odds sanity
   console.log('odds sample', JSON.stringify(await page.evaluate(() => { const B = window.__badges; const out = {}; for (const lv of ['easy', 'exam']) { const c = [0, 0, 0, 0]; for (let i = 0; i < 2000; i++) { const b = B.roll(lv, true, false); c[b.tier]++; } out[lv] = c.map(n => Math.round(n / 20)); } let none = 0; for (let i = 0; i < 1000; i++) if (!B.roll('normal', false, false)) none++; out.lossNoDraw = Math.round(none / 10); return out; })));
   // win a quick round and see the draw card
@@ -46,7 +46,7 @@ const { chromium } = require('playwright');
   const host = await browser.newPage({ viewport: { width: 900, height: 500 } }), guest = await browser.newPage({ viewport: { width: 900, height: 500 } });
   for (const pg of [host, guest]) pg.on('pageerror', e => errors.push('link: ' + e.message));
   await guest.goto('http://localhost:8766/index.html?role=guest&slot=g1', { waitUntil: 'domcontentloaded' });
-  await guest.evaluate(() => { localStorage.setItem('cnw-badges', JSON.stringify({ list: [{ id: 'g', type: 'hp', tier: 3, val: 2, ts: 1 }], worn: ['g'], seq: 1 })); location.reload(); });
+  await guest.evaluate(() => { localStorage.setItem('cnw-:badges', JSON.stringify({ list: [{ id: 'g', type: 'hp', tier: 3, val: 2, ts: 1 }], worn: ['g'], seq: 1 })); location.reload(); });
   await guest.waitForFunction(() => window.__game, null, { timeout: 30000 }); await host.goto('http://localhost:8766/index.html?role=host&map=classroom', { waitUntil: 'networkidle' }); await host.waitForFunction(() => window.__game, null, { timeout: 30000 });
   for (const pg of [host, guest]) await pg.evaluate(() => window.__game.renderer.setAnimationLoop(null));
   const relay = async () => { const h = await host.evaluate(() => window.__transport.drain()); const g = await guest.evaluate(() => window.__transport.drain()); await guest.evaluate((l) => l.forEach(s => { const t = window.__transport; if (!s.to || s.to === t.id) t.receive(s.str, s.from); }), h); await host.evaluate((l) => l.forEach(s => { const t = window.__transport; if (!s.to || s.to === t.id) t.receive(s.str, s.from); }), g); };

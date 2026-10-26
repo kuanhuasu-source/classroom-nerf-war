@@ -14,7 +14,7 @@ const VALS = { hp: [1, 1, 2, 2], mag: [2, 4, 6, 9], rate: [0.06, 0.1, 0.15, 0.22
   for (const cfg of configs) {
     const [map, level, mode, badges] = cfg.split(':');
     const worn = badges === 'none' ? [] : badges.split(',').map((b, i) => { const [type, tier] = b.split('@'); return { id: 'bb' + i, type, tier: +tier, val: VALS[type][+tier], ts: i }; });
-    await page.evaluate(({ worn, mode }) => { const g = window.__game; if (g.state !== 'menu') g.toMenu(); localStorage.setItem('cnw-badges', JSON.stringify({ list: worn, worn: worn.map(b => b.id), seq: 9 })); window.__badges.data = null; g.mode = mode || 'class'; g.forceTeacher = null; }, { worn, mode });
+    await page.evaluate(({ worn, mode }) => { const g = window.__game; if (g.state !== 'menu') g.toMenu(); localStorage.setItem('cnw-:badges', JSON.stringify({ list: worn, worn: worn.map(b => b.id), seq: 9 })); window.__badges.data = null; g.mode = mode || 'class'; g.forceTeacher = null; }, { worn, mode });
     const all = [];
     for (let i = 0; i < runs; i++) {
       const r = await page.evaluate(`(${botSrc})('${level}', '${map}', 420, 0.03)`);

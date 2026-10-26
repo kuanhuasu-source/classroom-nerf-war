@@ -4,10 +4,10 @@ const { chromium } = require('playwright');
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
-  await page.goto('http://localhost:8766/index.html', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:8766/index.html?id=TEST', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   await page.evaluate(() => { const n = document.getElementById('news'); if (n) n.hidden = true; }); // the what's-new card would sit over the menu buttons
-  await page.evaluate(() => { localStorage.removeItem('cnw-story'); localStorage.removeItem('cnw-ach'); window.__game.renderer.setAnimationLoop(null); });
+  await page.evaluate(() => { localStorage.removeItem('cnw-TEST:story'); localStorage.removeItem('cnw-TEST:ach'); window.__game.renderer.setAnimationLoop(null); });
   await page.click('#btn-story'); await page.waitForTimeout(100);
   const list = await page.evaluate(() => [...document.querySelectorAll('#story-list .chapter')].map(b => [b.querySelector('.day').textContent, b.disabled, b.querySelector('.stars').textContent]));
   console.log('chapters', JSON.stringify(list));
@@ -21,7 +21,7 @@ const { chromium } = require('playwright');
   // play it through like the solo test: knock out kids each second, then the teacher's weak points; the player never dies
   const r = await page.evaluate(() => { const g = window.__game; g.player.hurt = function () {}; let hint = ''; const ob = g.ui.buddy.bind(g.ui); g.ui.buddy = (t, s) => { hint += t + '|'; ob(t, s); };
     for (let i = 0; i < 600 && g.state === 'playing'; i++) { g.students.forEach(s => { if (s.alive) { s.hp = 1; s.hit(); g.player.shots += 2; g.player.hits += 1; } }); const t = g.teachers.find(t => !t.defeated); if (t && t.state !== 'enter') { const k = Object.keys(t.wp).find(k => t.wp[k].hp > 0); if (k) t.hitWeak(k); } for (let k = 0; k < 60; k++) { if (g.state === 'upgrade' || g.ui.offerOpen) { const b = document.querySelector('#upgrade-cards button'); if (b) g.pickUpgrade(b.dataset.id); } g.step(1 / 60); g.ui.tick(1 / 60); } }
-    return { state: g.state, wave: g.wave, teacher: g.teachers[0] && g.teachers[0].def.id, stars: g.storyStars, saved: JSON.parse(localStorage.getItem('cnw-story')), ach: Object.keys(JSON.parse(localStorage.getItem('cnw-ach') || '{}').unlocked || {}), hints: hint, toast: document.getElementById('ach-toast-name').textContent }; });
+    return { state: g.state, wave: g.wave, teacher: g.teachers[0] && g.teachers[0].def.id, stars: g.storyStars, saved: JSON.parse(localStorage.getItem('cnw-TEST:story')), ach: Object.keys(JSON.parse(localStorage.getItem('cnw-TEST:ach') || '{}').unlocked || {}), hints: hint, toast: document.getElementById('ach-toast-name').textContent }; });
   console.log('chapter 1 end', JSON.stringify(r));
   await page.waitForTimeout(3500);
   console.log('over card', JSON.stringify(await page.evaluate(() => [document.getElementById('over').hidden, document.getElementById('over-sub').textContent, document.getElementById('btn-next').hidden, document.getElementById('btn-next').textContent, document.getElementById('btn-again').textContent])));

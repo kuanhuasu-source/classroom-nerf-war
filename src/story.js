@@ -1,3 +1,5 @@
+import { Profile } from './profile.js';
+
 // 故事模式「Jason 的畢業週」：六年二班的 Jason 在畢業前最後一週，每天一章，把每個玩法串起來。
 // 章節是資料；Game.startStory 套用章節的玩法、地圖、難度、波次與老師，結束時用 starsFor 算星星，Progress 存在瀏覽器。
 export const STORY = {
@@ -61,8 +63,8 @@ export const chapterById = (id) => STORY.chapters.find(c => c.id === id);
 // progress lives in the browser: stars per chapter
 export const Progress = {
   data: null,
-  load() { if (this.data) return this.data; try { this.data = JSON.parse(localStorage.getItem('cnw-story') || 'null') || { stars: {} }; } catch (e) { this.data = { stars: {} }; } if (!this.data.stars) this.data.stars = {}; return this.data; },
-  save() { try { localStorage.setItem('cnw-story', JSON.stringify(this.data)); } catch (e) { /* ignore */ } },
+  load() { if (this.data) return this.data; this.data = Profile.get('story') || { stars: {} }; if (!this.data.stars) this.data.stars = {}; return this.data; },
+  save() { Profile.put('story', this.data); },
   stars(id) { return this.load().stars[id] || 0; },
   setStars(id, n) { const d = this.load(); if (n > (d.stars[id] || 0)) { d.stars[id] = n; this.save(); } },
   // a chapter opens when the one before it has at least one star; the secret one needs three stars everywhere else
@@ -81,4 +83,5 @@ export function starsFor(ch, g) {
   if (ch.mode === 'siege') return 1 + (g.damageTaken <= 4 ? 1 : 0) + (acc >= 0.35 ? 1 : 0);
   return 1 + (p.hp >= 3 ? 1 : 0) + (acc >= 0.4 ? 1 : 0);
 }
+Profile.onSwitch(() => { Progress.data = null; });
 export const starText = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 3 - n));

@@ -21,6 +21,8 @@ import { LunchMode } from './lunch.js';
 import { STORY, Progress, starsFor, starText } from './story.js';
 import { Ach } from './achievements.js';
 import { Badges, TYPES } from './badges.js';
+import { Profile } from './profile.js';
+import { Records } from './records.js';
 import { TEACHERS, BOSSES, COMMITTEE, GANG } from './teachers.js';
 import { LAYOUTS, LAYOUT_IDS, layoutById } from './layouts.js';
 import { Prop } from './props.js';
@@ -40,8 +42,7 @@ export class Game {
     // guest side: the host's figure plus the other guests
     this.others = new Map(); this.mySlot = 'host'; this.buffs = {};
     this.pid = opts.pid || Game.persistentId();
-    this.profile = { name: '', look: '' }; // what this player typed and picked on the front page (the lobby fills it)
-    try { this.profile.name = localStorage.getItem('cnw-name') || ''; this.profile.look = localStorage.getItem('cnw-look') || ''; } catch (e) { /* ignore */ }
+    Profile.load(); this.loadProfile(); // what this player typed and picked on the front page, kept under their ID (the lobby fills it)
     this.net = new NetStats(); this.showNet = true; this.pvSeq = 0; this.snapSeq = 0; this.pingT = 0; this.acc = 0;
     PaperFigure.renderTime = () => performance.now() - (this.isHost ? 100 : this.net.delay); // guests from inputs: 100 ms behind; snapshots: adaptive
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -107,6 +108,7 @@ export class Game {
   lobbyNames() { return [...this.remotes.values()].filter(r => !r.offline && this.connOf(r.slot)).map(r => r.skin.name + (r.touch ? '📱' : '')); }
   sendHello() { if (this.transport && !this.isHost) this.transport.send(JSON.stringify({ t: 'hello', pid: this.pid, touch: this.touch ? 1 : 0, name: this.profile.name, look: this.profile.look, badge: Badges.effects() })); }
   // 1 slot; the 2nd after the story is done; the 3rd for three stars everywhere or 12 stickers
+  loadProfile() { this.profile = { name: Profile.get('name') || Profile.id, look: Profile.get('look') || '' }; }
   badgeSlots() { return Badges.slots(Progress.finished(), Progress.allThree() || Ach.count() >= 12); }
   badgeHud() { const sets = Badges.activeSets().map(s => `【${s.name}】`).join(''), worn = Badges.worn(); this.ui.badge(sets ? sets + worn.map(b => TYPES[b.type].icon).join('') : worn.map(b => Badges.label(b)).join('・')); } // with a set on, the HUD shows the set names and just the icons
   mySkin() { return skinFor(this.mySlot, this.profile.name, this.profile.look); }
@@ -174,7 +176,7 @@ export class Game {
   // end of any round: stickers and story stars
   afterRound(win) {
     if (this.roundDone) return; this.roundDone = true;
-    this.drawnBadge = Badges.roll(this.level, win, this.coop || !this.isHost); this.drawnDropped = this.drawnBadge ? Badges.add(this.drawnBadge) : null;
+    this.drawnBadge = Badges.roll(this.level, win, this.coop || !this.isHost); this.drawnDropped = this.drawnBadge ? Badges.add(this.drawnBadge) : null; if (this.drawnBadge) Records.bump('badges');
     if (!this.isHost) { if (win) { Ach.unlock('first_win'); if (this.damageTaken === 0) Ach.unlock('untouched'); } return; }
     const p = this.player, acc = p.shots ? p.hits / p.shots : 0, plain = !this.siege && !this.toilet && !this.lunch;
     if (this.kills) Ach.add('kills', this.kills);
@@ -197,6 +199,15 @@ export class Game {
       if (win) { Progress.setStars(this.story.id, this.storyStars); if (this.story.finale) Ach.unlock('grad'); if (this.story.id === 'secret') Ach.unlock('secret'); if (Progress.allThree()) Ach.unlock('all3'); }
     }
   }
+  // 個人紀錄：這一局的摘要（連線時用主機算的那份個人數字），存進去並記下打破了哪些最佳成績
+  roundSummary(win) {
+    const p = this.player, mode = this.lunch ? 'lunch' : this.toilet ? 'toilet' : this.siege ? 'siege' : 'class';
+    let kills = this.kills, hits = p.hits, shots = p.shots;
+    const st = this.isHost ? this.coopStats() : (this.pendingOver && this.pendingOver.stats), mine = st && st.find(s => s.slot === this.mySlot); if (mine) { kills = mine.kills; hits = mine.hits; shots = mine.shots; }
+    return { ts: Date.now(), mode, level: this.level, map: this.world.layout.id, win, score: this.score, wave: this.wave, shots, hits, acc: shots ? hits / shots : 0, kills, teachers: this.teachers.filter(t => t.defeated).length, time: Math.round(this.playT || 0),
+      timeLeft: this.toilet ? Math.round(this.timeLeft) : undefined, soup: this.lunch && this.lunchMode ? Math.round(this.lunchMode.cart.soup) : undefined, stars: this.story ? this.storyStars : (this.lunch && this.lunchMode ? this.lunchMode.stars() : 0), story: this.story ? this.story.title : '' };
+  }
+  recordRound(win) { if (this.recorded) return; this.recorded = true; this.recordBroken = Records.record(this.roundSummary(win)); if (this.recordBroken.length) Ach.unlock('record'); }
   driveInput() { const k = this.player.keys, tc = this.touchCtl, tm = tc && tc.on ? tc.move : null; return { f: (k['KeyW'] || k['ArrowUp'] ? 1 : 0) - (k['KeyS'] || k['ArrowDown'] ? 1 : 0) + (tm ? -tm.z : 0), t: (k['KeyD'] || k['ArrowRight'] ? 1 : 0) - (k['KeyA'] || k['ArrowLeft'] ? 1 : 0) + (tm ? tm.x : 0) }; }
   horn() { if (!this.lunch || !this.lunchMode) return; if (this.isHost) this.lunchMode.horn('host'); else { this.hornSeq = (this.hornSeq || 0) + 1; Audio.whistle(); } }
   refillShooter() { const LM = this.lunchMode, slot = LM.shooterSlot(); if (slot === 'ai') return; if (slot === 'host') { const p = this.player; p.ammo = p.magSize(); p.reserve = LUNCH.ammo; this.ui.ammo(p.ammo, false, p.reserve); this.ui.pickFlash(); } else { const r = this.remoteBySlot(slot); if (r) r.reserve = LUNCH.ammo; this.netEvent({ t: 'ammoSet', n: LUNCH.ammo }, slot); } }
@@ -324,6 +335,7 @@ export class Game {
   badgeHp(fx) { return fx ? (this.toilet ? Math.min(1, fx.hp) : fx.hp) : 0; }
   markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.badge = Badges.effects(); p.maxHp = this.baseHp(p) + p.up.maxHpBonus + this.badgeHp(p.badge); p.hp = p.maxHp; this.badgeHud(); }
   guestReset() {
+    this.playT = 0; this.recordBroken = []; this.recorded = false; this.pendingOver = null;
     if (this.lunchMode) { this.lunchMode.dispose(); this.lunchMode = null; }
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
@@ -501,6 +513,7 @@ export class Game {
     this.clock.getDelta();
   }
   reset() {
+    this.playT = 0; this.recordBroken = []; this.recorded = false;
     this.students.forEach(s => s.dispose()); this.students = [];
     this.teachers.forEach(t => t.dispose()); this.teachers = []; this.slowT = 0; this.bellT = 0; this.bell = null;
     this.darts.clear(); this.world.desks.forEach(d => { d.occupant = null; d.covered = null; });
@@ -939,6 +952,7 @@ export class Game {
     setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); this.showOver(`下課！${tn}${trio ? '全員' : ''}投降了`, sub, true); }, 3200);
   }
   showOver(title, sub, win, remoteStats = null) {
+    this.recordRound(win); // the score is final here (the win bonus is in), on the host and on a guest alike
     $('over').hidden = false; $('hud').hidden = true;
     $('over-title').textContent = title; $('over-title').classList.toggle('red-pen', !win); $('over-sub').textContent = sub;
     Badges.showDraw(this.drawnBadge, this.drawnDropped, this.badgeSlots(), () => this.badgeHud());
@@ -957,6 +971,7 @@ export class Game {
       $('st-kills').textContent = this.kills;
       $('st-acc').textContent = this.player.shots ? Math.min(100, Math.round(this.player.hits / this.player.shots * 100)) + '%' : '0%';
     }
+    const rn = $('record-note'), br = this.recordBroken || []; if (rn) { rn.hidden = !br.length; rn.textContent = br.length ? '新紀錄！' + br.map(b => `${b.label} ${b.now}（舊 ${b.old}）`).join('　') : ''; }
   }
   coopStats() {
     if (!this.coop || !this.stats) return null;
@@ -978,6 +993,7 @@ export class Game {
     this.renderer.render(this.scene, this.camera);
   }
   step(realDt) {
+    if (this.state === 'playing') this.playT = (this.playT || 0) + realDt; // how long this round has run, for the records
     if (!this.isHost) return this.guestStep(realDt);
     this.player.update(realDt); this.aimAssist(realDt);
     for (const r of this.remotes.values()) { r.update(realDt); if (r.badge && r.badge.regenHp && this.state === 'playing' && !r.sitting && r.group.visible) { r.regenT = (r.regenT || 0) + realDt; if (r.regenT >= r.badge.regenHp) { r.regenT = 0; if (r.hp < r.maxHp) r.hp++; } } }

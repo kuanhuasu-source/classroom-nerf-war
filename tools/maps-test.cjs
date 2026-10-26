@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   for (const map of ['lab', 'music', 'classroom', 'hall', 'yard']) {
     const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
     const errors = []; page.on('pageerror', e => errors.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-    await page.goto('http://localhost:8766/index.html?map=' + map, { waitUntil: 'networkidle' });
+    await page.goto('http://localhost:8766/index.html?id=TEST&map=' + map, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
     await page.evaluate(() => { window.__game.renderer.setPixelRatio(0.6); window.__game.renderer.setAnimationLoop(null); });
     await page.click('#btn-start');

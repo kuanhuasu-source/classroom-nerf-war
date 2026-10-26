@@ -1,7 +1,8 @@
 import { $ } from './ui.js';
 import { Audio } from './audio.js';
+import { Profile } from './profile.js';
 
-// 成就貼紙簿：25 張貼紙。解鎖與累計計數都存在瀏覽器；解鎖時右下角跳一張貼紙。
+// 成就貼紙簿：26 張貼紙。解鎖與累計計數都存在瀏覽器；解鎖時右下角跳一張貼紙。
 export const ACH = [
   // 通用
   { id: 'first_win', icon: '🔔', name: '第一次下課', hint: '任何玩法贏一局' },
@@ -35,13 +36,15 @@ export const ACH = [
   { id: 'secret', icon: '🎤', name: '校長的對手', hint: '打贏隱藏章「校長親自出馬」' },
   // 徽章
   { id: 'hall', icon: '🏛️', name: '校園名人堂', hint: '第一次湊到徽章套裝' },
+  // 紀錄
+  { id: 'record', icon: '📈', name: '破紀錄的人', hint: '打破自己的任何一項最佳成績' },
 ];
 export const achById = (id) => ACH.find(a => a.id === id);
 
 export const Ach = {
   data: null, queue: [], showing: false,
-  load() { if (this.data) return this.data; try { this.data = JSON.parse(localStorage.getItem('cnw-ach') || 'null') || {}; } catch (e) { this.data = {}; } this.data.unlocked = this.data.unlocked || {}; this.data.counters = this.data.counters || {}; this.data.teachers = this.data.teachers || {}; return this.data; },
-  save() { try { localStorage.setItem('cnw-ach', JSON.stringify(this.data)); } catch (e) { /* ignore */ } },
+  load() { if (this.data) return this.data; this.data = Profile.get('ach') || {}; this.data.unlocked = this.data.unlocked || {}; this.data.counters = this.data.counters || {}; this.data.teachers = this.data.teachers || {}; return this.data; },
+  save() { Profile.put('ach', this.data); },
   has(id) { return !!this.load().unlocked[id]; },
   count() { return Object.keys(this.load().unlocked).length; },
   unlock(id) {
@@ -70,3 +73,4 @@ export const Ach = {
   },
   reset() { this.data = { unlocked: {}, counters: {}, teachers: {} }; this.save(); },
 };
+Profile.onSwitch(() => { Ach.data = null; Ach.queue = []; });
