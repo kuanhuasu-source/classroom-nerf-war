@@ -89,7 +89,7 @@ export function initLobby(game) {
   const badgeNote = () => { const w = Badges.worn(); $('badge-note').textContent = w.length ? w.map(b => Badges.label(b)).join('・') : (Badges.load().list.length ? '還沒佩戴' : ''); };
   $('btn-badges').addEventListener('click', () => { Badges.render(game.badgeSlots(), badgeNote); $('badge-status').textContent = `可以佩戴 ${game.badgeSlots()} 枚${game.badgeSlots() < 2 ? '（破完故事模式開第二格）' : ''}`; $('badges').hidden = false; });
   $('btn-badges-close').addEventListener('click', () => { $('badges').hidden = true; badgeNote(); });
-  $('btn-badge-merge').addEventListener('click', () => { const n = Badges.merge(); $('badge-status').textContent = n ? `合成了 ${n} 枚！` : '沒有三枚同類同級的。'; Badges.render(game.badgeSlots(), badgeNote); badgeNote(); });
+  $('btn-badge-merge').addEventListener('click', () => { const n = Badges.merge(); $('badge-status').textContent = n ? `合成了 ${n} 枚，同類型升了一級！` : '沒有三枚同類同級的。'; Badges.render(game.badgeSlots(), badgeNote); badgeNote(); });
   badgeNote();
   // ---------- 貼紙簿 ----------
   $('btn-stickers').addEventListener('click', () => { Ach.renderBook(); $('stickers').hidden = false; });

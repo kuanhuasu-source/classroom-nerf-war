@@ -36,6 +36,8 @@ const { chromium } = require('playwright');
     g.toMenu(); wearOnly('speed', 3, 0.12); g.start(); g.player.keys = { KeyW: true }; const a = g.player.pos.clone(); for (let i = 0; i < 60; i++) g.player.update(1 / 60); out.speed = +g.player.pos.distanceTo(a).toFixed(2); g.player.keys = {};
     // merge: three common hp badges become one 精良
     g.toMenu(); const d = B.load(); d.list = []; d.worn = []; for (let i = 0; i < 3; i++) d.list.push({ id: 'm' + i, type: 'hp', tier: 0, val: 1, ts: i, src: 'test' }); B.save(); out.merged = [B.merge(), B.load().list.map(b => [b.type, b.tier])];
+    // merging keeps the type: 30 random merges of three 稀有 speed / rate / multi badges must give that same type at 傳說
+    let keep = 0; for (let i = 0; i < 30; i++) { const t = ['speed', 'rate', 'multi'][i % 3], dd = B.load(); dd.list = []; for (let k = 0; k < 3; k++) dd.list.push({ id: 'k' + k, type: t, tier: 2, val: 1, ts: k, src: 'test' }); B.save(); B.merge(); const r = B.load().list[0]; if (r && r.type === t && r.tier === 3) keep++; } out.mergeKeepsType = keep;
     // cap: 41st badge drops the oldest lowest
     const d2 = B.load(); d2.list = []; for (let i = 0; i < 40; i++) d2.list.push({ id: 'c' + i, type: 'mag', tier: i === 0 ? 0 : 1, val: 2, ts: i, src: 'test' }); B.save(); const dropped = B.add(B.make(2, 'test')); out.cap = [B.load().list.length, dropped && dropped.id];
     return out; });

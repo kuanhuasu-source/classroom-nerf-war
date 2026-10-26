@@ -2,7 +2,7 @@ import { $ } from './ui.js';
 import { Audio } from './audio.js';
 
 // 徽章：每打完一場抽一枚（贏一定抽，輸一半機率安慰抽，稀有度降一級）。稀有度看這場的難度，多人再加一點。
-// 一枚一種效果，數值在稀有度的範圍內隨機。首頁佩戴一枚（破完故事開第二格）。收藏上限 40，三枚同類同級可合成高一級。
+// 一枚一種效果，數值在稀有度的範圍內隨機。首頁佩戴一枚（破完故事開第二格）。收藏上限 40，三枚同類同級可合成一枚同類型高一級的。
 export const TIERS = [
   { id: 0, name: '普通', color: '#9aa0a6' },
   { id: 1, name: '精良', color: '#2f6fd1' },
@@ -38,9 +38,11 @@ export const Badges = {
     if (!win) tier = Math.max(0, tier - 1);
     return this.make(tier, level);
   },
-  make(tier, src = '') {
+  // type given: that type (merging keeps the type); otherwise a random type that comes in this tier
+  make(tier, src = '', type = null) {
     const pool = Object.keys(TYPES).filter(k => TYPES[k].vals[tier] !== null);
-    const type = pool[Math.floor(Math.random() * pool.length)], T = TYPES[type];
+    if (!type || !pool.includes(type)) type = pool[Math.floor(Math.random() * pool.length)];
+    const T = TYPES[type];
     let val = T.vals[tier]; if (T.jitter) { const j = (Math.random() * 2 - 1) * T.jitter; val = Number.isInteger(T.vals[tier]) ? Math.max(1, Math.round(val + j)) : r2(Math.max(0.01, val + j)); }
     const d = this.load(); return { id: 'b' + (++d.seq) + Math.random().toString(36).slice(2, 5), type, tier, val, ts: Date.now(), src };
   },
@@ -60,7 +62,7 @@ export const Badges = {
       const groups = {}; for (const b of d.list) if (b.tier < 3) (groups[b.type + ':' + b.tier] = groups[b.type + ':' + b.tier] || []).push(b);
       const g = Object.values(groups).find(x => x.length >= 3); if (!g) break;
       const three = g.sort((a, c) => a.ts - c.ts).slice(0, 3); d.list = d.list.filter(b => !three.includes(b)); d.worn = d.worn.filter(w => !three.some(t => t.id === w));
-      d.list.push(this.make(three[0].tier + 1, 'merge')); n++;
+      d.list.push(this.make(three[0].tier + 1, 'merge', three[0].type)); n++;
     }
     if (n) this.save(); return n;
   },
