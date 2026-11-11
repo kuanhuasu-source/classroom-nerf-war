@@ -28,6 +28,7 @@ const { chromium } = require('playwright');
   console.log('over stats:', await host.evaluate(() => document.getElementById('st-kills').textContent));
   // the front page: name box and look buttons exist on the real menu
   const menu = await browser.newPage({ viewport: { width: 1100, height: 700 } }); await menu.goto('http://localhost:8766/index.html', { waitUntil: 'networkidle' }); await menu.waitForFunction(() => window.__game, null, { timeout: 30000 });
+  await menu.evaluate(() => { const n = document.getElementById('news'); if (n) n.hidden = true; }); /* the what's-new card would sit over the page */
   await menu.fill('#my-name', '阿寶寶寶寶寶寶寶'); await menu.click('.look-btn[data-look="l6"]');
   console.log('menu:', await menu.evaluate(() => [document.querySelectorAll('.look-btn').length, document.getElementById('my-name').value, window.__game.profile, localStorage.getItem('cnw-look')]));
   await menu.screenshot({ path: 'menu-profile.png' });

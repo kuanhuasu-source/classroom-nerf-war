@@ -298,6 +298,20 @@
 - 多人：加碼照人數（MP），徽章各戴各的，不再額外縮放；主機套用隊友的愛心與回血。
 - 附帶發現：機器人在活動中心會考完全打不到人（第一波 0 擊殺），是機器人不會上二樓，不是遊戲問題；真人測試正常。
 
+### 4.19 大改版：瘦身加核心擴充
+
+- 回顧的判斷：四天六十次提交裡，新增的大多是玩法模式和收集系統，「瞄準、射、躲、撿」這個每秒都在做的核心幾乎沒變；敵人外觀不同但行為都是躲、探頭、射。所以這次把外圈瘦身，把擴充加在核心上。
+- A 瘦身：`TYPES` 拿掉 jitter，`Badges.load` 把舊徽章歸到標準值；`SETS` 剩 dodge／shop／pe／late／grad。首頁故事按鈕第一、`#free-settings`（details）把玩法／難度／教室收成一行摘要；`modesOpen()`（故事星期一有星或累計三局）決定其他玩法鎖不鎖。`Profile.boot` 第一次來自動給暫時 ID（`cnw-temp`），`rename` 把暫時 ID 的資料搬到新 ID；結算卡 `#id-nudge` 請他取名。回合結束後才到的 pointer lock 會自動放開。
+- B 槍：`GUNS`（shotgun／sniper／rapid）也是 `BUFFS` 的成員，沿用牆上道具與 buff 的同步；`Player.heldGun()` 決定射擊節奏、幾發、散射、彈速，`game.armDart` 給子彈 `dmg／pierce／life／g／cap`。散彈同一目標一次齊射最多算三發（`volleyN`），狙擊穿人時跳過已經打過的那個。隊友的 fire 訊息帶 `g`，主機對照 `buffs[slot]` 才加效果。
+- C 敵人：`Student.kind`（跟著 variant 同步）。shield：`advance` 狀態慢慢走近，`blocks(d)` 用慢慢轉的 `faceA` 判斷正面，貼圖 `open` 時（探頭與出手）才打得到，狙擊可穿；rusher：`rush` 直衝、`steal` 搶 15 發、`flee` 往最近的門，倒下時連同搶走的一起掉；lobber：`lob` 用固定飛行時間算拋物線，`spawnWave` 當落點預告，`balloonSplash` 範圍扣血。`rollKind` 第二波起、每種同時最多兩個、守校門不出搶子彈的。
+- D 動作：滑壘在 `Player.update`（蹲鍵的上升緣加跑步），方向鎖定、速度從 10 掉到蹲走；板擦 `throwEraser` 以 `player` 的 eraser 彈飛出，落地走原本的 `eraserBreak` 變粉筆灰，隊友用 `eraser` 訊息請主機丟。
+- E 回饋：`PaperFigure.yelp／stickDart`，`Game.onKnock`（四秒內連續打倒的連殺、最後一個慢動作），老師 `defeat` 飛假髮。隊友端從貼圖狀態變化自己觸發泡泡。
+- F 音樂：`Audio.music(name)` 用 setInterval 提前 0.15 秒排程三段 64 步的循環（旋律、低音、鼓），`frame` 依狀態決定曲目；`cnw-music` 記開關。
+- G 無限下課：`ENDLESS`（每波人數、難度函式、里程碑表）。`startWave` 每波重算 `diff`；清完第 5n 波走 `startBoss`，`endlessBoss` 選老師，`endlessBossDown` 讓老師退場後繼續。`endlessMilestone` 主機與各隊友各自 `grantEndless`（`Badges.reward` 保證傳說不重複，第 30 波給 `award`）。結算沒有輸贏，抽徽章的稀有度看撐過幾波。
+- H 對打：`DUEL`。主機的子彈鉤子在 duel 時先對其他玩家做圓柱判定（跳過射的人、坐著的、保護中的），`lastHitBy` 記是誰打的，`onPlayerDown` 加分並把人 `sitDown` 到 `duelSpawn` 選的最遠點（座位機制順便把隊友傳送過去），`duelEnd` 的 over 訊息帶 `ws`，隊友端只有 `ws` 等於自己才算贏。計分板走快照的 `ds`。
+- 順手修掉兩個被行尾註解吃掉的敘述：隊友的 yaw／eye／crouch 沒更新、開局沒有強制完整快照。之後替換程式碼時行內註解一律用 `/* */`。
+- 驗證：`tools/guns-test／kinds-test／moves-test／juice-test／music-test／endless-test／duel-test`，加上原本的全套。機器人量不出好不好玩；下一步仍然是找真的小六生試玩。
+
 ### 4.18 個人 ID 與紀錄
 
 - 需求：個人紀錄，身分用「個人 ID」（最多十碼英數，不分大小寫），一台裝置多人輪流。

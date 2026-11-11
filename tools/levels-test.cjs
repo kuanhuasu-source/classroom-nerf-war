@@ -6,6 +6,7 @@ const { chromium } = require('playwright');
   await page.waitForFunction(() => window.__game, null, { timeout: 30000 });
   await page.evaluate(() => { const n = document.getElementById('news'); if (n) n.hidden = true; }); // the what's-new card would sit over the menu buttons
   console.log('buttons:', await page.evaluate(() => [...document.querySelectorAll('.seg-btn[data-level]')].map(b => b.dataset.level + ':' + b.textContent)));
+  await page.evaluate(() => { document.getElementById('free-settings').open = true; }); /* the settings are folded into one line on the front page now */
   await page.click('.seg-btn[data-level="exam"]');
   console.log('picked:', await page.evaluate(() => [window.__game.level, window.__game.diff.label, window.__game.diff.maxShooters, document.querySelector('.seg-btn[data-level="exam"]').classList.contains('on'), document.getElementById('difficulty-note') ? document.getElementById('difficulty-note').textContent.slice(0, 10) : (document.querySelector('#menu .note') || {}).textContent, localStorage.getItem('cnw-difficulty')]));
   await page.screenshot({ path: 'menu-levels.png' });

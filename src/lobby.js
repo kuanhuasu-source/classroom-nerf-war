@@ -111,7 +111,7 @@ export function initLobby(game) {
   // ---------- 貼紙簿 ----------
   $('btn-stickers').addEventListener('click', () => { Ach.renderBook(); $('stickers').hidden = false; });
   // what's new: shown once per NEWS_VER, the first time this browser opens the new build
-  const NEWS_VER = 'records1';
+  const NEWS_VER = 'revamp1';
   let seenNews = null; try { seenNews = localStorage.getItem('cnw-news'); } catch (e) { /* ignore */ }
   const closeNews = () => { $('news').hidden = true; try { localStorage.setItem('cnw-news', NEWS_VER); } catch (e) { /* ignore */ } };
   $('btn-news-close').addEventListener('click', closeNews);
