@@ -8,6 +8,7 @@ import { Ach } from './achievements.js';
 import { Badges, TYPES } from './badges.js';
 import { Profile } from './profile.js';
 import { Records } from './records.js';
+import { Audio } from './audio.js';
 
 // The front page: solo, open a room, or join one by code.
 export function initLobby(game) {
@@ -65,6 +66,10 @@ export function initLobby(game) {
   }
   applyLook(LOOKS.some(l => l.id === game.profile.look) ? game.profile.look : LOOKS[0].id);
   $('btn-start').addEventListener('click', () => { leave(); game.start(); });
+  // music: the first click anywhere on the front page lets the sound start (browsers want a gesture); the switch is remembered
+  const musicBtn = $('btn-music'), musicLabel = () => { musicBtn.textContent = Audio.musicState().on ? '♪ 音樂：開' : '♪ 音樂：關'; };
+  musicBtn.addEventListener('click', (e) => { e.stopPropagation(); Audio.init(); Audio.resume(); Audio.musicToggle(); musicLabel(); }); musicLabel();
+  document.addEventListener('pointerdown', () => { Audio.init(); Audio.resume(); }, { once: true });
 
   // ---------- 故事模式：Jason 的畢業週 ----------
   const storyNote = () => { const total = STORY.chapters.filter(c => !c.hidden).reduce((a, c) => a + Progress.stars(c.id), 0); $('story-note').textContent = total ? `★ ${total}/18${Progress.allThree() ? '　隱藏章已解鎖' : ''}` : ''; };

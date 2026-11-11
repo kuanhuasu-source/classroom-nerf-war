@@ -276,7 +276,7 @@ export class LunchMode {
   }
   // a player's dart vs the kids
   hitKid(p, who, volley, dmg = 1) {
-    for (const k of this.kids) { if (!k.alive || !k.group.visible) continue; const dx = p.x - k.group.position.x, dz = p.z - k.group.position.z, h = 1.35 * k.group.scale.y; if (dx * dx + dz * dz < 0.36 * 0.36 * this.game.hitMul(who) && p.y > k.group.position.y && p.y < k.group.position.y + h) { if (volley && k.lastVolley === volley) return true; k.lastVolley = volley; this.game.lastShooter = who; if (k.hit(dmg)) { this.kills++; this.game.stat(who, 'kills'); } this.game.lastShooter = null; return true; } }
+    for (const k of this.kids) { if (!k.alive || !k.group.visible) continue; const dx = p.x - k.group.position.x, dz = p.z - k.group.position.z, h = 1.35 * k.group.scale.y; if (dx * dx + dz * dz < 0.36 * 0.36 * this.game.hitMul(who) && p.y > k.group.position.y && p.y < k.group.position.y + h) { if (volley && k.lastVolley === volley) return true; k.lastVolley = volley; this.game.lastShooter = who; if (k.hit(dmg)) { this.kills++; this.game.stat(who, 'kills'); this.game.onKnock(who); } this.game.lastShooter = null; return true; } }
     return false;
   }
   // an enemy dart vs the pot

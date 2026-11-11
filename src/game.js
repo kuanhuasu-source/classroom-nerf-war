@@ -418,6 +418,7 @@ export class Game {
       if (e.code === 'KeyG') this.player.throwEraser();
       if (e.code === 'KeyE') this.tryRevive();
       if (e.code === 'KeyF' && this.lunch) this.horn();
+      if (e.code === 'KeyM') this.ui.message(Audio.musicToggle() ? '音樂：開' : '音樂：關', '', 1);
       if (e.code === 'KeyN') { this.showNet = !this.showNet; if (!this.showNet) this.ui.net(''); }
       if (/^Digit[1-4]$/.test(e.code)) this.emote(+e.code[5]);
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ControlLeft', 'ShiftLeft'].includes(e.code)) e.preventDefault();
@@ -556,7 +557,7 @@ export class Game {
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
     this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null; this.timeLeft = 0; this.refillT = 0; this.hintT = 0; this.ui.wet(false); this.ui.soup(null);
-    this.kindSeen = {}; this.shieldHint = false;
+    this.kindSeen = {}; this.shieldHint = false; this.combos = {};
     this.damageTaken = 0; this.wetCount = 0; this.dustHit = false; this.hornHits = 0; this.bumps = 0; this.roundDone = false; this.clockT = 0; this.hintsShown = {}; this.storyStars = 0; this.bossTimer = 0;
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
@@ -894,6 +895,13 @@ export class Game {
   }
   // a player's eraser on its way: bursts into chalk dust where it lands (or on the first kid it reaches)
   throwEraser(who, from, dir) { const d = this.darts.fire(from, dir, CFG.eraser.speed, 'player', 'eraser'); d.who = who; return d; }
+  // 連殺：同一個人四秒內連續打倒同學，第二個起有提示、加分、越來越高的音；一波的最後一個倒下時全場慢動作半秒
+  onKnock(who = 'host') {
+    this.combos = this.combos || {}; const c = this.combos[who] || (this.combos[who] = { n: 0, t: 0 });
+    c.n = this.clockT - c.t <= 4 ? c.n + 1 : 1; c.t = this.clockT;
+    if (c.n >= 2) { const bonus = 100 * c.n; this.lastShooter = who; this.addScore(bonus); this.lastShooter = null; if (who === this.mySlot) this.ui.combo(c.n, bonus); else this.netEvent({ t: 'combo', n: c.n, b: bonus }, who); }
+    if (!this.toilet && !this.lunch && !this.spawnQueue.length && !this.students.some(s => s.alive) && this.wave > 0) { this.slowT = Math.max(this.slowT, 0.6); this.netEvent({ t: 'sfx', n: 'lastOne' }); Audio.lastOne(); }
+  }
   // a dart from a borrowed gun: harder hit, flies through people, short range or flat flight
   armDart(d, gun) { if (!d || !gun) return d; if (gun.pellets) d.cap = 3; if (gun.dmg) d.dmg = gun.dmg; if (gun.pierce) d.pierce = gun.pierce; if (gun.life) d.life = gun.life; if (gun.g !== undefined) d.g = gun.g; return d; }
   addScore(n, who = this.lastShooter || 'host') { const b = this.buffs[who]; if (b && b.id === 'double') n *= 2; this.score += n; this.ui.score(this.score); }
@@ -1017,6 +1025,8 @@ export class Game {
     if (this.net.tick(dt) && this.transport) this.ui.net(this.showNet ? (this.isHost ? this.net.hostText(Object.fromEntries([...this.remotes.values()].map(r => [r.slot, r.skin.name]))) : this.net.guestText()) : '');
     if (this.state === 'upgrade' && this.offer) { this.offer.t -= dt; if (this.offer.t <= 0) { if (!this.offer.picked.host) this.pickUpgrade($('upgrade-cards').children[0].dataset.id); else this.closeOffer(); } }
     this.tickLiveOffer(dt);
+    // background music follows what is going on: the menu loop, the battle loop, the boss loop while a teacher is up, silence on the result screen
+    { const want = this.state === 'menu' ? 'menu' : (this.state === 'playing' || this.state === 'upgrade' || this.state === 'paused') ? (this.teachers.some(t => !t.defeated) ? 'boss' : 'battle') : null; if (want !== this.musicWant) { this.musicWant = want; Audio.music(want); } }
     this.ui.tick(dt); this.touchCtl.update();
     this.renderer.render(this.scene, this.camera);
   }
@@ -1098,7 +1108,7 @@ export class Game {
             if (s.blocks(d)) { Audio.thud(); s.flash = 0.08; if (!this.shieldHint) { this.shieldHint = true; this.message('墊板擋住了！', '等他放下墊板丟的時候再打，或繞到側面', 2.5); } return true; }
             // one volley counts once per kid (the 連發 badge); shotgun pellets may land up to three on the same kid; a piercing dart flies on through the one it already hit
             if (d.volley && s.lastVolley === d.volley) { if (d.pierce !== undefined) continue; if (!(d.cap && s.volleyN < d.cap)) return true; s.volleyN++; } else { s.lastVolley = d.volley; s.volleyN = 1; }
-            this.lastShooter = d.who; if (s.hit(d.dmg || 1)) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null;
+            this.lastShooter = d.who; s.hitY = p.y - s.group.position.y; if (s.hit(d.dmg || 1)) { this.kills++; this.stat(d.who, 'kills'); this.onKnock(d.who); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null;
             if (d.pierce > 0) { d.pierce--; return false; }
             return true;
           }

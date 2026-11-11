@@ -409,6 +409,7 @@ export class Teacher extends PaperFigure {
     }
   }
   defeat() {
+    { const p = this.group.position, top = new THREE.Vector3(p.x, p.y + 1.9 * this.group.scale.y, p.z); this.game.spawnDebris(top, 0x2b2622, [0.34, 0.12, 0.3], new THREE.Vector3(rand(-1.2, 1.2), 5.5, rand(-1.2, 1.2)), 3); } // the wig goes flying
     this.defeated = true; this.special = null; this.flags.mood = 'cry'; this.setTexture(Draw.teacher(this.def, this.flags)); this.path = []; this.fade(true);
     Audio.teacher();
     this.game.onTeacherDefeated(this);

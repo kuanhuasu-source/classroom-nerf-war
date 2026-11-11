@@ -49,8 +49,8 @@ export class Student extends PaperFigure {
   applyState(s) {
     this.setTarget(s.x, s.y, s.z); if (this.alive && !s.a) this.fade(true); this.alive = !!s.a;
     const prev = this.texState; this.setTex(s.st);
-    if (prev !== s.st) { if (s.st === 'hurt') Audio.hitEnemy(); else if (s.st === 'out') Audio.out(); }
-    this.group.scale.set(s.sx, s.sy, s.sx); this.remoteRz = s.rz; if (s.f && this.flash <= 0) this.flash = 0.15; this.alert.visible = !!s.al;
+    if (prev !== s.st) { if (s.st === 'hurt') { Audio.hitEnemy(); this.yelp(pick(Student.HIT_YELPS)); } else if (s.st === 'out') { Audio.out(); this.yelp(pick(Student.OUT_YELPS), 1.3); } }
+    this.group.scale.set(s.sx, s.sy, s.sx); this.remoteRz = s.rz; if (s.f && this.flash <= 0) { this.flash = 0.15; this.stickDart(); } this.alert.visible = !!s.al;
   }
   chooseDesk() {
     // the two that do not hide: back to running (or running away with the loot) / back to walking up behind the board
@@ -177,7 +177,7 @@ export class Student extends PaperFigure {
           this.alert.visible = false;
           const sees = this.kind === 'lobber' ? Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < 12 : this.canSee(player); // a balloon needs no line of sight
           if (sees && this.game.shootersBusy()) { this.state = 'hide'; this.timer = rand(0.5, 1.2); } // someone else is already firing: wait your turn
-          else if (sees) { this.state = 'shoot'; this.shotsLeft = 1 + Math.floor(Math.random() * (this.game.diff.burstMax + (this.leader ? 1 : 0))); this.shotsFired = 0; this.shotTimer = 0.15;
+          else if (sees) { if (Math.random() < 0.12) this.yelp(pick(Student.TAUNTS), 0.8); this.state = 'shoot'; this.shotsLeft = 1 + Math.floor(Math.random() * (this.game.diff.burstMax + (this.leader ? 1 : 0))); this.shotsFired = 0; this.shotTimer = 0.15;
             if (this.kind === 'lobber') this.shotsLeft = 1;
             if (this.v.cleaner) { this.burstKind = Math.random() < TOILET.waterChance ? 'water' : 'plunger'; this.shotsLeft = this.burstKind === 'water' ? 1 : TOILET.plungerBurst[0] + Math.floor(Math.random() * (TOILET.plungerBurst[1] - TOILET.plungerBurst[0] + 1)); } // 清潔隊：潑一桶水，或通馬桶連發 3 到 5 支
           }
@@ -239,9 +239,10 @@ export class Student extends PaperFigure {
   }
   hit(dmg = 1) {
     if (!this.alive) return false;
-    this.hp -= dmg; this.flash = 0.15; Audio.hitEnemy();
+    this.hp -= dmg; this.flash = 0.15; Audio.hitEnemy(); this.stickDart(this.hitY);
     this.game.addScore(CFG.score.hit); this.game.hitmark();
-    if (this.hp <= 0) { this.knockOut(); return true; }
+    if (this.hp <= 0) { this.yelp(pick(Student.OUT_YELPS), 1.3); this.knockOut(); return true; }
+    this.yelp(pick(Student.HIT_YELPS));
     this.setTex('hurt'); this.alert.visible = false;
     this.state = 'hurt'; this.timer = 0.7;
     // stumble back away from player
@@ -252,6 +253,7 @@ export class Student extends PaperFigure {
   }
   knockOut() {
     this.alive = false; Audio.out(); this.alert.visible = false; this.fade(true);
+    for (let i = 0; i < 3; i++) this.game.spawnDebris(new THREE.Vector3(this.group.position.x, this.group.position.y + 0.8, this.group.position.z), 0xfbf6e6, [0.09, 0.012, 0.07], new THREE.Vector3(rand(-1.5, 1.5), rand(2, 3.5), rand(-1.5, 1.5)), 1.4); // paper scraps
     this.game.darts.drop(this.group.position, (this.leader ? CFG.leader.drop : CFG.gun.dropOnKnockout) + (this.loot >= 1 ? this.loot : 0));
     if (this.loot >= 1) { this.game.message('搶走的子彈掉出來了！', `${this.loot} 發，走過去撿`, 1.8); this.loot = 0; }
     if (this.tag) this.tag.visible = false;
@@ -271,3 +273,6 @@ export class Student extends PaperFigure {
   }
   dispose() { if (this.desk) { if (this.desk.covered === this) this.desk.covered = null; if (this.desk.occupant === this) this.desk.occupant = null; } super.dispose(); }
 }
+Student.HIT_YELPS = ['哎唷！', '好痛！', '喂！', '犯規啦！', '啊啊啊'];
+Student.OUT_YELPS = ['我要告訴老師！', '嗚嗚嗚', '不玩了啦', '媽——', '記住你了'];
+Student.TAUNTS = ['看招！', '嘿嘿', '接好！', '別跑！'];

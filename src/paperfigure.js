@@ -24,9 +24,34 @@ export class PaperFigure {
   }
   // out of the fight (knocked out, sitting, leaving): pale and see-through, no ring
   fade(on) { this.dim = on ? 0.72 : 1; this.mat.opacity = on ? 0.5 : 1; if (this.ringMesh) this.ringMesh.visible = !on; }
+  // a short speech bubble over the head (哎唷！) — textures are shared per text
+  yelp(text, dur = 0.9) {
+    PaperFigure.yelps = PaperFigure.yelps || {};
+    if (!PaperFigure.yelps[text]) {
+      const c = Draw.canvas(320, 120), ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#2b2622'; ctx.lineWidth = 6; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(10, 10, 300, 80, 22); else ctx.rect(10, 10, 300, 80); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(140, 88); ctx.lineTo(160, 116); ctx.lineTo(180, 88); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#2b2622'; ctx.font = 'bold 40px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 160, 52);
+      PaperFigure.yelps[text] = Draw.tex(c);
+    }
+    if (!this.yelpSprite) { this.yelpSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: PaperFigure.yelps[text], transparent: true, depthTest: false })); this.yelpSprite.scale.set(1.2, 0.45, 1); this.yelpSprite.position.set(0.15, this.h + 0.6, 0); this.group.add(this.yelpSprite); }
+    else { this.yelpSprite.material.map = PaperFigure.yelps[text]; this.yelpSprite.material.needsUpdate = true; }
+    this.yelpSprite.visible = true; this.yelpT = dur;
+  }
+  // a foam dart left sticking out of the paper where it hit, for a couple of seconds (three at most)
+  stickDart(y = null) {
+    PaperFigure.stuckGeo = PaperFigure.stuckGeo || new THREE.CylinderGeometry(0.028, 0.028, 0.16, 8); PaperFigure.stuckMat = PaperFigure.stuckMat || new THREE.MeshBasicMaterial({ color: 0xf28a1a }); PaperFigure.stuckTip = PaperFigure.stuckTip || new THREE.MeshBasicMaterial({ color: 0x2f6fd1 });
+    this.stuck = this.stuck || [];
+    if (this.stuck.length >= 3) { const old = this.stuck.shift(); this.mesh.remove(old.m); }
+    const m = new THREE.Mesh(PaperFigure.stuckGeo, PaperFigure.stuckMat); m.rotation.x = Math.PI / 2 + rand(-0.5, 0.5); m.rotation.z = rand(-0.5, 0.5);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), PaperFigure.stuckTip); tip.position.y = 0.08; m.add(tip);
+    m.position.set(rand(-0.16, 0.16), y === null ? this.h * rand(0.45, 0.9) : clamp(y, 0.2, this.h - 0.1), 0.07); this.mesh.add(m); this.stuck.push({ m, t: 2.5 });
+  }
   setTexture(canvas) { this.tex.dispose(); this.tex = Draw.tex(canvas); this.mat.map = this.tex; this.mat.needsUpdate = true; }
   face(camPos) { const dx = camPos.x - this.group.position.x, dz = camPos.z - this.group.position.z; this.group.rotation.y = Math.atan2(dx, dz); }
   tick(dt, moving) {
+    if (this.yelpT > 0) { this.yelpT -= dt; if (this.yelpT <= 0 && this.yelpSprite) this.yelpSprite.visible = false; }
+    if (this.stuck && this.stuck.length) { for (let i = this.stuck.length - 1; i >= 0; i--) { this.stuck[i].t -= dt; if (this.stuck[i].t <= 0) { this.mesh.remove(this.stuck[i].m); this.stuck.splice(i, 1); } } }
     if (this.flash > 0) { this.flash -= dt; const f = clamp(this.flash / 0.15, 0, 1); this.mat.color.setRGB(1 + f * 1.5, 1 + f * 0.6, 1 + f * 0.6); } else this.mat.color.setRGB(this.dim, this.dim, this.dim);
     if (moving) { this.wobble += dt * 11; this.mesh.rotation.z = Math.sin(this.wobble) * 0.09; this.mesh.position.y = Math.abs(Math.sin(this.wobble)) * 0.05; }
     else { this.mesh.rotation.z *= 0.85; this.mesh.position.y *= 0.85; }

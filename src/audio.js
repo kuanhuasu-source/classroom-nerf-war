@@ -10,7 +10,45 @@ export const Audio = (() => {
       master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
     } catch (e) { ctx = null; }
   }
-  function resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
+  function resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); if (ctx && musicWant && !musicTimer) music(musicWant); }
+  // ---- background music: three short loops synthesized on the fly (no files), scheduled a little ahead of the clock ----
+  // each bar is 16 steps (sixteenth notes); numbers are MIDI notes, 0 is a rest
+  const SONGS = {
+    menu: { bpm: 84, wave: 'triangle', vol: 0.07, drums: 0,
+      lead: [72, 0, 0, 76, 0, 0, 79, 0, 0, 0, 76, 0, 0, 0, 0, 0, 74, 0, 0, 77, 0, 0, 81, 0, 0, 0, 77, 0, 0, 0, 0, 0, 76, 0, 0, 79, 0, 0, 84, 0, 0, 0, 79, 0, 0, 0, 0, 0, 74, 0, 0, 79, 0, 0, 83, 0, 0, 0, 79, 0, 72, 0, 0, 0],
+      bass: [48, 0, 0, 0, 0, 0, 0, 0, 55, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 0, 53, 0, 0, 0, 0, 0, 0, 0, 52, 0, 0, 0, 0, 0, 0, 0, 55, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0, 55, 0, 0, 0, 0, 0, 0, 0] },
+    battle: { bpm: 138, wave: 'square', vol: 0.045, drums: 1,
+      lead: [76, 0, 79, 0, 81, 0, 79, 0, 76, 0, 72, 0, 74, 0, 76, 0, 81, 0, 84, 0, 81, 0, 79, 0, 76, 0, 79, 0, 81, 0, 0, 0, 77, 0, 81, 0, 84, 0, 81, 0, 77, 0, 81, 0, 79, 0, 77, 0, 79, 0, 83, 0, 86, 0, 83, 0, 79, 0, 74, 0, 79, 0, 0, 0],
+      bass: [36, 0, 48, 0, 36, 0, 48, 0, 36, 0, 48, 0, 43, 0, 48, 0, 33, 0, 45, 0, 33, 0, 45, 0, 33, 0, 45, 0, 40, 0, 45, 0, 29, 0, 41, 0, 29, 0, 41, 0, 29, 0, 41, 0, 36, 0, 41, 0, 31, 0, 43, 0, 31, 0, 43, 0, 31, 0, 43, 0, 38, 0, 43, 0] },
+    boss: { bpm: 152, wave: 'sawtooth', vol: 0.035, drums: 2,
+      lead: [69, 72, 76, 81, 76, 72, 69, 72, 76, 81, 76, 72, 69, 0, 69, 0, 65, 69, 72, 77, 72, 69, 65, 69, 72, 77, 72, 69, 65, 0, 65, 0, 67, 71, 74, 79, 74, 71, 67, 71, 74, 79, 74, 71, 67, 0, 67, 0, 64, 68, 71, 76, 71, 68, 64, 68, 71, 76, 80, 76, 71, 0, 76, 0],
+      bass: [33, 0, 33, 45, 33, 0, 33, 45, 33, 0, 33, 45, 33, 0, 45, 0, 29, 0, 29, 41, 29, 0, 29, 41, 29, 0, 29, 41, 29, 0, 41, 0, 31, 0, 31, 43, 31, 0, 31, 43, 31, 0, 31, 43, 31, 0, 43, 0, 28, 0, 28, 40, 28, 0, 28, 40, 28, 0, 28, 40, 28, 0, 40, 0] },
+  };
+  let musicGain = null, musicTimer = null, musicName = null, musicWant = null, musicOn = true, mStep = 0, mNext = 0;
+  try { musicOn = localStorage.getItem('cnw-music') !== '0'; } catch (e) { /* ignore */ }
+  const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  function mNote(f, t, dur, type, vol) { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(musicGain); o.start(t); o.stop(t + dur + 0.02); }
+  function mNoise(t, dur, vol, hp) { const n = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = ctx.createBufferSource(); s.buffer = buf; const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp; const g = ctx.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(musicGain); s.start(t); }
+  function mSchedule() {
+    const s = SONGS[musicName]; if (!s || !ctx) return; const spb = 60 / s.bpm / 4;
+    if (mNext < ctx.currentTime) mNext = ctx.currentTime + 0.03; // the tab slept: do not flood the gap
+    while (mNext < ctx.currentTime + 0.15) {
+      const i = mStep % s.lead.length, l = s.lead[i], b = s.bass[i], beat = i % 16;
+      if (l) mNote(hz(l), mNext, spb * (s.drums ? 1.7 : 5), s.wave, s.vol);
+      if (b) mNote(hz(b), mNext, spb * (s.drums ? 1.8 : 14), 'triangle', s.vol * 1.9);
+      if (s.drums) { if (beat % (s.drums === 2 ? 4 : 8) === 0) mNote(110, mNext, 0.09, 'sine', 0.16); if (beat % 8 === 4) mNoise(mNext, 0.06, 0.07, 1800); if (beat % 2 === 0 && beat % 4 !== 0) mNoise(mNext, 0.025, 0.03, 5000); }
+      mNext += spb; mStep++;
+    }
+  }
+  // which loop should play (null: silence). Remembered even before the first click lets the sound start.
+  function music(name) {
+    musicWant = name;
+    if (musicTimer && (name !== musicName || !musicOn || !name)) { clearInterval(musicTimer); musicTimer = null; if (musicGain) { const g = musicGain; g.gain.setTargetAtTime(0, ctx.currentTime, 0.08); setTimeout(() => g.disconnect(), 500); musicGain = null; } }
+    if (!ctx || !musicOn || !name || !SONGS[name] || musicTimer) return;
+    musicName = name; musicGain = ctx.createGain(); musicGain.gain.value = 1; musicGain.connect(master); mStep = 0; mNext = ctx.currentTime + 0.06;
+    mSchedule(); musicTimer = setInterval(mSchedule, 40);
+  }
+  function musicToggle(on = !musicOn) { musicOn = on; try { localStorage.setItem('cnw-music', on ? '1' : '0'); } catch (e) { /* ignore */ } music(musicWant); return musicOn; }
   function tone({ f0 = 440, f1 = f0, dur = 0.1, type = 'square', vol = 0.2, delay = 0 }) {
     if (!ctx) return;
     const t = ctx.currentTime + delay;
@@ -48,10 +86,12 @@ export const Audio = (() => {
     return t - ctx.currentTime;
   }
   return {
-    init, resume,
+    init, resume, music, musicToggle, musicState: () => ({ on: musicOn, want: musicWant, playing: musicTimer ? musicName : null, step: mStep }),
     bellOut() { return bell([0, 1]); },   // 下課鈴
     bellIn() { return bell([2, 3]); },    // 上課鈴
     pew() { tone({ f0: 1100, f1: 320, dur: 0.11, type: 'sawtooth', vol: 0.14 }); noise({ dur: 0.05, vol: 0.12, hp: 2000 }); },
+    combo(n) { const base = 520 * Math.pow(1.19, Math.min(n, 6)); [1, 1.26, 1.5].forEach((m, i) => tone({ f0: base * m, dur: 0.12, type: 'square', vol: 0.12, delay: i * 0.07 })); },
+    lastOne() { tone({ f0: 880, f1: 220, dur: 0.5, type: 'sine', vol: 0.16 }); },
     slide() { noise({ dur: 0.35, vol: 0.16, hp: 900 }); tone({ f0: 260, f1: 120, dur: 0.3, type: 'sine', vol: 0.08 }); },
     shotgun() { noise({ dur: 0.16, vol: 0.3, hp: 500 }); tone({ f0: 320, f1: 90, dur: 0.14, type: 'sawtooth', vol: 0.16 }); },
     twang() { tone({ f0: 1700, f1: 240, dur: 0.22, type: 'triangle', vol: 0.2 }); tone({ f0: 300, f1: 520, dur: 0.1, type: 'sine', vol: 0.1, delay: 0.03 }); },

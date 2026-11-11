@@ -130,6 +130,7 @@ function applyEvent(g, e) {
     case 'zone': g.addZone(new THREE.Vector3(e.p[0], 0, e.p[1]), e.r, e.l, e.k || 'acid'); break;
     case 'prop': { const p = g.props[e.id]; if (p) p.applyState(e.st); break; }
     case 'wave': g.spawnWave(new THREE.Vector3(e.p[0], 0, e.p[1]), e.r, e.d, e.c); break;
+    case 'combo': g.ui.combo(e.n, e.b); break;
     case 'eraserPlus': { const p = g.player; if (p.erasers < CFG.eraser.max) { p.erasers++; g.ui.eraser(p.erasers); } break; }
     case 'pickup': { const p = g.player; p.reserve = Math.min(p.reserveCap(), p.reserve + e.n); Audio.pickup(); g.ui.ammo(p.ammo, p.ammo === 0, p.reserve); g.ui.pickFlash(); break; }
     case 'ammoSet': { const p = g.player; p.reserve = e.n; p.ammo = p.magSize(); g.ui.ammo(p.ammo, false, p.reserve); g.ui.pickFlash(); g.ui.message('補彈完成', `車上 ${e.n} 發`, 1.5); break; }
