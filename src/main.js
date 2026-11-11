@@ -5,6 +5,7 @@ import { TEACHERS, BOSSES, GANG } from './teachers.js';
 import { Badges } from './badges.js';
 import { GUNS, BUFFS } from './config.js';
 import { SpecialItem } from './item.js';
+import { Draw } from './draw.js';
 import { Progress } from './story.js';
 import { Ach } from './achievements.js';
 
@@ -12,7 +13,7 @@ async function boot() {
   try { await document.fonts.ready; } catch (e) { /* fonts optional */ }
   // ?role=host / ?role=guest with a queue transport is the fake link used by the tests;
   // real rooms (PeerJS) come in the next step.
-  window.__teachers = TEACHERS; window.__bosses = BOSSES; window.__gang = GANG; window.__badges = Badges; window.__progress = Progress; window.__ach = Ach; window.__guns = GUNS; window.__buffs = BUFFS; window.__SpecialItem = SpecialItem;
+  window.__teachers = TEACHERS; window.__bosses = BOSSES; window.__gang = GANG; window.__badges = Badges; window.__progress = Progress; window.__ach = Ach; window.__guns = GUNS; window.__buffs = BUFFS; window.__SpecialItem = SpecialItem; window.__draw = Draw;
   const mapParam = new URLSearchParams(location.search).get('map'), modeParam = new URLSearchParams(location.search).get('mode'); // handy for tests and for the ?teacher=id debug switch
   const q = new URLSearchParams(location.search), role = q.get('role');
   if (role === 'host' || role === 'guest') {

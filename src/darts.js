@@ -38,6 +38,10 @@ export class Darts {
       if (!this.waterMat) this.waterMat = new THREE.MeshToonMaterial({ color: 0x6fb7ef, transparent: true, opacity: 0.8 });
       mesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), this.waterMat); mesh.scale.set(1.2, 0.9, 1.4);
     }
+    else if (kind === 'balloon') { // a water balloon lobbed over the desks
+      if (!this.balloonMat) this.balloonMat = new THREE.MeshToonMaterial({ color: 0x4fa3e8 });
+      mesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), this.balloonMat); mesh.scale.set(1, 1.15, 1);
+    }
     else if (kind === 'plunger') { // a rubber plunger: stick along z with the red cup in front
       if (!this.plungerGeo) { this.plungerGeo = new THREE.CylinderGeometry(0.014, 0.014, 0.34, 6); this.plungerGeo.rotateX(Math.PI / 2); this.cupGeo = new THREE.CylinderGeometry(0.03, 0.075, 0.07, 10); this.cupGeo.rotateX(-Math.PI / 2); this.matRubber = new THREE.MeshToonMaterial({ color: 0xd8432b }); }
       mesh = new THREE.Mesh(this.plungerGeo, this.matWood || this.matChalk); const cup = new THREE.Mesh(this.cupGeo, this.matRubber); cup.position.z = 0.2; mesh.add(cup);
@@ -49,7 +53,7 @@ export class Darts {
     mesh.castShadow = true;
     mesh.position.copy(pos);
     const vel = dir.clone().normalize().multiplyScalar(speed);
-    const d = { mesh, vel, owner, kind, life: 3.2, stuck: false, restTime: 0, id: ++this.seq, who: 'host', g: kind === 'note' || kind === 'speech' ? 0 : kind === 'plane' ? 1.5 : kind === 'water' ? 9 : CFG.gun.gravity, r: kind === 'ball' ? 0.2 : kind === 'water' ? 0.12 : 0 };
+    const d = { mesh, vel, owner, kind, life: 3.2, stuck: false, restTime: 0, id: ++this.seq, who: 'host', g: kind === 'note' || kind === 'speech' ? 0 : kind === 'plane' ? 1.5 : kind === 'water' || kind === 'balloon' ? 9 : CFG.gun.gravity, r: kind === 'ball' ? 0.2 : kind === 'water' || kind === 'balloon' ? 0.12 : 0 };
     this.orient(d);
     this.scene.add(mesh); this.list.push(d);
     return d;

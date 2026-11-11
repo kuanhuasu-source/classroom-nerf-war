@@ -113,14 +113,14 @@ export const Draw = (() => {
       shape(ctx, ellipsePts(cx + 2, headY - 84, 7, 7, 10), '#2b2622', null);
     }
     // face
-    const ey = headY + 6;
-    if (state === 'normal') {
+    const ey = headY + 6, face = state === 'open' ? 'normal' : state; // 'open': the shield kid with the board lowered
+    if (face === 'normal') {
       shape(ctx, ellipsePts(cx - 24, ey, 7, 9, 10), '#2b2622', null);
       shape(ctx, ellipsePts(cx + 24, ey, 7, 9, 10), '#2b2622', null);
       line(ctx, [[cx - 36, ey - 22], [cx - 12, ey - 26]], '#2b2622', 4); // determined brows
       line(ctx, [[cx + 12, ey - 26], [cx + 36, ey - 22]], '#2b2622', 4);
       line(ctx, [[cx - 18, ey + 32], [cx, ey + 40], [cx + 18, ey + 30]], '#2b2622', 4);
-    } else if (state === 'hurt') {
+    } else if (face === 'hurt') {
       line(ctx, [[cx - 32, ey - 8], [cx - 16, ey + 6]], '#2b2622', 4); line(ctx, [[cx - 32, ey + 6], [cx - 16, ey - 8]], '#2b2622', 4);
       line(ctx, [[cx + 16, ey - 8], [cx + 32, ey + 6]], '#2b2622', 4); line(ctx, [[cx + 16, ey + 6], [cx + 32, ey - 8]], '#2b2622', 4);
       shape(ctx, ellipsePts(cx, ey + 36, 14, 18, 12), '#8a2a2a');
@@ -134,6 +134,20 @@ export const Draw = (() => {
     }
     // cheeks
     ctx.globalAlpha = 0.5; shape(ctx, ellipsePts(cx - 40, ey + 20, 10, 6, 10), '#f28a8a', null); shape(ctx, ellipsePts(cx + 40, ey + 20, 10, 6, 10), '#f28a8a', null); ctx.globalAlpha = 1;
+    if (v.kind === 'rusher') { // a yellow headband and a sack for the loot
+      shape(ctx, [[cx - 66, headY - 34], [cx + 66, headY - 34], [cx + 64, headY - 18], [cx - 64, headY - 18]], '#f4e27a', '#2b2622', 2);
+      shape(ctx, [[18, 236], [66, 222], [80, 318], [30, 330]], '#b98556', '#2b2622', 3); line(ctx, [[30, 238], [62, 230]], '#2b2622', 3);
+      ctx.fillStyle = '#2b2622'; ctx.font = 'bold 30px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('搶', 50, 292);
+    }
+    if (v.kind === 'lobber' && state !== 'out') { // an arm up with a water balloon
+      shape(ctx, [[84, 212], [44, 150], [60, 140], [100, 204]], v.shirt); shape(ctx, ellipsePts(50, 140, 13, 13, 14), v.skin);
+      shape(ctx, ellipsePts(40, 96, 32, 36, 18), '#6fb7ef', '#2b2622', 3); shape(ctx, ellipsePts(30, 84, 8, 10, 10), '#d6ecfb', null); shape(ctx, [[34, 130], [46, 130], [40, 142]], '#6fb7ef', '#2b2622', 2);
+    }
+    if (v.kind === 'shield' && state !== 'out') { // the desk pad: up in front of the body, or lowered at the side while he throws
+      const up = state !== 'open', pts = up ? [[52, 170], [196, 160], [204, 344], [60, 352]] : [[6, 286], [70, 278], [80, 452], [16, 460]];
+      shape(ctx, pts, '#b7e3a1', '#2b2622', 4);
+      if (up) { for (let i = 1; i < 4; i++) line(ctx, [[58 + i * 36, 172 - i * 2], [64 + i * 36, 348 - i * 2]], 'rgba(43,38,34,0.25)', 2, 1); for (let j = 1; j < 4; j++) line(ctx, [[54, 170 + j * 44], [200, 162 + j * 44]], 'rgba(43,38,34,0.25)', 2, 1); ctx.fillStyle = '#2b2622'; ctx.font = 'bold 34px Iansui, "Noto Sans TC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('墊板', 128, 270); }
+    }
     return c;
   }
   function kidVariant() {

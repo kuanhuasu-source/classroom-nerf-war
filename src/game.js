@@ -238,6 +238,25 @@ export class Game {
     const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.0, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
     m.rotation.x = -Math.PI / 2; m.position.set(at.x, this.world.heightAt(at.x, at.z) + 0.05, at.z); this.scene.add(m); this.rings.push({ mesh: m, t: 0, radius, slow: dur });
   }
+  // which of the three special kids (if any) the next one through the door is: none in the first wave, a few more as the waves go on, at most two of a kind at once
+  rollKind() {
+    if (!this.isHost || this.toilet || this.lunch || this.state !== 'playing') return null;
+    if (this.wave < (this.level === 'easy' ? 3 : 2)) return null;
+    // each kind: about a tenth of the kids mid-game, so roughly one in three is special
+    const p = (this.level === 'easy' ? 0.05 : 0.08) + Math.min(0.04, this.wave * 0.006), n = (k) => this.students.filter(s => s.alive && s.kind === k).length, r = Math.random();
+    if (r < p) return n('shield') < 2 ? 'shield' : null;
+    if (r < 2 * p) return !this.siege && n('rusher') < 2 ? 'rusher' : null; // 守校門彈藥無限，搶子彈沒意義
+    if (r < 3 * p) return n('lobber') < 2 ? 'lobber' : null;
+    return null;
+  }
+  onKindSeen(kind) { this.kindSeen = this.kindSeen || {}; if (this.kindSeen[kind]) return; this.kindSeen[kind] = true; const m = { shield: ['拿墊板的來了！', '正面打不穿：等他放下來丟的時候打，或繞到側面'], rusher: ['有人衝過來搶子彈！', '先打倒他；被搶了就在他跑出門前追回來'], lobber: ['丟水球的來了！', '水球會越過課桌，看到地上的藍圈就跑開'] }[kind]; setTimeout(() => { if (this.state === 'playing') this.message(m[0], m[1], 3); }, 700); }
+  // a water balloon burst: everyone within the splash loses a heart
+  balloonSplash(at) {
+    this.spawnRing(at, 1.1, 0x6fb7ef); Audio.boing(); this.netEvent({ t: 'sfx', n: 'boing' });
+    for (let i = 0; i < 5; i++) { const a = Math.random() * Math.PI * 2; this.spawnDebris(at, 0x6fb7ef, [0.06, 0.06, 0.06], new THREE.Vector3(Math.cos(a) * rand(0.8, 2), rand(1.5, 3), Math.sin(a) * rand(0.8, 2)), 0.9); }
+    if (this.state !== 'playing') return;
+    for (const pl of this.activeTargets()) if (Math.hypot(pl.pos.x - at.x, pl.pos.z - at.z) < 1.1 && Math.abs((pl.pos.y || 0) - at.y) < 1.3) pl.hurt();
+  }
   setDifficulty(level) { if (DIFFICULTY[level]) { this.level = level; this.diff = DIFFICULTY[level]; } }
   // how many students are currently firing; the difficulty caps this
   extraPlayers() { return this.coop ? Math.max(0, this.players().length - 1) : 0; } // 多人加碼的基準：比單人多幾個人
@@ -535,6 +554,7 @@ export class Game {
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
     this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null; this.timeLeft = 0; this.refillT = 0; this.hintT = 0; this.ui.wet(false); this.ui.soup(null);
+    this.kindSeen = {}; this.shieldHint = false;
     this.damageTaken = 0; this.wetCount = 0; this.dustHit = false; this.hornHits = 0; this.bumps = 0; this.roundDone = false; this.clockT = 0; this.hintsShown = {}; this.storyStars = 0; this.bossTimer = 0;
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
@@ -1047,7 +1067,7 @@ export class Game {
     // darts & hits
     const player = this.player;
     this.darts.update(dt, (d, prev) => {
-      if (d.kind && d.kind.endsWith('Break')) { if (d.kind === 'tubeBreak') this.addZone(d.pos, 1.1, 4); else if (d.kind === 'eraserBreak') this.dustBurst(d.pos); return false; }
+      if (d.kind && d.kind.endsWith('Break')) { if (d.kind === 'tubeBreak') this.addZone(d.pos, 1.1, 4); else if (d.kind === 'eraserBreak') this.dustBurst(d.pos); else if (d.kind === 'balloonBreak') this.balloonSplash(d.pos); return false; }
       const p = d.mesh.position;
       for (let i = this.items.length - 1; i >= 0; i--) if (this.items[i].testDart(d)) { this.applyBuff(this.items[i].buff, d.who || 'host'); this.items[i].dispose(); this.items.splice(i, 1); return true; }
       for (const pr of this.props) if (pr.testDart(d)) return true;
@@ -1066,6 +1086,7 @@ export class Game {
           const h = 1.35 * s.group.scale.y;
           const hrr = 0.36 * this.hitMul(d.who);
           if (dx * dx + dz * dz < hrr * hrr && p.y > s.group.position.y && p.y < s.group.position.y + h) {
+            if (s.blocks(d)) { Audio.thud(); s.flash = 0.08; if (!this.shieldHint) { this.shieldHint = true; this.message('墊板擋住了！', '等他放下墊板丟的時候再打，或繞到側面', 2.5); } return true; }
             // one volley counts once per kid (the 連發 badge); shotgun pellets may land up to three on the same kid; a piercing dart flies on through the one it already hit
             if (d.volley && s.lastVolley === d.volley) { if (d.pierce !== undefined) continue; if (!(d.cap && s.volleyN < d.cap)) return true; s.volleyN++; } else { s.lastVolley = d.volley; s.volleyN = 1; }
             this.lastShooter = d.who; if (s.hit(d.dmg || 1)) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null;
@@ -1085,6 +1106,7 @@ export class Game {
           const hr = 0.28 * (1 - (pl.up ? pl.up.dodge : 0));
           if (dx * dx + dz * dz < hr * hr && p.y > pl.pos.y && p.y < pl.pos.y + pl.eye + 0.2) {
             if (d.kind === 'eraser') this.dustBurst(p.clone());
+            if (d.kind === 'balloon') { this.balloonSplash(new THREE.Vector3(p.x, pl.pos.y || 0, p.z)); return true; }
             if (d.kind === 'water') { // 潑水：不扣血，慢 5 秒
               this.spawnRing(p.clone(), 0.6, 0x6fb7ef);
               if (pl === this.player) { pl.wet = TOILET.wetSeconds; this.wetCount++; this.ui.wet(true); this.message('被潑到水了！', '行動變慢 5 秒', 1.4); Audio.boing(); }
