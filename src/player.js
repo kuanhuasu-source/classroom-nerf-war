@@ -164,7 +164,7 @@ export class Player {
   }
   hurt() {
     if (this.hurtCd > 0 || this.sitting || this.invuln > 0) return;
-    this.hurtCd = 0.7 + (this.badge && this.badge.invulnBonus ? this.badge.invulnBonus : 0); this.hp--; this.game.damageTaken = (this.game.damageTaken || 0) + 1; Audio.hurt(); this.game.ui.hp(this.hp, this.maxHp); this.game.ui.vignette();
+    this.hurtCd = 0.7; this.hp--; this.game.damageTaken = (this.game.damageTaken || 0) + 1; Audio.hurt(); this.game.ui.hp(this.hp, this.maxHp); this.game.ui.vignette();
     if (this.hp <= 0) this.game.onPlayerDown(this);
   }
 }

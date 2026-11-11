@@ -42,7 +42,7 @@ export class Game {
     // guest side: the host's figure plus the other guests
     this.others = new Map(); this.mySlot = 'host'; this.buffs = {};
     this.pid = opts.pid || Game.persistentId();
-    Profile.load(); this.loadProfile(); // what this player typed and picked on the front page, kept under their ID (the lobby fills it)
+    Profile.boot(); this.loadProfile(); // what this player typed and picked on the front page, kept under their ID (the lobby fills it)
     this.net = new NetStats(); this.showNet = true; this.pvSeq = 0; this.snapSeq = 0; this.pingT = 0; this.acc = 0;
     PaperFigure.renderTime = () => performance.now() - (this.isHost ? 100 : this.net.delay); // guests from inputs: 100 ms behind; snapshots: adaptive
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -422,7 +422,7 @@ export class Game {
     canvas.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('pointerlockchange', () => {
       this.hasLock = document.pointerLockElement === canvas;
-      if (this.hasLock) { this.lockFailed = false; this.lockFails = 0; this.lockPending = false; }
+      if (this.hasLock) { this.lockFailed = false; this.lockFails = 0; this.lockPending = false; if (this.state !== 'playing') { this.ignoreUnlock = true; document.exitPointerLock(); } } // a lock that arrives after the round already ended must not keep the mouse
       else if (this.ignoreUnlock) this.ignoreUnlock = false; // we let go of the mouse on purpose (upgrade cards)
       else if (this.state === 'playing' && !this.ui.offerOpen) this.pause();
     });
@@ -971,6 +971,7 @@ export class Game {
       $('st-kills').textContent = this.kills;
       $('st-acc').textContent = this.player.shots ? Math.min(100, Math.round(this.player.hits / this.player.shots * 100)) + '%' : '0%';
     }
+    const nudge = $('id-nudge'); if (nudge) nudge.hidden = !Profile.temp; // a first-timer on a temporary id: now is the moment to pick their own
     const rn = $('record-note'), br = this.recordBroken || []; if (rn) { rn.hidden = !br.length; rn.textContent = br.length ? '新紀錄！' + br.map(b => `${b.label} ${b.now}（舊 ${b.old}）`).join('　') : ''; }
   }
   coopStats() {

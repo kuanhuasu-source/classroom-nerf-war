@@ -33,7 +33,7 @@ export const Records = {
       if (b.win && !r.win) continue; const v = r[b.f]; if (v === undefined || v === null) continue;
       if (b.f === 'acc' && (r.shots || 0) < 20) continue;
       const old = best[b.f];
-      if (old === undefined || (b.dir === 'max' ? v > old : v < old)) { best[b.f] = v; if (old !== undefined) broken.push({ label: b.label, old: fmtOf(b, old), now: fmtOf(b, v) }); }
+      if (old === undefined || (b.dir === 'max' ? v > old : v < old)) { best[b.f] = v; if (old !== undefined && !(b.dir === 'max' && !old)) broken.push({ label: b.label, old: fmtOf(b, old), now: fmtOf(b, v) }); }
     }
     d.recent.unshift({ ts: r.ts || Date.now(), mode: r.mode, level: r.level, map: r.map, win: r.win ? 1 : 0, score: r.score || 0, story: r.story || '', stars: r.stars || 0, wave: r.wave || 0, soup: r.soup, timeLeft: r.timeLeft });
     d.recent = d.recent.slice(0, 20); this.save();

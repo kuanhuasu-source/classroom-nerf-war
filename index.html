@@ -324,6 +324,8 @@ details.help .keys { margin: 10px 0 4px; font-size: 15px; gap: 4px 12px; }
 .bset b { font-size: 15px; } .bset small { font-size: 12px; color: var(--pencil); line-height: 1.25; } .bset .bonus { color: var(--ink); } .bset.on .st { color: var(--nerf-orange); }
 #news .card { max-width: 600px; }
 /* ---- id gate, records, card, moving code ---- */
+#free-settings { margin-bottom: 12px; } #free-settings summary { font-size: 20px; border-bottom: 2px dashed var(--paper-line); padding-bottom: 2px; margin-bottom: 8px; } #free-summary { font-size: 14px; margin-left: 10px; color: var(--ink); }
+.seg-btn.locked { opacity: .55; }
 #idgate { z-index: 60; } #records, #cardview, #move { z-index: 55; } /* over the result card too */ #idgate .card { max-width: 440px; text-align: center; }
 #id-input { font: 30px/1.2 var(--font-num), monospace; letter-spacing: 3px; text-align: center; width: 100%; max-width: 320px; text-transform: uppercase; border: 3px solid var(--ink); border-radius: 12px; padding: 6px 10px; background: #fff; }
 #id-known { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0 4px; }
@@ -377,10 +379,10 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
       <section class="menu-left">
         <h1>課桌<span>大戰</span></h1>
         <p class="sub">下課十分鐘，六年二班變成戰場。躲在課桌後面，用泡棉槍把全班打到罰坐，再面對回來的老師。</p>
-        <p class="note" id="id-line">ID <b id="id-show"></b> <button class="mini" id="btn-id-switch" type="button">切換</button></p>
+        <p class="note" id="id-line">ID <b id="id-show"></b><span id="id-temp" hidden>（暫時的）</span> <button class="mini" id="btn-id-switch" type="button">切換</button></p>
         <div id="menu-buttons">
-          <button class="btn big" id="btn-start">單人開戰</button>
-          <button class="btn blue big" id="btn-story" type="button">故事模式：Jason 的畢業週<small id="story-note"></small></button>
+          <button class="btn big" id="btn-story" type="button">故事模式：Jason 的畢業週<small id="story-note"></small></button>
+          <button class="btn blue big" id="btn-start">自由玩<small id="free-note"></small></button>
           <button class="btn blue" id="btn-host">開房間</button>
           <button class="btn" id="btn-join-open" style="background:var(--pencil)">輸入房號</button>
           <div class="small-row">
@@ -400,7 +402,7 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
         <p class="note" id="menu-note">建議用電腦與滑鼠遊玩。最多四個人一起打：一個人開房間，其他人輸入房號或掃 QR code。</p>
       </section>
       <section class="menu-right">
-        <h3 class="menu-h">這一局</h3>
+        <details class="help" id="free-settings"><summary>自由玩設定<span id="free-summary"></span></summary>
         <div class="row" id="mode-row">
       <span class="note">玩法</span>
       <div class="seg" role="radiogroup" aria-label="玩法">
@@ -433,6 +435,7 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
       </div>
       <span class="note" id="map-note"></span>
     </div>
+        </details>
     <h3 class="menu-h">連線時</h3>
         <div class="row" id="profile-row">
       <span class="note">名字</span>
@@ -508,8 +511,8 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
 </div>
 <div class="overlay" id="idgate" hidden>
   <div class="card">
-    <h2>你的個人 ID</h2>
-    <p class="sub">最多 10 碼英文或數字，不分大小寫。紀錄、星星、貼紙、徽章都會跟著這個 ID。</p>
+    <h2 id="id-title">你的個人 ID</h2>
+    <p class="sub" id="id-sub">最多 10 碼英文或數字，不分大小寫。紀錄、星星、貼紙、徽章都會跟著這個 ID。</p>
     <input id="id-input" maxlength="10" placeholder="例如 JASON06" autocomplete="off" autocapitalize="characters" spellcheck="false">
     <div id="id-known"></div>
     <p class="note red-pen" id="id-error"></p>
@@ -590,6 +593,7 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
       <div><b id="st-acc">0%</b><span>命中率</span></div>
     </div>
     <p class="note red-pen" id="record-note" hidden></p>
+    <p class="note" id="id-nudge" hidden>這一局記在暫時的 ID 上。<button class="mini" id="btn-id-nudge" type="button">取個自己的 ID</button> 紀錄、貼紙、徽章才會跟著你。</p>
     <div id="badge-draw" hidden>
       <p class="note">抽到一枚徽章，點一下翻開</p>
       <div class="badge-card" id="badge-card"><div class="back">?</div><div class="front"><span id="badge-card-icon"></span><b id="badge-card-name"></b><small id="badge-card-desc"></small></div></div>

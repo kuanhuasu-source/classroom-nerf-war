@@ -25,8 +25,11 @@ const { chromium } = require('playwright');
     const wear = (...specs) => { const d = B.load(); d.list = d.list.filter(b => b.src !== 'test'); d.worn = []; for (const [type, tier, val] of specs) { const b = { id: 'T' + type, type, tier, val, ts: Date.now(), src: 'test' }; d.list.push(b); d.worn.push(b.id); } B.save(); };
     // sets found and their flags
     wear(['rate', 2, 0.15], ['multi', 2, 1]); out.dodge = [B.activeSets().map(s => s.id), B.effects().spreadMul];
-    wear(['hp', 0, 1], ['regenHp', 1, 40]); out.nurse = [B.activeSets().map(s => s.id), B.effects().invulnBonus];
-    wear(['regenAmmo', 1, 25], ['regenHp', 1, 40]); const e = B.effects(); out.duty = [e.sets, e.regenHp, e.regenAmmo];
+    // the two sets nobody could feel are gone: these pairs give nothing now, and the regen numbers are the plain tier values
+    wear(['hp', 0, 1], ['regenHp', 1, 40]); out.noNurse = B.activeSets().length;
+    wear(['regenAmmo', 1, 25], ['regenHp', 1, 40]); const e = B.effects(); out.noDuty = [e.sets, e.regenHp, e.regenAmmo];
+    // values are fixed per tier: a badge saved with an odd value settles on the standard one when the box is loaded
+    { const d9 = B.load(); d9.list = [{ id: 'odd', type: 'mag', tier: 1, val: 5, ts: 1, src: 'test' }]; d9.worn = []; B.save(); B.data = null; out.fixedOnLoad = B.load().list[0].val; out.makeFixed = [...new Set(Array.from({ length: 40 }, () => B.make(1, 't', 'mag').val))]; }
     wear(['hp', 2, 2], ['rate', 2, 0.15], ['speed', 2, 0.08]); out.gradAndPe = [B.activeSets().map(s => s.id)];
     wear(['hp', 1, 1], ['rate', 2, 0.15], ['speed', 2, 0.08]); out.notGrad = B.activeSets().map(s => s.id);
     wear(['hp', 0, 1]); out.none = B.activeSets().length;
@@ -39,18 +42,16 @@ const { chromium } = require('playwright');
     wear(['speed', 1, 0.05], ['hp', 0, 1]); g.toMenu(); g.start(); out.peCrouch = [c0, crouchDist()];
     wear(['speed', 1, 0.05], ['rate', 0, 0.06]); g.toMenu(); g.start(); for (let i = 0; i < 60 * 6 && !g.buffs.host; i++) g.step(1 / 60); out.lateRush = g.buffs.host && [g.buffs.host.id, g.buffs.host.name, g.wave];
     wear(['hp', 2, 2], ['rate', 2, 0.15], ['speed', 2, 0.08]); g.toMenu(); g.start(); out.gradStart = g.buffs.host && [g.buffs.host.id, g.buffs.host.name, g.buffs.host.t, document.getElementById('hud-badge').textContent];
-    // hurt protection with the nurse set
-    wear(['hp', 0, 1], ['regenHp', 1, 40]); g.toMenu(); g.start(); g.player.hurtCd = 0; g.player.hurt(); out.nurseHurtCd = g.player.hurtCd;
     // 傳說每種只能一枚：own the hp legend, roll 2000 exam wins, never a second one; the reroll is flagged; three 稀有 hp cannot merge, three 稀有 mag still can
     { const d0 = B.load(); d0.list = [{ id: 'L', type: 'hp', tier: 3, val: 2, ts: 1, src: 'test' }]; d0.worn = []; B.save(); let dupLegend = 0, rerolled = 0, legends = 0; for (let i = 0; i < 2000; i++) { const b = B.roll('exam', true, false); if (b.tier === 3) { legends++; if (b.type === 'hp') dupLegend++; } if (b.rerolledFrom) rerolled++; } out.legendOnce = { legends, dupLegend, rerolled };
       B.showDraw({ id: 'x', type: 'mag', tier: 1, val: 4, ts: 2, src: 'test', rerolledFrom: 'hp' }, null, 3, () => {}); out.rerollNote = document.getElementById('badge-card-note').textContent;
       const d1 = B.load(); for (let k = 0; k < 3; k++) { d1.list.push({ id: 'h' + k, type: 'hp', tier: 2, val: 2, ts: k, src: 'test' }); d1.list.push({ id: 'm' + k, type: 'mag', tier: 2, val: 6, ts: k, src: 'test' }); } B.save(); out.mergeBlocked = [B.merge(), B.load().list.filter(b => b.tier === 3).map(b => b.type).sort(), B.load().list.filter(b => b.type === 'hp' && b.tier === 2).length]; }
     // the sticker comes with the first set worn through the panel
-    A.data = null; localStorage.removeItem('cnw-TEST:ach'); wear(['hp', 0, 1]); const d = B.load(); d.list.push({ id: 'Tregen', type: 'regenHp', tier: 1, val: 40, ts: 1, src: 'test' }); B.save(); B.wear('Tregen', 3); out.hallSticker = A.has('hall');
+    A.data = null; localStorage.removeItem('cnw-TEST:ach'); wear(['hp', 0, 1]); const d = B.load(); d.list.push({ id: 'Tspeed', type: 'speed', tier: 1, val: 0.05, ts: 1, src: 'test' }); B.save(); B.wear('Tspeed', 3); out.hallSticker = A.has('hall');
     // the panel lists seven sets with one done
     g.toMenu(); B.render(3, () => {}); out.panel = [document.querySelectorAll('#badge-sets .bset').length, document.querySelectorAll('#badge-sets .bset.on').length, document.querySelector('#badge-sets .bset.on b').textContent];
     // the draw card says what wearing it would complete
-    B.showDraw({ id: 'x', type: 'regenAmmo', tier: 1, val: 25, ts: 2, src: 'test' }, null, 3, () => {}); out.drawNote = document.getElementById('badge-card-note').textContent;
+    B.showDraw({ id: 'x', type: 'rate', tier: 1, val: 0.1, ts: 2, src: 'test' }, null, 3, () => {}); out.drawNote = document.getElementById('badge-card-note').textContent;
     return out; });
   console.log(JSON.stringify(r, null, 1));
   await page.evaluate(() => { document.getElementById('badges').hidden = false; }); await page.screenshot({ path: 'badge-panel.png' });

@@ -32,20 +32,27 @@ export function initLobby(game) {
   // mode: the classroom war or the gate siege; remembered per browser
   const MODE_NOTES = { class: '下課大戰：六波同學加一位老師，撿地上的泡棉彈補充。', siege: '守校門：惡霸軍團從校門、圍牆、水溝蓋闖進操場，守住十波。彈藥無限，第 3、6、9 波有頭目，第 10 波是會瘋狂丟板擦的大王。', toilet: '搶廁所：下課想上廁所，清潔隊卻在打掃。只有三滴血、90 秒；被水潑到慢 5 秒，通馬桶一連 3 到 5 支。射破最裡面小便斗架上和洗手台上的 8 個罐子就贏。', lunch: '午餐大作戰（兩人限定）：一個推餐車去蒸飯室裝菜再推回六年二班，一個站在車上擋搶菜的同學；裝完菜換手。回程撞到、被打中、被搶都會灑湯，回班時剩多少湯決定星星。開房間找剛好一位隊友再開始。' };
   let mode = 'class'; try { const saved = localStorage.getItem('cnw-mode'); if (saved && MODE_NOTES[saved]) mode = saved; } catch (e) { /* ignore */ }
-  const applyMode = (m) => { mode = m; game.mode = m; document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('mode-note').textContent = MODE_NOTES[m]; $('map-row').classList.toggle('dim', m !== 'class'); $('map-note').textContent = m === 'siege' ? '守校門固定在操場' : m === 'toilet' ? '搶廁所固定在廁所' : m === 'lunch' ? '午餐大作戰固定在走廊' : ''; try { localStorage.setItem('cnw-mode', m); } catch (e) { /* ignore */ } };
+  const MODE_NAMES = { class: '下課大戰', siege: '守校門', toilet: '搶廁所', lunch: '午餐大作戰' }, LEVEL_NAMES = { easy: '小考', normal: '段考', hard: '模擬考', exam: '會考' };
+  // 首頁只留一行摘要：玩法・難度・教室；要改再展開「自由玩設定」
+  const freeSummary = () => { const mapBtn = document.querySelector(`.map-btn[data-map="${game.mapChoice || 'random'}"]`), txt = `${MODE_NAMES[game.mode] || ''}・${LEVEL_NAMES[game.level] || ''}${game.mode === 'class' && mapBtn ? '・' + mapBtn.textContent : ''}`; $('free-summary').textContent = txt; $('free-note').textContent = txt; };
+  // 其他玩法等故事星期一過關（或已經打過三局的老玩家）才開：第一次來的人先走故事
+  const modesOpen = () => Progress.stars('mon') > 0 || (Records.load().totals.games || 0) >= 3;
+  const refreshLocks = () => { const open = modesOpen(); document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const lock = !open && b.dataset.mode !== 'class'; b.classList.toggle('locked', lock); b.textContent = (lock ? '🔒 ' : '') + MODE_NAMES[b.dataset.mode]; }); if (!open && mode !== 'class') applyMode('class'); };
+  const applyMode = (m) => { if (m !== 'class' && !modesOpen()) { $('mode-note').textContent = '先過故事模式的星期一，就能玩這個。'; return; } mode = m; game.mode = m; document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('mode-note').textContent = MODE_NOTES[m]; $('map-row').classList.toggle('dim', m !== 'class'); $('map-note').textContent = m === 'siege' ? '守校門固定在操場' : m === 'toilet' ? '搶廁所固定在廁所' : m === 'lunch' ? '午餐大作戰固定在走廊' : ''; try { localStorage.setItem('cnw-mode', m); } catch (e) { /* ignore */ } freeSummary(); };
   document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { b.setAttribute('role', 'radio'); b.addEventListener('click', () => applyMode(b.dataset.mode)); });
   applyMode(mode);
   // difficulty: remembered per browser
   const NOTES = { easy: '小考：少一點同學、準度低、一次只有一個同學開火，每清一波回 2 顆心。', normal: '段考：同時最多兩個同學開火，每清一波回 1 顆心。', hard: '模擬考：人多、準、三個同學同時射你，不回血，大 Boss 機率高。', exam: '會考：同學更多更準、四個同時開火、彈速更快、老師更兇，六成機率遇到大 Boss。給能穩過模擬考的人。' };
   let level = 'normal'; try { const saved = localStorage.getItem('cnw-difficulty'); if (saved && NOTES[saved]) level = saved; } catch (e) { /* ignore */ }
-  const applyLevel = (l) => { level = l; game.setDifficulty(l); document.querySelectorAll('.seg-btn[data-level]').forEach(b => { const on = b.dataset.level === l; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('difficulty-note').textContent = NOTES[l]; try { localStorage.setItem('cnw-difficulty', l); } catch (e) { /* ignore */ } };
+  const applyLevel = (l) => { level = l; game.setDifficulty(l); document.querySelectorAll('.seg-btn[data-level]').forEach(b => { const on = b.dataset.level === l; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('difficulty-note').textContent = NOTES[l]; try { localStorage.setItem('cnw-difficulty', l); } catch (e) { /* ignore */ } freeSummary(); };
   document.querySelectorAll('.seg-btn[data-level]').forEach(b => { b.setAttribute('role', 'radio'); b.addEventListener('click', () => applyLevel(b.dataset.level)); });
   applyLevel(level);
   // room choice: random or a specific classroom
   let mapChoice = 'random'; try { const saved = localStorage.getItem('cnw-map'); if (saved) mapChoice = saved; } catch (e) { /* ignore */ }
-  const applyMap = (m) => { mapChoice = m; game.mapChoice = m; document.querySelectorAll('.map-btn').forEach(b => { const on = b.dataset.map === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); try { localStorage.setItem('cnw-map', m); } catch (e) { /* ignore */ } };
+  const applyMap = (m) => { mapChoice = m; game.mapChoice = m; document.querySelectorAll('.map-btn').forEach(b => { const on = b.dataset.map === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); try { localStorage.setItem('cnw-map', m); } catch (e) { /* ignore */ } freeSummary(); };
   document.querySelectorAll('.map-btn').forEach(b => { b.setAttribute('role', 'radio'); b.addEventListener('click', () => applyMap(b.dataset.map)); });
-  applyMap(mapChoice);
+  applyMap(mapChoice); refreshLocks();
+  const fs = $('free-settings'); try { fs.open = localStorage.getItem('cnw-free-open') === '1'; } catch (e) { /* ignore */ } fs.addEventListener('toggle', () => { try { localStorage.setItem('cnw-free-open', fs.open ? '1' : '0'); } catch (e) { /* ignore */ } });
   // who am I in a room: a typed name (up to 6 characters) and one of the looks; remembered per browser
   const nameEl = $('my-name'), lookRow = $('look-row');
   nameEl.value = game.profile.name;
@@ -84,11 +91,11 @@ export function initLobby(game) {
     $('album-stickers').textContent = `貼紙 ${Ach.count()} / 26${Progress.allThree() ? '　全章三星！' : ''}`;
   };
   $('btn-story').addEventListener('click', () => { leave(); renderStory(); $('story').hidden = false; });
-  $('btn-story-close').addEventListener('click', () => { $('story').hidden = true; });
+  $('btn-story-close').addEventListener('click', () => { $('story').hidden = true; refreshLocks(); });
   $('btn-diary-back').addEventListener('click', () => { $('diary').hidden = true; renderStory(); $('story').hidden = false; });
   $('btn-diary-go').addEventListener('click', () => { if (!diaryChapter) return; $('diary').hidden = true; game.startStory(diaryChapter); if (game.state !== 'playing') { renderStory(); $('story').hidden = false; } });
   $('btn-next').addEventListener('click', () => { const ch = game.story; const nx = ch ? Progress.next(ch) : null; const album = !ch || ch.finale || ch.hidden || !nx; game.toMenu(); storyNote(); if (album) showAlbum(); else showDiary(nx); });
-  $('btn-album-close').addEventListener('click', () => { $('album').hidden = true; storyNote(); });
+  $('btn-album-close').addEventListener('click', () => { $('album').hidden = true; storyNote(); refreshLocks(); });
   // ---------- 徽章 ----------
   const badgeNote = () => { const w = Badges.worn(), sets = Badges.activeSets(); $('badge-note').textContent = sets.length ? sets.map(s => s.name).join('＋') : w.length ? w.map(b => Badges.label(b)).join('・') : (Badges.load().list.length ? '還沒佩戴' : ''); };
   const slotHint = () => { const n = game.badgeSlots(); return `可以佩戴 ${n} 枚` + (n < 2 ? '（破完故事模式開第二格）' : n < 3 ? '（故事每章三顆星，或集滿 12 張貼紙，開第三格）' : ''); };
@@ -109,7 +116,7 @@ export function initLobby(game) {
   storyNote();
 
   $('btn-host').addEventListener('click', () => {
-    leave(); show('host');
+    leave(); show('host'); $('free-settings').open = true; // the host picks what the room plays
     const code = roomCode(); $('lobby-code').textContent = code; status('正在開房間……'); drawQr('qr-room', `${siteUrl}?room=${code}`);
     transport = new PeerTransport(peerOpts);
     const roster = () => {
@@ -151,7 +158,7 @@ export function initLobby(game) {
   $('btn-copy').addEventListener('click', () => { const code = $('lobby-code').textContent; try { navigator.clipboard.writeText(code).catch(() => {}); } catch (e) { /* ignore */ } status('房號 ' + code + ' 複製好了。'); });
   $('btn-begin').addEventListener('click', () => game.start());
   $('btn-lobby-back').addEventListener('click', leave);
-  const toMenu = () => { game.toMenu(); leave(); };
+  const toMenu = () => { game.toMenu(); leave(); refreshLocks(); storyNote(); };
   $('btn-menu-pause').addEventListener('click', toMenu);
   $('btn-menu-over').addEventListener('click', toMenu);
 
@@ -159,19 +166,21 @@ export function initLobby(game) {
   const pre = normalizeCode(q.get('room'));
   if (pre.length === 4) whenId(() => { show('join'); $('join-code').value = pre; status('房號已填好，正在加入……'); setTimeout(join, 300); }); // a scanned QR joins by itself, once there is an ID
 
-  // ---------- 個人 ID：沒有就先問，之後首頁可以切換；紀錄、星星、貼紙、徽章、名字、造型都跟著 ID ----------
+  // ---------- 個人 ID：第一次來先用暫時的 ID 直接玩，打完一局結算畫面請他取名（資料跟著搬）；首頁可以切換 ----------
   const gate = $('idgate'), idIn = $('id-input');
-  const refreshAll = () => { game.loadProfile(); nameEl.value = game.profile.name === Profile.id ? '' : game.profile.name; applyLook(LOOKS.some(l => l.id === game.profile.look) ? game.profile.look : LOOKS[0].id, false); storyNote(); badgeNote(); $('id-show').textContent = Profile.id; };
+  const refreshAll = () => { game.loadProfile(); nameEl.value = game.profile.name === Profile.id ? '' : game.profile.name; applyLook(LOOKS.some(l => l.id === game.profile.look) ? game.profile.look : LOOKS[0].id, false); storyNote(); badgeNote(); refreshLocks(); $('id-show').textContent = Profile.id; $('id-temp').hidden = !Profile.temp; $('btn-id-switch').textContent = Profile.temp ? '取個自己的 ID' : '切換'; const n = $('id-nudge'); if (n && !Profile.temp) n.hidden = true; };
   const showGate = (switching) => {
-    gate.hidden = false; idIn.value = switching ? Profile.id : ''; $('btn-id-cancel').hidden = !switching; $('id-error').textContent = '';
+    gate.hidden = false; idIn.value = switching && !Profile.temp ? Profile.id : ''; $('btn-id-cancel').hidden = !switching; $('id-error').textContent = '';
+    $('id-title').textContent = Profile.temp ? '取一個自己的 ID' : '你的個人 ID'; $('id-sub').textContent = Profile.temp ? `現在用的是暫時的 ${Profile.id}。取個自己的（最多 10 碼英文或數字），剛剛打的紀錄會一起搬過去。` : '最多 10 碼英文或數字，不分大小寫。紀錄、星星、貼紙、徽章都會跟著這個 ID。';
     const kb = $('id-known'); kb.innerHTML = ''; for (const k of Profile.known().filter(k => k !== Profile.id)) { const b = document.createElement('button'); b.type = 'button'; b.className = 'mini'; b.textContent = k; b.addEventListener('click', () => { idIn.value = k; applyId(); }); kb.appendChild(b); }
     setTimeout(() => idIn.focus(), 50);
   };
-  const applyId = () => { const id = Profile.clean(idIn.value); if (!Profile.valid(id)) { $('id-error').textContent = '請輸入 1 到 10 碼的英文或數字'; return; } Profile.set(id); gate.hidden = true; refreshAll(); while (afterId.length) afterId.shift()(); };
+  const applyId = () => { const id = Profile.clean(idIn.value); if (!Profile.valid(id)) { $('id-error').textContent = '請輸入 1 到 10 碼的英文或數字'; return; } if (Profile.temp) Profile.rename(id); else Profile.set(id); gate.hidden = true; refreshAll(); while (afterId.length) afterId.shift()(); };
   idIn.addEventListener('input', () => { const v = Profile.clean(idIn.value); if (v !== idIn.value) idIn.value = v; });
   idIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyId(); });
   $('btn-id-ok').addEventListener('click', applyId); $('btn-id-cancel').addEventListener('click', () => { gate.hidden = true; });
   $('btn-id-switch').addEventListener('click', () => showGate(true));
+  $('btn-id-nudge').addEventListener('click', () => showGate(true));
 
   // ---------- 紀錄頁、成績卡、搬家代碼 ----------
   const totalStars = () => STORY.chapters.reduce((a, c) => a + Progress.stars(c.id), 0);
@@ -207,9 +216,7 @@ export function initLobby(game) {
   $('btn-move-in').addEventListener('click', () => importCode($('move-in').value));
   $('btn-move-close').addEventListener('click', () => { $('move').hidden = true; });
   // opened from a moving QR: import first, then the ID is set by it
-  if (q.get('id') && !Profile.id && Profile.valid(Profile.clean(q.get('id')))) Profile.set(Profile.clean(q.get('id'))); // ?id=XYZ skips the gate (debug and test links)
   const mv = q.get('move');
-  if (mv) importCode(mv, true).then((ok) => { if (!ok && !Profile.id) showGate(false); try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ } });
-  else if (!Profile.id) showGate(false);
+  if (mv) importCode(mv, true).then(() => { try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ } });
   if (Profile.id) { refreshAll(); while (afterId.length) afterId.shift()(); }
 }
