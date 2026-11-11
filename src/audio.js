@@ -52,6 +52,7 @@ export const Audio = (() => {
     bellOut() { return bell([0, 1]); },   // 下課鈴
     bellIn() { return bell([2, 3]); },    // 上課鈴
     pew() { tone({ f0: 1100, f1: 320, dur: 0.11, type: 'sawtooth', vol: 0.14 }); noise({ dur: 0.05, vol: 0.12, hp: 2000 }); },
+    slide() { noise({ dur: 0.35, vol: 0.16, hp: 900 }); tone({ f0: 260, f1: 120, dur: 0.3, type: 'sine', vol: 0.08 }); },
     shotgun() { noise({ dur: 0.16, vol: 0.3, hp: 500 }); tone({ f0: 320, f1: 90, dur: 0.14, type: 'sawtooth', vol: 0.16 }); },
     twang() { tone({ f0: 1700, f1: 240, dur: 0.22, type: 'triangle', vol: 0.2 }); tone({ f0: 300, f1: 520, dur: 0.1, type: 'sine', vol: 0.1, delay: 0.03 }); },
     enemyPew() { tone({ f0: 900, f1: 280, dur: 0.1, type: 'sawtooth', vol: 0.07 }); },

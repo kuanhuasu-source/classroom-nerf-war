@@ -45,6 +45,8 @@ export class UI {
   }
   tick(dt) { if (this.msgTimer > 0) { this.msgTimer -= dt; if (this.msgTimer <= 0) this.msgEl.classList.remove('show'); } if (this.buddyT > 0) { this.buddyT -= dt; if (this.buddyT <= 0) $('hud-buddy').classList.remove('on'); } }
   // 小美's speech bubble (story mode)
+  // how many erasers are left to throw (null hides it: the lunch run has none)
+  eraser(n) { const el = $('eraser-wrap'); if (el) el.hidden = n === null; const c = $('eraser-n'); if (c && n !== null) c.textContent = n; const tb = $('tc-eraser'); if (tb) { tb.style.display = n === null ? 'none' : 'flex'; tb.textContent = n === null ? '' : `板擦${n}`; tb.classList.toggle('dim', n === 0); } }
   badge(text) { const el = $('hud-badge'); if (!el) return; el.hidden = !text; el.textContent = text || ''; }
   buddy(text, secs = 4) { const el = $('hud-buddy'); if (!el) return; $('buddy-text').textContent = text; el.classList.add('on'); this.buddyT = secs; }
   hitmark() { const h = $('hitmark'); h.classList.add('show'); clearTimeout(this._hm); this._hm = setTimeout(() => h.classList.remove('show'), 60); }

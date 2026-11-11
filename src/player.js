@@ -16,6 +16,7 @@ export class Player {
     this.hp = CFG.player.hp; this.ammo = CFG.gun.mag; this.reserve = CFG.gun.reserveStart; this.reloading = 0; this.reloadTotal = 1; this.emptyTime = 0; this.fireCd = 0; this.crouching = false;
     this.keys = {}; this.shots = 0; this.hits = 0; this.hurtCd = 0;
     this.sitting = false; this.sitT = 0; this.invuln = 0; this.seat = null; this.sitTick = -1;
+    this.slideT = 0; this.slideCd = 0; this.slideDir = null; this.crouchKeyWas = false; this.erasers = CFG.eraser.start; this.eraserCd = 0;
     this.buildGun();
   }
   buildGun() {
@@ -44,12 +45,14 @@ export class Player {
   update(dt) {
     const k = this.keys;
     const tc = this.game.touchCtl, tm = tc && tc.on ? tc.move : null;
-    this.crouching = !!(k['ControlLeft'] || k['ControlRight'] || k['KeyC'] || (tc && tc.crouch)) || this.world.lowCeiling(this.pos, CFG.player.standH); // under the slide you stay down until you are out
+    const crouchKey = !!(k['ControlLeft'] || k['ControlRight'] || k['KeyC'] || (tc && tc.crouch)), crouchEdge = crouchKey && !this.crouchKeyWas; this.crouchKeyWas = crouchKey;
+    this.slideCd = Math.max(0, this.slideCd - dt); this.eraserCd = Math.max(0, this.eraserCd - dt);
+    this.crouching = crouchKey || this.slideT > 0 || this.world.lowCeiling(this.pos, CFG.player.standH); // under the slide you stay down until you are out
     const targetEye = this.sitting ? 0.8 : this.crouching ? CFG.player.crouchEye : CFG.player.eye;
     this.invuln = Math.max(0, this.invuln - dt);
     if (this.sitting) this.sitUpdate(dt);
     this.eye += (targetEye - this.eye) * Math.min(1, dt * 10);
-    const run = (k['ShiftLeft'] || k['ShiftRight']) && !this.crouching;
+    const runKey = !!(k['ShiftLeft'] || k['ShiftRight']), run = runKey && !this.crouching;
     if (this.wet > 0) { this.wet -= dt; if (this.wet <= 0) { this.wet = 0; this.game.ui.wet(false); } }
     const speed = (this.crouching ? (this.badge && this.badge.crouchFull ? CFG.player.walk : CFG.player.crouchSpeed) : run ? CFG.player.run : CFG.player.walk) * (this.game.hasBuff('speed') ? CFG.items.speedMul : 1) * (this.wet > 0 ? TOILET.wetSpeed : 1) * (1 + (this.badge ? this.badge.speed : 0));
     this.badgeTick(dt);
@@ -60,7 +63,17 @@ export class Player {
     if (k['KeyA'] || k['ArrowLeft']) mx -= 1; if (k['KeyD'] || k['ArrowRight']) mx += 1;
     if (tm && (tm.x || tm.z)) { mx += tm.x; mz += tm.z; }
     const moving = (mx || mz) && !this.sitting && !LM;
-    if (moving) {
+    // 滑壘：跑著（鍵盤按住 Shift，觸控把搖桿推到底）的時候按下蹲，就朝正在跑的方向低姿勢滑出去
+    if (crouchEdge && moving && this.slideT <= 0 && this.slideCd <= 0 && (runKey || (tm && Math.hypot(tm.x, tm.z) > 0.85))) {
+      const l0 = Math.hypot(mx, mz), sin0 = Math.sin(this.yaw), cos0 = Math.cos(this.yaw), ax = mx / l0, az = mz / l0;
+      this.slideDir = { x: -sin0 * -az + cos0 * ax, z: -cos0 * -az + -sin0 * ax }; this.slideT = CFG.slide.time; this.slideCd = CFG.slide.cd; this.crouching = true; Audio.slide();
+    }
+    if (this.slideT > 0 && !this.sitting && !LM) { // sliding: the direction is locked, the speed bleeds off toward a crouch walk
+      const f = this.slideT / CFG.slide.time, sp = (CFG.player.crouchSpeed + (CFG.slide.speed - CFG.player.crouchSpeed) * f) * (this.wet > 0 ? TOILET.wetSpeed : 1); this.slideT -= dt;
+      const before = this.pos.clone(); this.world.walk(this.pos, this.slideDir.x * sp * dt, this.slideDir.z * sp * dt, CFG.player.radius, CFG.player.crouchH);
+      if (this.pos.distanceTo(before) < sp * dt * 0.3) this.slideT = 0; // ran into something
+    }
+    else if (moving) {
       const l = Math.hypot(mx, mz); if (l > 1 || !tm) { mx /= l; mz /= l; } // the stick may walk slowly, keys never do
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
       // forward is -z in camera space rotated by yaw
@@ -71,6 +84,7 @@ export class Player {
     this.camera.position.set(this.pos.x, this.pos.y + this.eye + (moving ? Math.sin(this.bob) * 0.025 : 0), this.pos.z);
     this.camera.rotation.set(0, 0, 0, 'YXZ'); this.camera.rotation.order = 'YXZ'; this.camera.rotation.y = this.yaw; this.camera.rotation.x = this.pitch;
     if (LM && LM.cart.shake > 0) this.camera.rotation.z = Math.sin(performance.now() / 25) * 0.035 * LM.cart.shake; // the cart just hit something
+    if (this.slideT > 0) this.camera.rotation.z = 0.07 * Math.min(1, this.slideT / 0.25); // leaning into the slide
     // gun animation
     this.fireCd -= dt; this.hurtCd -= dt;
     this.recoil = Math.max(0, this.recoil - dt * 6);
@@ -156,6 +170,17 @@ export class Player {
     if (gun && Audio[gun.sfx]) Audio[gun.sfx](); else Audio.pew();
     if (this.game.monitor && this.game.isHost) this.game.monitor.noticeShot();
     this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve);
+  }
+  // 丟板擦：往準心方向拋一塊，落地或打到人就炸開一團粉筆灰（同學看不到人、躲起來；自己站進去也會看不清）
+  throwEraser() {
+    const g = this.game; if (this.sitting || g.state !== 'playing' || this.eraserCd > 0 || g.lunch) return;
+    if (this.erasers <= 0) { g.ui.message('板擦丟完了', '每清一波會補一塊', 1.2); return; }
+    this.erasers--; this.eraserCd = CFG.eraser.cd; g.ui.eraser(this.erasers);
+    const view = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion), dir = view.clone(); dir.y += CFG.eraser.lift; dir.normalize();
+    const from = this.camera.position.clone().addScaledVector(view, 0.4); from.y -= 0.1;
+    if (g.isHost) g.throwEraser('host', from, dir);
+    else if (g.transport) g.transport.send(JSON.stringify({ t: 'eraser', p: [+from.x.toFixed(2), +from.y.toFixed(2), +from.z.toFixed(2)], d: [+dir.x.toFixed(3), +dir.y.toFixed(3), +dir.z.toFixed(3)] }));
+    Audio.chalkThrow();
   }
   reload() {
     if (this.reloading > 0 || this.ammo >= this.magSize()) return;

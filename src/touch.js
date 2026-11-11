@@ -17,6 +17,7 @@ export class TouchControls {
       <button class="tc-btn" id="tc-fire" type="button">射擊</button>
       <button class="tc-btn" id="tc-reload" type="button">重裝</button>
       <button class="tc-btn" id="tc-crouch" type="button">蹲</button>
+      <button class="tc-btn" id="tc-eraser" type="button">板擦</button>
       <button class="tc-btn" id="tc-revive" type="button">救！</button>
       <button class="tc-btn" id="tc-pause" type="button">Ⅱ</button>
       <button class="tc-btn" id="tc-gyro" type="button">陀螺儀</button>
@@ -29,6 +30,7 @@ export class TouchControls {
     hold('tc-fire', () => { this.firing = true; g.player.firing = true; g.player.tryFire(); }, () => { this.firing = false; g.player.firing = false; });
     hold('tc-reload', () => g.player.reload());
     hold('tc-crouch', () => { this.crouch = !this.crouch; $('tc-crouch').classList.toggle('held', this.crouch); });
+    hold('tc-eraser', () => g.player.throwEraser());
     hold('tc-revive', () => g.tryRevive());
     hold('tc-pause', () => g.pause());
     hold('tc-full', () => g.enterFullscreen(true));

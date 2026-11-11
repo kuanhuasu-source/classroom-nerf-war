@@ -315,6 +315,7 @@ export class Game {
       const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
       if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.cf !== undefined) r.cartIn = { f: m.cf, t: m.ct || 0 }; if (m.hn && m.hn !== r.hornSeq) { r.hornSeq = m.hn; if (this.lunchMode) this.lunchMode.horn(slot); } if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
       else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (m.vy) d.volley = slot + m.vy; const held = GUNS[(this.buffs[slot] || {}).id]; if (held && m.g === held.id) this.armDart(d, held); if (this.monitor) this.monitor.noticeShot(r); }
+      else if (m.t === 'eraser') { if (!r.sitting) this.throwEraser(slot, new THREE.Vector3(...m.p), new THREE.Vector3(...m.d)); }
       else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = this.baseHp(r) + r.up.maxHpBonus + this.badgeHp(r.badge); r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
       else if (m.t === 'revive') {
         if (r.sitting) return; const t = this.reviveNear(r.pos, r);
@@ -346,7 +347,7 @@ export class Game {
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
     this.ui.infinite = this.siege; this.ui.timer(this.toilet ? this.toiletTime() : this.lunch ? LUNCH.time : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.lunch ? '搶菜' : this.siege ? '惡霸' : '同學'); this.ui.waveLabelText(this.toilet ? '罐子' : this.lunch ? '角色' : '波次'); this.ui.wet(false); this.ui.soup(null);
     if (this.lunch) { this.lunchMode = new LunchMode(this); this.message('抬午餐囉！', '推車手：W/S 推煞、A/D 轉彎、F 喇叭。射手：擋住探頭的同學', 4); }
-    this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.buff(null);
+    this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.buff(null); this.ui.eraser(this.lunch ? null : this.player.erasers);
     if (this.lockSupported && !this.touch) this.requestLock(); else if (this.touch) this.enterFullscreen();
     Audio.bellOut();
     this.clock.getDelta();
@@ -414,6 +415,7 @@ export class Game {
       if (this.state !== 'playing') return;
       this.player.keys[e.code] = true;
       if (e.code === 'KeyR') this.player.reload();
+      if (e.code === 'KeyG') this.player.throwEraser();
       if (e.code === 'KeyE') this.tryRevive();
       if (e.code === 'KeyF' && this.lunch) this.horn();
       if (e.code === 'KeyN') { this.showNet = !this.showNet; if (!this.showNet) this.ui.net(''); }
@@ -511,7 +513,7 @@ export class Game {
     if (this.coop) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
-    this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false);
+    this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.eraser(this.lunch ? null : this.player.erasers);
     if (this.lockSupported && !this.touch) this.requestLock(); else if (this.touch) this.enterFullscreen();
     Audio.bellOut();
     this.ui.timer(this.toilet ? this.toiletTime() : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.siege ? '惡霸' : '同學'); this.ui.waveLabelText(this.toilet ? '罐子' : '波次'); this.ui.wet(false);
@@ -890,6 +892,8 @@ export class Game {
     const rx = Math.max(d.x - d.w / 2 - pos.x, 0, pos.x - (d.x + d.w / 2)), rz = Math.max(d.z - d.d / 2 - pos.z, 0, pos.z - (d.z + d.d / 2));
     return Math.hypot(rx, rz) < CFG.milk.reach;
   }
+  // a player's eraser on its way: bursts into chalk dust where it lands (or on the first kid it reaches)
+  throwEraser(who, from, dir) { const d = this.darts.fire(from, dir, CFG.eraser.speed, 'player', 'eraser'); d.who = who; return d; }
   // a dart from a borrowed gun: harder hit, flies through people, short range or flat flight
   armDart(d, gun) { if (!d || !gun) return d; if (gun.pellets) d.cap = 3; if (gun.dmg) d.dmg = gun.dmg; if (gun.pierce) d.pierce = gun.pierce; if (gun.life) d.life = gun.life; if (gun.g !== undefined) d.g = gun.g; return d; }
   addScore(n, who = this.lastShooter || 'host') { const b = this.buffs[who]; if (b && b.id === 'double') n *= 2; this.score += n; this.ui.score(this.score); }
@@ -1049,6 +1053,7 @@ export class Game {
             this.message('這波清光了！', heal ? `+500，回 ${heal} ♥` : '+500', 1.8); this.storyHint('clear');
             for (const pl of this.players()) { const h = heal + (pl.badge && pl.badge.grad ? 1 : 0); if (h && !pl.sitting) { pl.hp = Math.min(pl.maxHp, pl.hp + h); if (pl === this.player) this.ui.hp(pl.hp, pl.maxHp); } } // 畢業生代表套裝：每波多回 1
             if (this.player.hp < this.player.maxHp) this.spawnMilk();
+            if (this.player.erasers < CFG.eraser.max) { this.player.erasers++; this.ui.eraser(this.player.erasers); } this.netEvent({ t: 'eraserPlus' }); // 每清一波補一塊板擦
             this.offerTimer = 1.6; this.waveTimer = 6.5; // time to breathe: scavenge darts, drink milk, pick an upgrade
           }
         }
@@ -1078,6 +1083,10 @@ export class Game {
       if (this.lunch && d.owner !== 'player' && this.lunchMode.hitPot(p)) return true;
       if (this.toilet && d.owner === 'player') { // 搶廁所：打破罐子；全部破了就贏
         for (let i = 0; i < this.world.cans.length; i++) { const c = this.world.cans[i]; if (!c.alive) continue; const dx = p.x - c.x, dz = p.z - c.z; if (dx * dx + dz * dz < TOILET.canRadius * TOILET.canRadius && Math.abs(p.y - c.y) < 0.26) { this.breakCan(i, d.who || 'host'); return true; } }
+      }
+      if (d.owner === 'player' && d.kind === 'eraser') { // a thrown eraser: dust on the first kid it reaches, otherwise where it lands (the Break above)
+        for (const s of this.students) { if (!s.alive) continue; const dx = p.x - s.group.position.x, dz = p.z - s.group.position.z; if (dx * dx + dz * dz < 0.2 && p.y > s.group.position.y && p.y < s.group.position.y + 1.4 * s.group.scale.y) { this.dustBurst(p.clone()); return true; } }
+        return false;
       }
       if (d.owner === 'player') {
         for (const s of this.students) {

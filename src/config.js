@@ -6,6 +6,8 @@ import * as THREE from 'three';
 export const CFG = {
   room: { w: 12, d: 9, h: 3.2 },
   player: { eye: 1.25, crouchEye: 0.62, radius: 0.28, walk: 3.2, run: 5.0, crouchSpeed: 1.7, hp: 5, standH: 1.45, crouchH: 0.85 }, // standH / crouchH: headroom needed under the slide
+  // 新動作：滑壘（跑步中按蹲：0.6 秒低姿勢往前衝，1.6 秒後才能再滑）；丟板擦（G：一團粉筆灰擋住同學的視線，每局兩塊、每清一波補一塊、最多三塊）
+  slide: { time: 0.6, speed: 10, cd: 1.6 }, eraser: { start: 2, max: 3, speed: 9.5, lift: 0.28, cd: 0.8 },
   gun: { restCap: 90, mag: 15, reloadEmpty: 1.3, reloadPartial: 0.85, speed: 32, gravity: 6, fireInterval: 0.18, reserveStart: 90, reserveMax: 150, autoReloadDelay: 0.35, pickupRadius: 1.4, floorLife: 40, dropOnKnockout: 8 },
   choco: { heal: 3, ammo: 20 },
   // touch (phone / tablet) help: a magnet near targets, bigger hit circles for that player's darts, enemies a little kinder, one more heart. Per player, never advertised.

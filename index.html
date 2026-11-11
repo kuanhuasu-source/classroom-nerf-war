@@ -159,7 +159,8 @@ body.touch #hud-ammo small kbd { display: none; }
 #tc-fire { right: calc(22px + env(safe-area-inset-right, 0px)); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); width: 96px; height: 96px; font-size: 22px; }
 #tc-reload { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(108px + env(safe-area-inset-bottom, 0px)); }
 #tc-crouch { right: calc(37px + env(safe-area-inset-right, 0px)); bottom: calc(204px + env(safe-area-inset-bottom, 0px)); }
-#tc-revive { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(190px + env(safe-area-inset-bottom, 0px)); display: none; background: #cfe6ff; }
+#tc-eraser { right: calc(128px + env(safe-area-inset-right, 0px)); bottom: calc(184px + env(safe-area-inset-bottom, 0px)); font-size: 15px; } #tc-eraser.dim { opacity: .45; }
+#tc-revive { right: calc(204px + env(safe-area-inset-right, 0px)); bottom: calc(108px + env(safe-area-inset-bottom, 0px)); display: none; background: #cfe6ff; }
 #tc-pause { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); width: 44px; height: 44px; font-size: 18px; }
 #tc-full { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(128px + env(safe-area-inset-right, 0px)); width: 44px; height: 44px; font-size: 20px; }
 #tc-gyro { top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(62px + env(safe-area-inset-right, 0px)); width: 58px; height: 44px; font-size: 13px; border-radius: 22px; }
@@ -242,7 +243,8 @@ body.touch #hud-buddy { bottom: auto; top: calc(100px + env(safe-area-inset-top,
   #tc-fire { width: 64px; height: 64px; font-size: 15px; right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
   #tc-reload { right: calc(86px + env(safe-area-inset-right, 0px)); bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
   #tc-crouch { right: calc(23px + env(safe-area-inset-right, 0px)); bottom: calc(130px + env(safe-area-inset-bottom, 0px)); }
-  #tc-revive { right: calc(86px + env(safe-area-inset-right, 0px)); bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
+  #tc-eraser { right: calc(86px + env(safe-area-inset-right, 0px)); bottom: calc(116px + env(safe-area-inset-bottom, 0px)); font-size: 11px; }
+  #tc-revive { right: calc(140px + env(safe-area-inset-right, 0px)); bottom: calc(62px + env(safe-area-inset-bottom, 0px)); }
   #tc-pause { width: 34px; height: 34px; font-size: 14px; top: calc(6px + env(safe-area-inset-top, 0px)); right: calc(6px + env(safe-area-inset-right, 0px)); }
   #tc-full { width: 34px; height: 34px; font-size: 16px; top: calc(6px + env(safe-area-inset-top, 0px)); right: calc(98px + env(safe-area-inset-right, 0px)); }
   #tc-gyro { width: 46px; height: 34px; font-size: 11px; top: calc(6px + env(safe-area-inset-top, 0px)); right: calc(46px + env(safe-area-inset-right, 0px)); }
@@ -270,7 +272,9 @@ body.touch #hud-up { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
 body.touch #tc-fire { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
 body.touch #tc-reload { bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
 body.touch #tc-crouch { bottom: calc(126px + env(safe-area-inset-bottom, 0px)); }
-body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); }
+body.touch #tc-eraser { bottom: calc(106px + env(safe-area-inset-bottom, 0px)); }
+body.touch #hud-ammo small #eraser-wrap { display: none; }
+body.touch #tc-revive { bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
 @media (max-height: 520px) {
   body.touch #hud-hp { top: calc(44px + env(safe-area-inset-top, 0px)); left: max(8px, env(safe-area-inset-left, 0px)); }
   body.touch #hud-ammo { top: calc(44px + env(safe-area-inset-top, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); }
@@ -279,7 +283,8 @@ body.touch #tc-revive { bottom: calc(112px + env(safe-area-inset-bottom, 0px)); 
   body.touch #tc-fire { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
   body.touch #tc-reload { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
   body.touch #tc-crouch { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
-  body.touch #tc-revive { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  body.touch #tc-eraser { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+  body.touch #tc-revive { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
   #upgrade.compact { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
 }
 
@@ -364,7 +369,7 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
   <div class="sticker" id="hud-up"></div>
   <div class="sticker" id="hud-net"></div>
   <div class="sticker" id="hud-hp">♥♥♥♥♥</div>
-  <div class="sticker" id="hud-ammo"><span id="ammo">15</span><span class="reserve">/ <span id="reserve">30</span></span><small>彈匣 / 備用　<kbd style="font-size:12px">R</kbd> 重裝</small><div class="bar"><i id="reload-bar"></i></div></div>
+  <div class="sticker" id="hud-ammo"><span id="ammo">15</span><span class="reserve">/ <span id="reserve">30</span></span><small>彈匣 / 備用　<kbd style="font-size:12px">R</kbd> 重裝<span id="eraser-wrap">　板擦 ×<span id="eraser-n">2</span> <kbd style="font-size:12px">G</kbd></span></small><div class="bar"><i id="reload-bar"></i></div></div>
   <div id="crosshair"><div class="dot"></div></div>
   <div id="hitmark">✕</div>
   <div id="msg"></div>
@@ -447,7 +452,8 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
       <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>移動</dd>
       <dt><kbd>滑鼠</kbd></dt><dd>轉視角，左鍵發射泡棉彈</dd>
       <dt><kbd>Ctrl</kbd></dt><dd>蹲下，整個人藏在課桌後面</dd>
-      <dt><kbd>Shift</kbd></dt><dd>跑步</dd>
+      <dt><kbd>Shift</kbd></dt><dd>跑步；跑步中按蹲是滑壘，低姿勢滑一小段</dd>
+      <dt><kbd>G</kbd></dt><dd>丟板擦：一團粉筆灰擋住同學的視線（每局兩塊，每清一波補一塊）</dd>
       <dt><kbd>R</kbd></dt><dd>重裝彈匣（15 發，打空會自動換）</dd>
       <dt>地上的泡棉彈</dt><dd>走過去就撿起來當備用彈，同學和老師射的也能撿</dd>
       <dt><kbd>E</kbd></dt><dd>連線模式：走到罰坐的隊友旁邊救他</dd>
