@@ -31,15 +31,15 @@ export function initLobby(game) {
     $('menu-note').textContent = '建議用電腦與滑鼠遊玩。連線模式（最多四人）在網站版才有。'; }
 
   // mode: the classroom war or the gate siege; remembered per browser
-  const MODE_NOTES = { class: '下課大戰：六波同學加一位老師，撿地上的泡棉彈補充。', siege: '守校門：惡霸軍團從校門、圍牆、水溝蓋闖進操場，守住十波。彈藥無限，第 3、6、9 波有頭目，第 10 波是會瘋狂丟板擦的大王。', toilet: '搶廁所：下課想上廁所，清潔隊卻在打掃。只有三滴血、90 秒；被水潑到慢 5 秒，通馬桶一連 3 到 5 支。射破最裡面小便斗架上和洗手台上的 8 個罐子就贏。', lunch: '午餐大作戰（兩人限定）：一個推餐車去蒸飯室裝菜再推回六年二班，一個站在車上擋搶菜的同學；裝完菜換手。回程撞到、被打中、被搶都會灑湯，回班時剩多少湯決定星星。開房間找剛好一位隊友再開始。' };
+  const MODE_NOTES = { class: '下課大戰：六波同學加一位老師，撿地上的泡棉彈補充。', siege: '守校門：惡霸軍團從校門、圍牆、水溝蓋闖進操場，守住十波。彈藥無限，第 3、6、9 波有頭目，第 10 波是會瘋狂丟板擦的大王。', toilet: '搶廁所：下課想上廁所，清潔隊卻在打掃。只有三滴血、90 秒；被水潑到慢 5 秒，通馬桶一連 3 到 5 支。射破最裡面小便斗架上和洗手台上的 8 個罐子就贏。', endless: '無限下課：沒有終點，一波比一波難，每 5 波來一位老師，打到被罰坐為止。撐過 5、10、15、20、25 波各拿一枚徽章，第 30 波是只有這裡拿得到的「校長的獎狀」。教室可以自己選。', lunch: '午餐大作戰（兩人限定）：一個推餐車去蒸飯室裝菜再推回六年二班，一個站在車上擋搶菜的同學；裝完菜換手。回程撞到、被打中、被搶都會灑湯，回班時剩多少湯決定星星。開房間找剛好一位隊友再開始。' };
   let mode = 'class'; try { const saved = localStorage.getItem('cnw-mode'); if (saved && MODE_NOTES[saved]) mode = saved; } catch (e) { /* ignore */ }
-  const MODE_NAMES = { class: '下課大戰', siege: '守校門', toilet: '搶廁所', lunch: '午餐大作戰' }, LEVEL_NAMES = { easy: '小考', normal: '段考', hard: '模擬考', exam: '會考' };
+  const MODE_NAMES = { class: '下課大戰', siege: '守校門', toilet: '搶廁所', lunch: '午餐大作戰', endless: '無限下課' }, LEVEL_NAMES = { easy: '小考', normal: '段考', hard: '模擬考', exam: '會考' };
   // 首頁只留一行摘要：玩法・難度・教室；要改再展開「自由玩設定」
-  const freeSummary = () => { const mapBtn = document.querySelector(`.map-btn[data-map="${game.mapChoice || 'random'}"]`), txt = `${MODE_NAMES[game.mode] || ''}・${LEVEL_NAMES[game.level] || ''}${game.mode === 'class' && mapBtn ? '・' + mapBtn.textContent : ''}`; $('free-summary').textContent = txt; $('free-note').textContent = txt; };
+  const freeSummary = () => { const mapBtn = document.querySelector(`.map-btn[data-map="${game.mapChoice || 'random'}"]`), freeMap = game.mode === 'class' || game.mode === 'endless', txt = `${MODE_NAMES[game.mode] || ''}${game.mode === 'endless' ? '' : '・' + (LEVEL_NAMES[game.level] || '')}${freeMap && mapBtn ? '・' + mapBtn.textContent : ''}`; $('free-summary').textContent = txt; $('free-note').textContent = txt; };
   // 其他玩法等故事星期一過關（或已經打過三局的老玩家）才開：第一次來的人先走故事
   const modesOpen = () => Progress.stars('mon') > 0 || (Records.load().totals.games || 0) >= 3;
   const refreshLocks = () => { const open = modesOpen(); document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const lock = !open && b.dataset.mode !== 'class'; b.classList.toggle('locked', lock); b.textContent = (lock ? '🔒 ' : '') + MODE_NAMES[b.dataset.mode]; }); if (!open && mode !== 'class') applyMode('class'); };
-  const applyMode = (m) => { if (m !== 'class' && !modesOpen()) { $('mode-note').textContent = '先過故事模式的星期一，就能玩這個。'; return; } mode = m; game.mode = m; document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('mode-note').textContent = MODE_NOTES[m]; $('map-row').classList.toggle('dim', m !== 'class'); $('map-note').textContent = m === 'siege' ? '守校門固定在操場' : m === 'toilet' ? '搶廁所固定在廁所' : m === 'lunch' ? '午餐大作戰固定在走廊' : ''; try { localStorage.setItem('cnw-mode', m); } catch (e) { /* ignore */ } freeSummary(); };
+  const applyMode = (m) => { if (m !== 'class' && !modesOpen()) { $('mode-note').textContent = '先過故事模式的星期一，就能玩這個。'; return; } mode = m; game.mode = m; document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { const on = b.dataset.mode === m; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }); $('mode-note').textContent = MODE_NOTES[m]; $('map-row').classList.toggle('dim', m !== 'class' && m !== 'endless'); $('difficulty-row').classList.toggle('dim', m === 'endless'); $('map-note').textContent = m === 'siege' ? '守校門固定在操場' : m === 'toilet' ? '搶廁所固定在廁所' : m === 'lunch' ? '午餐大作戰固定在走廊' : ''; try { localStorage.setItem('cnw-mode', m); } catch (e) { /* ignore */ } freeSummary(); };
   document.querySelectorAll('.seg-btn[data-mode]').forEach(b => { b.setAttribute('role', 'radio'); b.addEventListener('click', () => applyMode(b.dataset.mode)); });
   applyMode(mode);
   // difficulty: remembered per browser
@@ -93,7 +93,7 @@ export function initLobby(game) {
     $('album').hidden = false; $('album-text').textContent = STORY.epilogue.join('\n');
     const list = $('album-list'); list.innerHTML = '';
     for (const ch of STORY.chapters) { if (ch.hidden && !Progress.stars(ch.id)) continue; const row = document.createElement('div'); row.className = 'chapter'; row.innerHTML = '<span class="day"></span><span class="w"></span><span class="t"></span><span class="stars"></span>'; row.querySelector('.day').textContent = ch.day; row.querySelector('.w').textContent = ch.weather; row.querySelector('.t').textContent = ch.end; row.querySelector('.stars').textContent = starText(Progress.stars(ch.id)); list.appendChild(row); }
-    $('album-stickers').textContent = `貼紙 ${Ach.count()} / 26${Progress.allThree() ? '　全章三星！' : ''}`;
+    $('album-stickers').textContent = `貼紙 ${Ach.count()} / 29${Progress.allThree() ? '　全章三星！' : ''}`;
   };
   $('btn-story').addEventListener('click', () => { leave(); renderStory(); $('story').hidden = false; });
   $('btn-story-close').addEventListener('click', () => { $('story').hidden = true; refreshLocks(); });
@@ -163,7 +163,7 @@ export function initLobby(game) {
   $('btn-copy').addEventListener('click', () => { const code = $('lobby-code').textContent; try { navigator.clipboard.writeText(code).catch(() => {}); } catch (e) { /* ignore */ } status('房號 ' + code + ' 複製好了。'); });
   $('btn-begin').addEventListener('click', () => game.start());
   $('btn-lobby-back').addEventListener('click', leave);
-  const toMenu = () => { game.toMenu(); leave(); refreshLocks(); storyNote(); };
+  const toMenu = () => { game.toMenu(); leave(); refreshLocks(); storyNote(); badgeNote(); $('id-rank').textContent = Records.title() ? `　稱號：${Records.title()}` : ''; };
   $('btn-menu-pause').addEventListener('click', toMenu);
   $('btn-menu-over').addEventListener('click', toMenu);
 
@@ -173,7 +173,7 @@ export function initLobby(game) {
 
   // ---------- 個人 ID：第一次來先用暫時的 ID 直接玩，打完一局結算畫面請他取名（資料跟著搬）；首頁可以切換 ----------
   const gate = $('idgate'), idIn = $('id-input');
-  const refreshAll = () => { game.loadProfile(); nameEl.value = game.profile.name === Profile.id ? '' : game.profile.name; applyLook(LOOKS.some(l => l.id === game.profile.look) ? game.profile.look : LOOKS[0].id, false); storyNote(); badgeNote(); refreshLocks(); $('id-show').textContent = Profile.id; $('id-temp').hidden = !Profile.temp; $('btn-id-switch').textContent = Profile.temp ? '取個自己的 ID' : '切換'; const n = $('id-nudge'); if (n && !Profile.temp) n.hidden = true; };
+  const refreshAll = () => { game.loadProfile(); nameEl.value = game.profile.name === Profile.id ? '' : game.profile.name; applyLook(LOOKS.some(l => l.id === game.profile.look) ? game.profile.look : LOOKS[0].id, false); storyNote(); badgeNote(); refreshLocks(); $('id-rank').textContent = Records.title() ? `　稱號：${Records.title()}` : ''; $('id-show').textContent = Profile.id; $('id-temp').hidden = !Profile.temp; $('btn-id-switch').textContent = Profile.temp ? '取個自己的 ID' : '切換'; const n = $('id-nudge'); if (n && !Profile.temp) n.hidden = true; };
   const showGate = (switching) => {
     gate.hidden = false; idIn.value = switching && !Profile.temp ? Profile.id : ''; $('btn-id-cancel').hidden = !switching; $('id-error').textContent = '';
     $('id-title').textContent = Profile.temp ? '取一個自己的 ID' : '你的個人 ID'; $('id-sub').textContent = Profile.temp ? `現在用的是暫時的 ${Profile.id}。取個自己的（最多 10 碼英文或數字），剛剛打的紀錄會一起搬過去。` : '最多 10 碼英文或數字，不分大小寫。紀錄、星星、貼紙、徽章都會跟著這個 ID。';

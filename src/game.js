@@ -16,7 +16,7 @@ import { RemotePlayer } from './remoteplayer.js';
 import { serializeSnapshot, applySnapshot, applyDelta } from './net/snapshot.js';
 import { NetStats } from './net/stats.js';
 import { PaperFigure } from './paperfigure.js';
-import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE, TOILET, LUNCH, MP } from './config.js';
+import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE, TOILET, LUNCH, MP, ENDLESS } from './config.js';
 import { LunchMode } from './lunch.js';
 import { STORY, Progress, starsFor, starText } from './story.js';
 import { Ach } from './achievements.js';
@@ -69,6 +69,7 @@ export class Game {
     this.mode = 'class'; this.siege = false; this.bossDue = 0; this.bossDef = null; // 守校門模式
     this.toilet = false; this.timeLeft = 0; this.refillT = 0; // 搶廁所模式
     this.lunch = false; this.lunchMode = null; // 午餐大作戰
+    this.endless = false; this.endlessCleared = 0; this.endlessBossDone = {}; this.endlessLoot = []; // 無限下課
     this.story = null; this.damageTaken = 0; this.wetCount = 0; this.dustHit = false; this.hornHits = 0; this.bumps = 0; this.roundDone = false; this.clockT = 0; this.hintsShown = {}; // 故事與成就用的計數
     this.forceTeacher = new URLSearchParams(location.search).get('teacher'); // debug: ?teacher=pe
     this.clock = new THREE.Clock(); this.hasLock = false; this.lockSupported = 'requestPointerLock' in document.body;
@@ -134,7 +135,7 @@ export class Game {
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
     this.fullSnapNext = true;
     if (this.state === 'playing' || this.state === 'paused') {
-      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0 }), from);
+      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, endless: this.endless ? 1 : 0 }), from);
       this.transport.send(JSON.stringify({ t: 'restore', taken: r.up.taken, ammo: r.ammo, res: r.reserve, hp: r.hp, buff: this.buffs[slot] || null }), from);
       if (!this.stats[slot]) this.stats[slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 };
       this.message(back ? `${r.skin.name}回來了！` : `${r.skin.name}中途加入了！`, '', 1.5);
@@ -158,7 +159,8 @@ export class Game {
     if (this.world.layout.id === id && !!this.world.siege === !!siege) return;
     this.world.dispose(); this.world = new World(this.scene, id, { siege }); this.darts.world = this.world;
   }
-  waveLabel(n) { return this.lunch ? (this.lunchMode ? (this.lunchMode.roleOf(this.mySlot) === 'driver' ? '推車手' : '射手') : '—') : this.toilet ? `剩 ${this.cansLeft()}` : this.siege ? `${n}/${SIEGE.waves.length}` : n; }
+  endlessTier(w = this.wave) { for (const [from, name] of ENDLESS.tiers) if (w >= from) return name; return '小考'; }
+  waveLabel(n) { return this.endless ? `${n}・${this.endlessTier(n)}` : this.lunch ? (this.lunchMode ? (this.lunchMode.roleOf(this.mySlot) === 'driver' ? '推車手' : '射手') : '—') : this.toilet ? `剩 ${this.cansLeft()}` : this.siege ? `${n}/${SIEGE.waves.length}` : n; }
   cansLeft() { return (this.world.cans || []).filter(c => c.alive).length; }
   // ---------- 午餐大作戰 ----------
   // ---------- 故事模式與成就 ----------
@@ -176,7 +178,9 @@ export class Game {
   // end of any round: stickers and story stars
   afterRound(win) {
     if (this.roundDone) return; this.roundDone = true;
-    this.drawnBadge = Badges.roll(this.level, win, this.coop || !this.isHost); this.drawnDropped = this.drawnBadge ? Badges.add(this.drawnBadge) : null; if (this.drawnBadge) Records.bump('badges');
+    // 無限下課沒有輸贏：稀有度看撐過幾波（10 波以下當小考、20 以下段考、30 以下模擬考、之後會考），撐過 3 波就一定抽
+    const rollLevel = this.endless ? (this.endlessCleared >= 30 ? 'exam' : this.endlessCleared >= 20 ? 'hard' : this.endlessCleared >= 10 ? 'normal' : 'easy') : this.level, rollWin = this.endless ? this.endlessCleared >= 3 : win;
+    this.drawnBadge = Badges.roll(rollLevel, rollWin, this.coop || !this.isHost); this.drawnDropped = this.drawnBadge ? Badges.add(this.drawnBadge) : null; if (this.drawnBadge) Records.bump('badges');
     if (!this.isHost) { if (win) { Ach.unlock('first_win'); if (this.damageTaken === 0) Ach.unlock('untouched'); } return; }
     const p = this.player, acc = p.shots ? p.hits / p.shots : 0, plain = !this.siege && !this.toilet && !this.lunch;
     if (this.kills) Ach.add('kills', this.kills);
@@ -201,10 +205,10 @@ export class Game {
   }
   // 個人紀錄：這一局的摘要（連線時用主機算的那份個人數字），存進去並記下打破了哪些最佳成績
   roundSummary(win) {
-    const p = this.player, mode = this.lunch ? 'lunch' : this.toilet ? 'toilet' : this.siege ? 'siege' : 'class';
+    const p = this.player, mode = this.endless ? 'endless' : this.lunch ? 'lunch' : this.toilet ? 'toilet' : this.siege ? 'siege' : 'class';
     let kills = this.kills, hits = p.hits, shots = p.shots;
     const st = this.isHost ? this.coopStats() : (this.pendingOver && this.pendingOver.stats), mine = st && st.find(s => s.slot === this.mySlot); if (mine) { kills = mine.kills; hits = mine.hits; shots = mine.shots; }
-    return { ts: Date.now(), mode, level: this.level, map: this.world.layout.id, win, score: this.score, wave: this.wave, shots, hits, acc: shots ? hits / shots : 0, kills, teachers: this.teachers.filter(t => t.defeated).length, time: Math.round(this.playT || 0),
+    return { ts: Date.now(), mode, level: this.endless ? 'any' : this.level, map: this.world.layout.id, win, score: this.score, wave: this.endless ? this.endlessCleared : this.wave, shots, hits, acc: shots ? hits / shots : 0, kills, teachers: this.teachers.filter(t => t.defeated).length, time: Math.round(this.playT || 0),
       timeLeft: this.toilet ? Math.round(this.timeLeft) : undefined, soup: this.lunch && this.lunchMode ? Math.round(this.lunchMode.cart.soup) : undefined, stars: this.story ? this.storyStars : (this.lunch && this.lunchMode ? this.lunchMode.stars() : 0), story: this.story ? this.story.title : '' };
   }
   recordRound(win) { if (this.recorded) return; this.recorded = true; this.recordBroken = Records.record(this.roundSummary(win)); if (this.recordBroken.length) Ach.unlock('record'); }
@@ -241,9 +245,10 @@ export class Game {
   // which of the three special kids (if any) the next one through the door is: none in the first wave, a few more as the waves go on, at most two of a kind at once
   rollKind() {
     if (!this.isHost || this.toilet || this.lunch || this.state !== 'playing') return null;
-    if (this.wave < (this.level === 'easy' ? 3 : 2)) return null;
+    const easy = !this.endless && this.level === 'easy';
+    if (this.wave < (easy ? 3 : 2)) return null;
     // each kind: about a tenth of the kids mid-game, so roughly one in three is special
-    const p = (this.level === 'easy' ? 0.05 : 0.08) + Math.min(0.04, this.wave * 0.006), n = (k) => this.students.filter(s => s.alive && s.kind === k).length, r = Math.random();
+    const p = (easy ? 0.05 : 0.08) + Math.min(0.04, this.wave * 0.006), n = (k) => this.students.filter(s => s.alive && s.kind === k).length, r = Math.random();
     if (r < p) return n('shield') < 2 ? 'shield' : null;
     if (r < 2 * p) return !this.siege && n('rusher') < 2 ? 'rusher' : null; // 守校門彈藥無限，搶子彈沒意義
     if (r < 3 * p) return n('lobber') < 2 ? 'lobber' : null;
@@ -325,7 +330,7 @@ export class Game {
     } else {
       if (m.t === 'welcome') { this.mySlot = m.slot; this.darts.localWho = m.slot; if (this.onWelcome) this.onWelcome(m); }
       else if (m.t === 'full') { if (this.onFull) this.onFull(); }
-      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; this.lunch = !!m.lunch; if (m.level) this.setDifficulty(m.level); if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
+      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; this.lunch = !!m.lunch; this.endless = !!m.endless; if (m.level) this.setDifficulty(m.level); if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
       else if (m.t === 'restore') { // back after a disconnect: the host remembers what we had
         const p = this.player;
         for (const [id, n] of Object.entries(m.taken || {})) for (let i = 0; i < n; i++) { const u = takeUpgrade(p.up, id); if (u) { p.up.refill = 0; p.up.healFull = false; p.applyUpgrade(u); } }
@@ -355,7 +360,7 @@ export class Game {
   badgeHp(fx) { return fx ? (this.toilet ? Math.min(1, fx.hp) : fx.hp) : 0; }
   markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.badge = Badges.effects(); p.maxHp = this.baseHp(p) + p.up.maxHpBonus + this.badgeHp(p.badge); p.hp = p.maxHp; this.badgeHud(); }
   guestReset() {
-    this.playT = 0; this.recordBroken = []; this.recorded = false; this.pendingOver = null;
+    this.playT = 0; this.recordBroken = []; this.recorded = false; this.pendingOver = null; this.endlessCleared = 0; this.endlessLoot = [];
     if (this.lunchMode) { this.lunchMode.dispose(); this.lunchMode = null; }
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.dustT = 0; this.ui.dust(0, this.renderer.domElement);
@@ -501,8 +506,8 @@ export class Game {
     Audio.init(); Audio.resume();
     if (this.story && this.remoteList().length) { this.ui.message('故事模式是單人的', '先離開房間再開始', 3); const el = $('lobby-status'); if (el) el.textContent = '故事模式是單人的，先離開房間。'; return; }
     if (this.mode === 'lunch' && this.remoteList().length !== 1 && !this.story) { const n = this.remoteList().length; const txt = n ? '午餐大作戰只能兩個人：房間裡只留一位隊友' : '午餐大作戰要兩個人：開房間找一位隊友再按開始'; this.ui.message(txt, '', 3); const el = $('lobby-status'); if (el) el.textContent = txt; const mn = $('menu-note'); if (mn && !n) mn.textContent = txt; return; }
-    this.siege = this.mode === 'siege'; this.toilet = this.mode === 'toilet'; this.lunch = this.mode === 'lunch'; this.ui.infinite = this.siege;
-    this.diff = this.siege ? { ...DIFFICULTY[this.level], waves: SIEGE.waves } : DIFFICULTY[this.level]; // 守校門：十波，其餘照難度
+    this.siege = this.mode === 'siege'; this.toilet = this.mode === 'toilet'; this.lunch = this.mode === 'lunch'; this.endless = this.mode === 'endless' && !this.story; this.ui.infinite = this.siege;
+    this.diff = this.endless ? ENDLESS.diff(1) : this.siege ? { ...DIFFICULTY[this.level], waves: SIEGE.waves } : DIFFICULTY[this.level]; // 守校門：十波；無限下課：每波重算；其餘照難度
     if (this.story && this.story.waves) this.diff = { ...this.diff, waves: this.story.waves }; // 故事：章節自己的波次表
     this.setLayout(this.lunch ? 'corridor' : this.toilet ? 'toilet' : this.siege ? 'yard' : this.pickLayout(), this.siege);
     this.reset(); this.markTouchPlayer();
@@ -510,7 +515,7 @@ export class Game {
     for (const pl of this.players()) if (pl.badge && pl.badge.grad) this.applyBuff({ id: 'speed', name: '畢業生代表', effect: '開場衝刺', dur: 10 }, pl === this.player ? this.mySlot : pl.slot); // 套裝：開場 10 秒加速 this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
-    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, level: this.level }));
+    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, endless: this.endless ? 1 : 0, level: this.level }));
     if (this.coop) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
@@ -529,13 +534,14 @@ export class Game {
       this.ui.left(this.students.length); this.nextWavePending = false;
     } else {
       if (this.siege) this.message('隔壁學校的惡霸軍團來了！', `守住${this.world.layout.name}十波，彈藥無限`, 3.5);
+      else if (this.endless) this.message('無限下課！', '一波比一波難，看你能撐過幾波。每 5 波有老師，撐過有徽章', 4);
       else this.message('叮咚叮咚，下課了！', `${this.world.layout.name}變成戰場`, 3.5);
       this.waveTimer = 4.6; this.nextWavePending = true;
     }
     this.clock.getDelta();
   }
   reset() {
-    this.playT = 0; this.recordBroken = []; this.recorded = false;
+    this.playT = 0; this.recordBroken = []; this.recorded = false; this.endlessCleared = 0; this.endlessBossDone = {}; this.endlessLoot = [];
     this.students.forEach(s => s.dispose()); this.students = [];
     this.teachers.forEach(t => t.dispose()); this.teachers = []; this.slowT = 0; this.bellT = 0; this.bell = null;
     this.darts.clear(); this.world.desks.forEach(d => { d.occupant = null; d.covered = null; });
@@ -587,8 +593,9 @@ export class Game {
     this.wave++; this.ui.wave(this.waveLabel(this.wave)); Audio.wave();
     for (const pl of this.players()) if (pl.badge && pl.badge.bellRush) { const who = pl === this.player ? this.mySlot : pl.slot, cur = this.buffs[who]; if (!cur || cur.id === 'speed') this.applyBuff({ id: 'speed', name: '遲到大王', effect: '鐘響衝刺', dur: pl.badge.bellRush }, who); } // 套裝：每波開始加速
     for (const p of this.props) if (p.kind === 'bucket' && p.state !== 'up') { p.reset(); this.netEvent({ t: 'prop', id: p.id, st: 'up' }); }
-    const ex = this.extraPlayers(), base = this.diff.waves[this.wave - 1], count = Math.round(base * (1 + MP.count * ex));
-    this.difficultySpread = Math.max(this.diff.minSpread * (1 - MP.spread * ex), (this.diff.spread - (this.wave - 1) * 0.1) * (1 - MP.spread * ex));
+    if (this.endless) this.diff = ENDLESS.diff(this.wave); // 無限下課：這一波的難度現算
+    const ex = this.extraPlayers(), base = this.endless ? ENDLESS.size(this.wave) : this.diff.waves[this.wave - 1], count = Math.round(base * (1 + MP.count * ex));
+    this.difficultySpread = this.endless ? ENDLESS.spreadAt(this.wave) * (1 - MP.spread * ex) : Math.max(this.diff.minSpread * (1 - MP.spread * ex), (this.diff.spread - (this.wave - 1) * 0.1) * (1 - MP.spread * ex));
     const doors = this.world.layout.doors;
     if (this.siege) { // 守校門：三種入口輪流；第 3、6、9、10 波的頭目晚幾秒跟進
       const bossId = (this.story && this.story.bosses ? this.story.bosses : SIEGE.bosses)[this.wave];
@@ -596,7 +603,7 @@ export class Game {
       this.spawnQueue = Array.from({ length: count }, (_, i) => this.siegeEntry(i, i === count - 1));
       if (bossId) { this.bossDef = GANG.find(x => x.id === bossId); this.bossDue = SIEGE.bossDelay; }
     } else {
-      this.message(`第 ${this.wave} 波`, `${count} 位同學衝進來了`, 2);
+      this.message(this.endless ? `第 ${this.wave} 波・${this.endlessTier()}` : `第 ${this.wave} 波`, `${count} 位同學衝進來了`, 2);
       this.spawnQueue = Array.from({ length: count }, (_, i) => ({ door: doors[i % 2], leader: i === count - 1 }));
     }
     this.spawnTimer = 0.4; this.waveCount = count;
@@ -614,6 +621,27 @@ export class Game {
       Audio.drink(); this.netEvent({ t: 'sfx', n: 'drink' }); this.message('趁老師還沒進來偷吃巧克力！', `回血 +${CFG.choco.heal}、補彈 +${CFG.choco.ammo}`, 3);
     }, 1500);
   }
+  // ---------- 無限下課 ----------
+  // which teacher closes every fifth wave: a subject teacher, the dean, the principal, the committee (only where there is a stage), the gang king, then round again
+  endlessBoss() {
+    const n = Math.round(this.wave / ENDLESS.bossEvery), k = (n - 1) % 5;
+    if (k === 0) return pick(TEACHERS); if (k === 1) return BOSSES.find(b => b.id === 'dean'); if (k === 2) return BOSSES.find(b => b.id === 'principal');
+    if (k === 3) return this.world.layout.stage ? COMMITTEE : GANG.find(b => b.id === 'gang2');
+    return GANG.find(b => b.id === 'king');
+  }
+  endlessBossDown() {
+    this.addScore(CFG.score.win); this.bossPhase = false; this.endlessBossDone[this.wave] = true; for (const t of this.teachers) t.goneT = 3.5;
+    this.nextWavePending = true; this.waveTimer = 6; this.message(`${this.bossName}投降了！`, '可是下課還沒結束……', 3); Audio.win(); this.netEvent({ t: 'sfx', n: 'win' });
+  }
+  // a wave was cleared: everyone gets their own milestone reward
+  endlessMilestone(w) { this.grantEndless(w); this.netEvent({ t: 'milestone', w }); }
+  grantEndless(w) {
+    const tier = ENDLESS.rewards[w] !== undefined ? ENDLESS.rewards[w] : (w >= 40 && w % 10 === 0 ? 3 : null); let b = null;
+    if (w === ENDLESS.awardAt) b = Badges.load().list.some(x => x.type === 'award') ? Badges.reward(3) : Badges.make(3, 'endless', 'award');
+    else if (tier !== null) b = Badges.reward(tier);
+    if (b) { Badges.add(b); Records.bump('badges'); this.endlessLoot.push(Badges.label(b)); this.ui.message(`撐過第 ${w} 波！`, `拿到徽章：${Badges.label(b)}`, 3.5); Audio.item(); }
+    if (ENDLESS.stickers[w]) Ach.unlock(ENDLESS.stickers[w]);
+  }
   get teacher() { return this.teachers[0] || null; } // the first boss; the committee has three
   // the committee only comes to the hall (it needs a stage), and only for hard rounds or a pair
   pickBoss() {
@@ -623,7 +651,7 @@ export class Game {
     return stageOk && Math.random() < 0.5 ? COMMITTEE : pick(BOSSES);
   }
   spawnTeacher(def = this.pickBoss()) {
-    const door = this.world.layout.doors[0], extra = Math.min(3, this.extraPlayers()) * MP.bossWp;
+    const door = this.world.layout.doors[0], extra = Math.min(3, this.extraPlayers()) * MP.bossWp + (this.endless ? Math.floor(this.wave / 10) : 0);
     if (def.members) { // the whole committee walks in together
       def.members.forEach((m, i) => this.teachers.push(new Teacher(this, { x: door.x, z: door.z + (i - 1) * 0.7 }, { def: m, wpHp: def.wpHp + extra })));
       this.bellT = CFG.committee.bellEvery;
@@ -648,6 +676,7 @@ export class Game {
       t.goneT = 3.5; // leaves the field after the collapse (game time, see step)
       return;
     }
+    if (!alive.length && this.endless) return this.endlessBossDown();
     if (!alive.length) return this.onWin();
     for (const o of alive) { o.overtime = true; if (alive.length === 1) o.alone = true; }
     this.message(`${t.def.name}崩潰了！`, alive.length === 1 ? `只剩${alive[0].def.name}，要下台追人了` : '剩下的監考官加班，更快更兇', 2.5);
@@ -687,11 +716,12 @@ export class Game {
   openOffer() {
     if (!this.isHost) return;
     const mine = offerFor(this.player.up);
-    const picked = { host: false };
+    if (!mine.length && !this.remoteList().some(r => offerFor(r.up).length)) return; // every upgrade is taken (a long 無限下課 run)
+    const picked = { host: !mine.length };
     for (const r of this.remoteList()) { picked[r.slot] = false; this.sendTo(r.slot, { t: 'offer', ids: offerFor(r.up) }); }
     if (this.coop) { // no pause with partners: a compact panel and 10 seconds to decide, play goes on
       this.offer = { picked, t: COOP.offerSeconds, live: true };
-      this.ui.offer(mine.map(upgradeById), (id) => this.pickUpgrade(id), COOP.offerSeconds);
+      if (mine.length) this.ui.offer(mine.map(upgradeById), (id) => this.pickUpgrade(id), COOP.offerSeconds);
       return;
     }
     this.offer = { picked: { host: false, guest: true }, t: 14 };
@@ -858,7 +888,7 @@ export class Game {
   updateMilk(dt) {
     if (this.state === 'playing') {
       this.milkTimer -= dt;
-      if (this.milkTimer <= 0) { this.milkTimer = CFG.milk.interval; if (this.player.hp < this.player.maxHp) this.spawnMilk(); }
+      if (this.milkTimer <= 0) { this.milkTimer = this.endless ? ENDLESS.milkInterval : CFG.milk.interval; if (this.player.hp < this.player.maxHp) this.spawnMilk(); }
       if (this.bossPhase && this.teachers.some(t => !t.defeated)) { this.supplyTimer -= dt; if (this.supplyTimer <= 0) { this.supplyTimer = CFG.supply.interval; if (!this.milks.some(m => m.kind === 'ammo')) this.spawnSupply(); } }
       else { // during the waves a pencil case shows up nearby whenever someone is running low
         this.lowTimer = (this.lowTimer || 0) - dt;
@@ -948,6 +978,12 @@ export class Game {
       if (document.pointerLockElement) document.exitPointerLock();
       this.showOver(title, sub, false); return;
     }
+    if (this.endless) { // 無限下課：沒有輸贏，報撐過幾波
+      const n = this.endlessCleared, title = `無限下課：撐過 ${n} 波`, sub = n >= 30 ? '校長親自頒獎狀給你。' : n >= 20 ? '全校都知道六年二班有個加課狂。' : n >= 10 ? '老師說：你是真的不想下課。' : n >= 5 ? '撐過第一位老師了，下次再多幾波。' : '才剛開始就被罰坐，再來一次。';
+      this.overInfo = { win: n >= 10 ? 1 : 0, title, sub, stats: this.coopStats(), ew: n }; this.netEvent({ t: 'over', ...this.overInfo });
+      if (document.pointerLockElement) document.exitPointerLock();
+      this.showOver(title, sub, n >= 10); return;
+    }
     this.overInfo = { win: 0, title: this.coop ? '全部的人都被罰坐了' : '你被罰坐了！', sub: '沒有人能來救，全班歡呼。', stats: this.coopStats() }; this.netEvent({ t: 'over', ...this.overInfo });
     if (document.pointerLockElement) document.exitPointerLock();
     if (this.coop) this.showOver('全部的人都被罰坐了', '沒有人能來救，全班歡呼。', false);
@@ -994,7 +1030,8 @@ export class Game {
     const nb = $('btn-next'); if (nb) { nb.hidden = !(this.story && win); if (this.story && win) { const nx = Progress.next(this.story); nb.textContent = this.story.finale || this.story.hidden || !nx ? '翻開畢業紀念冊' : '下一章'; } }
     const ag = $('btn-again'); if (ag) ag.textContent = this.story ? (win ? '再玩這章' : '再試一次') : '再來一局';
     if (this.story && win) $('over-sub').textContent = `${this.story.end}　${starText(this.storyStars)}`;
-    $('st-score').textContent = this.score; $('st-wave').textContent = this.lunch && this.lunchMode ? '★'.repeat(this.lunchMode.stars()) || '—' : this.bossPhase ? '老師' : this.waveLabel(this.wave);
+    if (this.endless && this.endlessLoot.length) $('over-sub').textContent = `${sub}　這次拿到：${this.endlessLoot.join('、')}`;
+    $('st-score').textContent = this.score; $('st-wave').textContent = this.endless ? `撐過 ${this.endlessCleared} 波` : this.lunch && this.lunchMode ? '★'.repeat(this.lunchMode.stars()) || '—' : this.bossPhase ? '老師' : this.waveLabel(this.wave);
     const st = remoteStats || this.coopStats();
     if (st) {
       const acc = (h, s) => s ? Math.min(100, Math.round(h / s * 100)) + '%' : '0%';
@@ -1055,20 +1092,21 @@ export class Game {
         if (alive === 0 && !bossUp) {
           if (this.nextWavePending) {
             this.waveTimer -= dt;
-            if (this.waveTimer <= 0) { this.nextWavePending = false; if (this.wave >= this.diff.waves.length) { if (this.siege) this.onWin(); else this.startBoss(); } else this.startWave(); }
+            if (this.waveTimer <= 0) { this.nextWavePending = false; if (this.endless) { if (this.wave > 0 && this.wave % ENDLESS.bossEvery === 0 && !this.endlessBossDone[this.wave]) this.startBoss(); else this.startWave(); } else if (this.wave >= this.diff.waves.length) { if (this.siege) this.onWin(); else this.startBoss(); } else this.startWave(); }
           } else if (this.siege && this.wave >= this.diff.waves.length) { this.onWin(); }
           else if (this.wave > 0) {
             this.addScore(CFG.score.wave); this.nextWavePending = true; this.waveTimer = 2.5;
             const heal = this.diff.healPerWave;
             this.message('這波清光了！', heal ? `+500，回 ${heal} ♥` : '+500', 1.8); this.storyHint('clear');
             for (const pl of this.players()) { const h = heal + (pl.badge && pl.badge.grad ? 1 : 0); if (h && !pl.sitting) { pl.hp = Math.min(pl.maxHp, pl.hp + h); if (pl === this.player) this.ui.hp(pl.hp, pl.maxHp); } } // 畢業生代表套裝：每波多回 1
-            if (this.player.hp < this.player.maxHp) this.spawnMilk();
+            if (this.endless) { this.endlessCleared = this.wave; this.endlessMilestone(this.wave); }
+            if (this.player.hp < this.player.maxHp && (!this.endless || this.wave % 3 === 0)) this.spawnMilk();
             if (this.player.erasers < CFG.eraser.max) { this.player.erasers++; this.ui.eraser(this.player.erasers); } this.netEvent({ t: 'eraserPlus' }); // 每清一波補一塊板擦
-            this.offerTimer = 1.6; this.waveTimer = 6.5; // time to breathe: scavenge darts, drink milk, pick an upgrade
+            this.offerTimer = this.endless && this.wave % ENDLESS.offerEvery ? 0 : 1.6; this.waveTimer = this.endless && this.wave % ENDLESS.offerEvery ? 4 : 6.5; // time to breathe: scavenge darts, drink milk, pick an upgrade
           }
         }
       } else if (this.bossPhase && !this.teachers.length) { // the teacher walks in a few seconds after the bell
-        this.bossTimer -= dt; if (this.bossTimer <= 0) this.spawnTeacher();
+        this.bossTimer -= dt; if (this.bossTimer <= 0) this.spawnTeacher(this.endless ? this.endlessBoss() : this.pickBoss());
       }
     }
     if (this.offerTimer > 0) { this.offerTimer -= dt; if (this.offerTimer <= 0) this.openOffer(); }

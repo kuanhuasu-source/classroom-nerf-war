@@ -205,7 +205,7 @@ body.touch #hud-buddy { bottom: auto; top: calc(100px + env(safe-area-inset-top,
 #ach-toast.on { transform: none; } #ach-toast span { font-size: 30px; } #ach-toast small { display: block; color: var(--pencil); font-size: 12px; } #ach-toast b { font-size: 18px; }
 #mode-row { margin: -6px 0 10px; gap: 10px; }
 #difficulty-row { margin: 0 0 10px; gap: 10px; }
-#map-row.dim .seg { opacity: .45; }
+#map-row.dim .seg, #difficulty-row.dim .seg { opacity: .45; }
 #map-row { margin: 0 0 10px; gap: 10px; }
 #profile-row { margin: 0 0 14px; gap: 10px; align-items: center; }
 #my-name { font: inherit; font-size: 17px; width: 7.5em; padding: 3px 10px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; color: var(--ink); box-shadow: 2px 2px 0 var(--ink); }
@@ -388,7 +388,7 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
       <section class="menu-left">
         <h1>課桌<span>大戰</span></h1>
         <p class="sub">下課十分鐘，六年二班變成戰場。躲在課桌後面，用泡棉槍把全班打到罰坐，再面對回來的老師。</p>
-        <p class="note" id="id-line">ID <b id="id-show"></b><span id="id-temp" hidden>（暫時的）</span> <button class="mini" id="btn-id-switch" type="button">切換</button></p>
+        <p class="note" id="id-line">ID <b id="id-show"></b><span id="id-temp" hidden>（暫時的）</span><span id="id-rank"></span> <button class="mini" id="btn-id-switch" type="button">切換</button></p>
         <div id="menu-buttons">
           <button class="btn big" id="btn-story" type="button">故事模式：Jason 的畢業週<small id="story-note"></small></button>
           <button class="btn blue big" id="btn-start">自由玩<small id="free-note"></small></button>
@@ -420,6 +420,7 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
         <button type="button" class="seg-btn" data-mode="siege">守校門</button>
         <button type="button" class="seg-btn" data-mode="toilet">搶廁所</button>
         <button type="button" class="seg-btn" data-mode="lunch">午餐大作戰</button>
+        <button type="button" class="seg-btn" data-mode="endless">無限下課</button>
       </div>
       <span class="note" id="mode-note">下課大戰：六波同學加一位老師。</span>
     </div>

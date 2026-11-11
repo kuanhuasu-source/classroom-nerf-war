@@ -3,7 +3,7 @@ import { $ } from './ui.js';
 
 // 個人紀錄：每局結束存一筆摘要，更新最佳成績（每種玩法、每個難度一格，下課大戰再分地圖）、累計，和最近 20 局。
 // 全部掛在目前的個人 ID 底下（Profile.key('records')）。
-const MODE = { class: '下課大戰', siege: '守校門', toilet: '搶廁所', lunch: '午餐大作戰' };
+const MODE = { class: '下課大戰', siege: '守校門', toilet: '搶廁所', lunch: '午餐大作戰', endless: '無限下課' };
 const LEVEL = { easy: '小考', normal: '段考', hard: '模擬考', exam: '會考' };
 const MAP = { classroom: '六年二班', lab: '自然教室', music: '音樂教室', hall: '活動中心', yard: '操場', toilet: '廁所', corridor: '走廊' };
 // what counts as a best in each mode: max or min, and whether only wins count
@@ -11,6 +11,7 @@ const BESTS = {
   class: [{ f: 'score', label: '最高分', dir: 'max' }, { f: 'acc', label: '最高命中率', dir: 'max', fmt: v => Math.round(v * 100) + '%' }, { f: 'time', label: '最快下課', dir: 'min', win: true, fmt: v => secs(v) }],
   siege: [{ f: 'wave', label: '守到第幾波', dir: 'max', fmt: v => `第 ${v} 波` }, { f: 'time', label: '最快守完', dir: 'min', win: true, fmt: v => secs(v) }, { f: 'score', label: '最高分', dir: 'max' }],
   toilet: [{ f: 'timeLeft', label: '剩最多秒', dir: 'max', win: true, fmt: v => `${v} 秒` }, { f: 'score', label: '最高分', dir: 'max' }],
+  endless: [{ f: 'wave', label: '撐過幾波', dir: 'max', fmt: v => `${v} 波` }, { f: 'score', label: '最高分', dir: 'max' }],
   lunch: [{ f: 'soup', label: '湯剩最多', dir: 'max', win: true, fmt: v => `${v}%` }, { f: 'time', label: '最快回來', dir: 'min', win: true, fmt: v => secs(v) }, { f: 'kills', label: '打倒最多搶菜的', dir: 'max' }],
 };
 const secs = (v) => { const m = Math.floor(v / 60), s = Math.round(v % 60); return m ? `${m} 分 ${s} 秒` : `${s} 秒`; };
@@ -20,8 +21,11 @@ export const Records = {
   data: null,
   load() { if (this.data) return this.data; this.data = Profile.get('records') || {}; this.data.totals = this.data.totals || {}; this.data.best = this.data.best || {}; this.data.recent = this.data.recent || []; return this.data; },
   save() { Profile.put('records', this.data); },
-  keyFor(r) { return r.mode === 'class' ? `class:${r.level}:${r.map}` : `${r.mode}:${r.level}`; },
-  label(key) { const [mode, level, map] = key.split(':'); return `${MODE[mode] || mode}・${LEVEL[level] || level}${map ? '・' + (MAP[map] || map) : ''}`; },
+  keyFor(r) { return r.mode === 'class' ? `class:${r.level}:${r.map}` : r.mode === 'endless' ? `endless:any:${r.map}` : `${r.mode}:${r.level}`; },
+  label(key) { const [mode, level, map] = key.split(':'); return `${MODE[mode] || mode}${level === 'any' ? '' : '・' + (LEVEL[level] || level)}${map ? '・' + (MAP[map] || map) : ''}`; },
+  // 無限下課撐過最多幾波（所有地圖）與對應的稱號
+  endlessBest() { const b = this.load().best; return Object.keys(b).filter(k => k.startsWith('endless:')).reduce((m, k) => Math.max(m, b[k].wave || 0), 0); },
+  title() { const n = this.endlessBest(); for (const [w, t] of [[30, '永遠的六年二班'], [20, '加課狂'], [10, '不想下課']]) if (n >= w) return t; return ''; },
   bump(name, n = 1) { const t = this.load().totals; t[name] = (t[name] || 0) + n; this.save(); },
   // store one finished round; returns the bests it broke (empty on the very first round of that key, that is not a record, that is a baseline)
   record(r) {
@@ -43,7 +47,7 @@ export const Records = {
   // the records page
   render(profile, extra = {}) {
     const d = this.load(), t = d.totals;
-    $('rec-id').textContent = Profile.id; $('rec-name').textContent = profile.name && profile.name !== Profile.id ? profile.name : '';
+    $('rec-id').textContent = Profile.id; $('rec-name').textContent = [profile.name && profile.name !== Profile.id ? profile.name : '', this.title() ? `稱號：${this.title()}` : ''].filter(Boolean).join('　');
     const totals = [['局數', t.games || 0], ['贏', t.wins || 0], ['勝率', t.games ? Math.round((t.wins || 0) / t.games * 100) + '%' : '—'], ['射擊', t.shots || 0], ['命中率', t.shots ? Math.round(this.accuracy() * 100) + '%' : '—'],
       ['打倒同學', t.kills || 0], ['打倒老師', t.teachers || 0], ['遊玩時間', secs(t.time || 0)], ['抽到徽章', t.badges || 0], ['合成', t.merges || 0], ['貼紙', extra.stickers || 0], ['故事星星', extra.stars || 0]];
     const tb = $('rec-totals'); tb.innerHTML = ''; for (const [k, v] of totals) { const el = document.createElement('div'); el.innerHTML = '<b></b><span></span>'; el.querySelector('b').textContent = v; el.querySelector('span').textContent = k; tb.appendChild(el); }
@@ -60,7 +64,8 @@ export const Records = {
     for (const r of d.recent) {
       const el = document.createElement('div'); el.className = 'rec-row' + (r.win ? ' win' : '');
       const dt = new Date(r.ts), when = `${dt.getMonth() + 1}/${dt.getDate()} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
-      const what = r.story ? `故事・${r.story}` : `${MODE[r.mode] || r.mode}・${LEVEL[r.level] || r.level}${r.mode === 'class' && r.map ? '・' + (MAP[r.map] || r.map) : ''}`;
+      const what = r.story ? `故事・${r.story}` : r.mode === 'endless' ? `無限下課・${MAP[r.map] || r.map}` : `${MODE[r.mode] || r.mode}・${LEVEL[r.level] || r.level}${r.mode === 'class' && r.map ? '・' + (MAP[r.map] || r.map) : ''}`;
+      if (r.mode === 'endless') { el.innerHTML = '<b></b><span></span>'; el.querySelector('b').textContent = `${when}　${what}`; el.querySelector('span').textContent = `撐過 ${r.wave} 波　${r.score} 分`; rb.appendChild(el); continue; }
       const res = r.win ? (r.stars ? '★'.repeat(r.stars) : '贏') : '輸';
       const detail = r.mode === 'lunch' && r.soup !== undefined ? `湯 ${r.soup}%` : r.mode === 'toilet' && r.timeLeft !== undefined ? `剩 ${r.timeLeft} 秒` : r.mode === 'siege' ? `第 ${r.wave} 波` : `${r.score} 分`;
       el.innerHTML = '<b></b><span></span>'; el.querySelector('b').textContent = `${when}　${what}`; el.querySelector('span').textContent = `${res}　${detail}`; rb.appendChild(el);
@@ -76,7 +81,7 @@ export const Records = {
     x.fillStyle = '#2b2622'; font(46, true); x.textAlign = 'left'; x.fillText('課桌大戰', 56, 100); x.fillStyle = '#f28a1a'; x.fillText(round ? '這一局' : '成績卡', 250, 100);
     if (kidCanvas) x.drawImage(kidCanvas, W - 180, 60, 110, 220);
     x.fillStyle = '#2b2622'; font(30, true); x.fillText(`ID ${Profile.id}`, 56, 160); font(22, false); x.fillStyle = '#5d564f';
-    if (profile.name && profile.name !== Profile.id) x.fillText(profile.name, 56, 195);
+    { const sub = [profile.name && profile.name !== Profile.id ? profile.name : '', this.title()].filter(Boolean).join('・'); if (sub) x.fillText(sub, 56, 195); }
     const dt = new Date(); x.fillText(`${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()}`, 56, 228);
     const d = this.load(), t = d.totals; let y = 300;
     const line = (k, v) => { font(24, false); x.fillStyle = '#5d564f'; x.fillText(k, 56, y); font(28, true); x.fillStyle = '#2f6fd1'; x.textAlign = 'right'; x.fillText(String(v), W - 56, y); x.textAlign = 'left'; y += 44; };

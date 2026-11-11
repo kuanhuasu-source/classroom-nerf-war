@@ -21,6 +21,8 @@ export const TYPES = {
   multi: { icon: '🏐', name: '連發', legend: '躲避球王阿豪', line: '一次丟三顆球，裁判吹哨都來不及', tiers: ['洩氣的躲避球', '阿豪的護腕', '校隊球衣 7 號', '躲避球王阿豪'], desc: (v) => `每次射擊多 ${v} 顆（不耗彈，散得開；同一個人一次只算一下）`, vals: [null, null, 1, 2] },
   regenHp: { icon: '🩹', name: '慢慢回血', legend: '保健室王阿姨', line: '「擦一下就好了」，然後真的好了', tiers: ['OK 繃', '冰敷袋', '王阿姨的聽診器', '保健室王阿姨'], desc: (v) => `每 ${v} 秒回 1 顆心`, vals: [null, 40, 30, 20] },
   regenAmmo: { icon: '🧹', name: '自動補彈', legend: '工友阿勇伯', line: '掃地掃到的泡棉彈都放在警衛室窗台', tiers: ['掃把頭', '畚箕', '阿勇伯的鑰匙串', '工友阿勇伯'], desc: (v) => `每 ${v} 秒備用彈 +5`, vals: [null, 25, 18, 12] },
+  // 只有無限下課第 30 波拿得到，平常抽不到、也合成不出來
+  award: { icon: '🏅', name: '獎狀', legend: '校長的獎狀', line: '撐過三十波的學生，本校創校以來第一位', tiers: [null, null, null, '校長的獎狀'], desc: () => '愛心上限 +1、移動速度 +5%', vals: [null, null, null, 1], exclusive: true },
   speed: { icon: '👟', name: '快腿', legend: '飛毛腿張飛翔', line: '校運會百米紀錄 13 秒 1，至今沒人破', tiers: ['磨平的釘鞋', '接力棒', '飛翔的號碼布', '飛毛腿張飛翔'], desc: (v) => `移動速度 +${Math.round(v * 100)}%`, vals: [null, 0.05, 0.08, 0.12] },
 };
 // 套裝：戴著的徽章裡同時有這兩種類型就啟動（不限稀有度）；畢業生代表要三種不同、全部稀有以上。加成固定、不隨稀有度變強。
@@ -58,13 +60,19 @@ export const Badges = {
     if (dup) b.rerolledFrom = dup;
     return b;
   },
+  // a milestone reward of a given tier (無限下課): a legend is never a second copy; with all seven owned it is a 稀有 instead
+  reward(tier, src = 'endless') {
+    let b = this.make(tier, src);
+    if (tier === 3) { const free = Object.keys(TYPES).filter(k => !TYPES[k].exclusive && !this.ownsLegend(k)); b = free.length ? this.make(3, src, free[Math.floor(Math.random() * free.length)]) : this.make(2, src); }
+    return b;
+  },
   ownsLegend(type) { return this.load().list.some(b => b.type === type && b.tier === 3); },
   // three 稀有 of a type whose 傳說 is already owned cannot merge (there can only be one of each)
   canMerge(b) { return b.tier < 3 && !(b.tier === 2 && this.ownsLegend(b.type)); },
   // type given: that type (merging keeps the type); otherwise a random type that comes in this tier
   make(tier, src = '', type = null) {
-    const pool = Object.keys(TYPES).filter(k => TYPES[k].vals[tier] !== null);
-    if (!type || !pool.includes(type)) type = pool[Math.floor(Math.random() * pool.length)];
+    const all = Object.keys(TYPES).filter(k => TYPES[k].vals[tier] !== null), pool = all.filter(k => !TYPES[k].exclusive);
+    if (!type || !all.includes(type)) type = pool[Math.floor(Math.random() * pool.length)];
     const T = TYPES[type];
     const val = T.vals[tier];
     const d = this.load(); return { id: 'b' + (++d.seq) + Math.random().toString(36).slice(2, 5), type, tier, val, ts: Date.now(), src };
@@ -97,7 +105,7 @@ export const Badges = {
   // the sum of what the worn badges give, plus the set bonuses
   effects(list = this.worn()) {
     const e = { hp: 0, mag: 0, rate: 0, multi: 0, regenHp: 0, regenAmmo: 0, speed: 0, sets: [] };
-    for (const b of list) { if (b.type === 'regenHp' || b.type === 'regenAmmo') e[b.type] = e[b.type] ? Math.min(e[b.type], b.val) : b.val; else e[b.type] += b.val; }
+    for (const b of list) { if (b.type === 'award') { e.hp += 1; e.speed += 0.05; } else if (b.type === 'regenHp' || b.type === 'regenAmmo') e[b.type] = e[b.type] ? Math.min(e[b.type], b.val) : b.val; else e[b.type] += b.val; }
     e.multi = Math.min(2, e.multi);
     for (const s of this.activeSets(list)) { e.sets.push(s.id); Object.assign(e, s.fx); }
     return e;

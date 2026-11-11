@@ -67,6 +67,16 @@ export const DIFFICULTY = {
 };
 // 守校門：隔壁學校的惡霸軍團從校門、圍牆、水溝蓋闖進操場，守十波。彈藥無限；第 3、6、9 波有頭目，第 10 波是大王。
 export const SIEGE = { waves: [4, 5, 6, 7, 8, 9, 10, 11, 12, 10], bosses: { 3: 'gang1', 6: 'gang2', 9: 'gang3', 10: 'king' }, hpBonus: 1, entries: ['gate', 'drain', 'wall', 'gate'], bossDelay: 2.5 };
+// 無限下課：沒有終點，一波比一波難，打到被罰坐為止。每 5 波一個老師關；撐過 5／10／15／20／25 波各拿一枚徽章，30 波拿專屬的「校長的獎狀」，之後每 10 波一枚傳說。
+export const ENDLESS = {
+  size: (w) => Math.min(14, 2 + w), bossEvery: 5, offerEvery: 2, milkInterval: 30,
+  tiers: [[31, '會考'], [21, '模擬考'], [11, '段考'], [1, '小考']],
+  rewards: { 5: 1, 10: 2, 15: 2, 20: 3, 25: 3 }, awardAt: 30, stickers: { 10: 'endless10', 20: 'endless20', 30: 'endless30' },
+  titles: [[30, '永遠的六年二班'], [20, '加課狂'], [10, '不想下課']],
+  diff: (w) => ({ label: '無限', waves: [], enemyHp: Math.min(4, 2 + Math.floor(w / 10)), spread: 1, minSpread: 0.5, maxShooters: Math.min(5, 1 + Math.floor((w - 1) / 6)), spawnGap: Math.max(0.5, 1.8 * Math.pow(0.97, w)), healPerWave: 0, burstMax: w >= 12 ? 3 : 2,
+    teacherMul: Math.max(0.8, 1.4 - w * 0.02), peekDelay: Math.max(0.4, 0.9 - w * 0.015), dartSpeed: Math.min(21, 12 + w * 0.3), firstShotMul: Math.max(1.2, 2.5 - w * 0.05), bossChance: 0, hideMul: Math.max(0.8, 1.5 - w * 0.02) }),
+  spreadAt: (w) => Math.max(0.55, 1.7 * Math.pow(0.98, w)),
+};
 // 搶廁所：下課要去廁所，清潔隊正在打掃。三滴血、倒數 90 秒；潑水中了慢 5 秒、通馬桶連發 3 到 5 支；射中小便斗裡的紅心就贏
 export const TOILET = { time: 90, hp: 3, crew: 5, minCrew: 4, refill: 6, wetSeconds: 5, wetSpeed: 0.5, plungerBurst: [3, 5], plungerGap: 0.25, waterChance: 0.4, waterSpeed: 13, canRadius: 0.2, timeBonus: 20 };
 // 午餐大作戰（兩人限定）：推車手推餐車去蒸飯室裝菜再推回來，車頂射手擋搶菜的同學。回程撞到、被打中、被搶都會灑湯。
