@@ -181,6 +181,7 @@ export class Darts {
     const p = d.mesh.position, n = Math.max(1, Math.ceil(d.vel.length() * dt / 0.15)), sdt = dt / n;
     for (let k = 0; k < n; k++) {
       d.vel.y -= d.g * sdt; const prev = p.clone(); p.addScaledVector(d.vel, sdt); this.orient(d);
+      d.life -= sdt; if (d.life <= 0) { d.stuck = true; d.restTime = 0; return 'rest'; } // a short-range pellet drops where the host's copy will
       if (hitTest && hitTest(p)) return 'hit';
       const ground = this.world.heightAt(p.x, p.z);
       if (p.y < ground + 0.03) { if (p.y < ground - 0.25) p.copy(prev); else p.y = ground + 0.03; d.stuck = true; d.restTime = 0; return 'rest'; }

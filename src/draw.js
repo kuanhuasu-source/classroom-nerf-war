@@ -337,6 +337,14 @@ export const Draw = (() => {
       shape(ctx, [[30, 26], [98, 26], [98, 104], [30, 104]], '#ffffff', '#2b2622', 3);
       [44, 58, 72, 86].forEach(y => line(ctx, [[38, y], [90, y]], 'rgba(185,207,230,0.9)', 2, 1));
       ctx.fillStyle = '#d8432b'; ctx.font = 'bold 40px "Patrick Hand", sans-serif'; ctx.save(); ctx.translate(64, 78); ctx.rotate(-0.25); ctx.fillText('100', 0, 0); ctx.restore();
+    } else if (id === 'shotgun' || id === 'sniper' || id === 'rapid') {
+      const col = id === 'shotgun' ? '#2f9fd1' : id === 'sniper' ? '#8e44ad' : '#d8432b', long = id === 'sniper' ? 30 : 0, fat = id === 'shotgun' ? 8 : 0;
+      shape(ctx, [[30, 50], [88, 50], [88, 72], [30, 72]], col, '#2b2622', 3);                                   // body
+      shape(ctx, [[88, 54 - fat / 2], [104 + long * 0.4, 54 - fat / 2], [104 + long * 0.4, 66 + fat / 2], [88, 66 + fat / 2]], '#f4e27a', '#2b2622', 3); // barrel
+      shape(ctx, [[40, 72], [56, 72], [50, 100], [34, 98]], '#2b2622', '#2b2622', 2);                             // grip
+      if (id === 'rapid') for (const x of [44, 58, 72]) shape(ctx, ellipsePts(x, 42, 5, 5, 8), '#f28a1a', '#2b2622', 2);
+      if (id === 'shotgun') for (const [x, y] of [[112, 40], [116, 58], [112, 78]]) shape(ctx, ellipsePts(x, y, 4, 4, 8), '#6fb7ef', '#2b2622', 2);
+      ctx.fillStyle = '#2b2622'; ctx.font = 'bold 26px Iansui, "Noto Sans TC", sans-serif'; ctx.fillText(id === 'shotgun' ? '散' : id === 'sniper' ? '狙' : '連', 84, 102);
     } else if (id === 'infinite') {
       shape(ctx, ellipsePts(64, 70, 34, 36, 20), 'rgba(160,210,255,0.5)', '#2b2622', 3);
       shape(ctx, [[44, 30], [84, 30], [84, 42], [44, 42]], '#d8432b', '#2b2622', 3);

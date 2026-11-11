@@ -181,8 +181,8 @@ export class LunchKid extends PaperFigure {
     this.tick(dt, true); this.face(this.game.camera.position);
   }
   // a player's dart landed: true when this knocked the kid out
-  hit() {
-    this.hp--; this.flash = 0.15; this.game.addScore(CFG.score.hit); this.game.hitmark();
+  hit(dmg = 1) {
+    this.hp -= dmg; this.flash = 0.15; this.game.addScore(CFG.score.hit); this.game.hitmark();
     if (this.hp <= 0) { this.alive = false; this.setTex('out'); this.alert.visible = false; this.group.visible = true; this.group.scale.y = 0.6; this.fade(true); Audio.out(); this.game.addScore(CFG.score.out); if (this.tag) this.tag.visible = false; return true; }
     this.setTex('hurt'); this.state = 'hurt'; this.timer = 0.6; return false;
   }
@@ -275,8 +275,8 @@ export class LunchMode {
     if (g.players().every(p => p.sitting)) { if (!this.ai) return g.onLose(); if (!this.downSaid) { this.downSaid = true; this.buddySay(this.driver === 'ai' ? '撐住！我繼續推！' : '撐住！我來擋！'); } } else this.downSaid = false; // 小美在的話，倒下 6 秒再爬起來，不會直接輸
   }
   // a player's dart vs the kids
-  hitKid(p, who, volley) {
-    for (const k of this.kids) { if (!k.alive || !k.group.visible) continue; const dx = p.x - k.group.position.x, dz = p.z - k.group.position.z, h = 1.35 * k.group.scale.y; if (dx * dx + dz * dz < 0.36 * 0.36 * this.game.hitMul(who) && p.y > k.group.position.y && p.y < k.group.position.y + h) { if (volley && k.lastVolley === volley) return true; k.lastVolley = volley; this.game.lastShooter = who; if (k.hit()) { this.kills++; this.game.stat(who, 'kills'); } this.game.lastShooter = null; return true; } }
+  hitKid(p, who, volley, dmg = 1) {
+    for (const k of this.kids) { if (!k.alive || !k.group.visible) continue; const dx = p.x - k.group.position.x, dz = p.z - k.group.position.z, h = 1.35 * k.group.scale.y; if (dx * dx + dz * dz < 0.36 * 0.36 * this.game.hitMul(who) && p.y > k.group.position.y && p.y < k.group.position.y + h) { if (volley && k.lastVolley === volley) return true; k.lastVolley = volley; this.game.lastShooter = who; if (k.hit(dmg)) { this.kills++; this.game.stat(who, 'kills'); } this.game.lastShooter = null; return true; } }
     return false;
   }
   // an enemy dart vs the pot

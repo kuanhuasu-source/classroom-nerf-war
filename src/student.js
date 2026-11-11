@@ -176,9 +176,9 @@ export class Student extends PaperFigure {
     const d = this.game.darts.fire(from, dir, speed, 'enemy', kind); d.shooter = this;
     if (kind === 'water') Audio.boing(); else Audio.enemyPew();
   }
-  hit() {
+  hit(dmg = 1) {
     if (!this.alive) return false;
-    this.hp--; this.flash = 0.15; Audio.hitEnemy();
+    this.hp -= dmg; this.flash = 0.15; Audio.hitEnemy();
     this.game.addScore(CFG.score.hit); this.game.hitmark();
     if (this.hp <= 0) { this.knockOut(); return true; }
     this.setTex('hurt'); this.alert.visible = false;

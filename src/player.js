@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Ach } from './achievements.js';
-import { COOP, TOILET, CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, rand, pick, clamp } from './config.js';
+import { COOP, TOILET, CFG, GUNS, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { freshUp } from './upgrades.js';
 import { Draw } from './draw.js';
@@ -21,8 +21,8 @@ export class Player {
   buildGun() {
     const g = new THREE.Group(); const t = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: this.world.gradient });
     const ink = (m) => { m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), this.world.inkMat)); return m; };
-    const body = ink(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.34), t(0xf28a1a))); g.add(body);
-    const barrel = ink(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.16), t(0x2f6fd1))); barrel.position.set(0, 0.02, -0.25); g.add(barrel);
+    const body = ink(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.34), t(0xf28a1a))); g.add(body); this.gunBody = body;
+    const barrel = ink(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.16), t(0x2f6fd1))); barrel.position.set(0, 0.02, -0.25); g.add(barrel); this.gunBarrel = barrel;
     const handle = ink(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.07), t(0x2f6fd1))); handle.position.set(0, -0.11, 0.08); handle.rotation.x = 0.25; g.add(handle);
     const mag = ink(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.05), t(0xf4e27a))); mag.position.set(0, -0.1, -0.06); g.add(mag); this.magMesh = mag;
     const sight = ink(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.06), t(0xf4e27a))); sight.position.set(0, 0.075, -0.05); g.add(sight);
@@ -30,6 +30,13 @@ export class Player {
     g.position.set(0.28, -0.26, -0.5); g.rotation.y = -0.08;
     this.gun = g; this.gunBase = g.position.clone(); this.camera.add(g); this.recoil = 0; this.bob = 0;
   }
+  // the blaster in hand shows which borrowed gun is on: body colour, and a fat barrel (shotgun) or a long one (sniper)
+  gunLook(id) {
+    if (this.gunLookId === id) return; this.gunLookId = id; const gun = GUNS[id];
+    this.gunBody.material.color.setHex(gun ? gun.color : 0xf28a1a);
+    this.gunBarrel.scale.set(id === 'shotgun' ? 2.0 : 1, id === 'shotgun' ? 1.5 : 1, id === 'sniper' ? 2.4 : 1); this.gunBarrel.position.z = id === 'sniper' ? -0.36 : -0.25;
+  }
+  heldGun() { const b = this.game.myBuff; return (b && GUNS[b.id]) || null; }
   magSize() { return CFG.gun.mag + this.up.magBonus + (this.badge ? this.badge.mag : 0); }
   reserveCap() { return CFG.gun.reserveMax + this.up.reserveBonus; }
   eyePos() { return new THREE.Vector3(this.pos.x, this.pos.y + this.eye, this.pos.z); }
@@ -86,6 +93,7 @@ export class Player {
     // scavenge darts lying around
     const got = this.game.isHost ? this.game.darts.pickupNear(this.pos, CFG.gun.pickupRadius * this.up.pickupMul, this.reserveCap() - this.reserve) : 0;
     if (got > 0) { this.reserve += got; Ach.add('darts', got); Audio.pickup(); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); this.game.ui.pickFlash(); }
+    this.gunLook(this.heldGun() ? this.heldGun().id : null);
     if (this.firing && !this.sitting) this.tryFire();
   }
   // worn badges that tick: slow heal (host decides hp, so only the host's own player here) and ammo trickle (local)
@@ -121,8 +129,9 @@ export class Player {
       if (this.reserve <= 0) this.game.message('彈匣和備用彈都空了！', '去撿地上的泡棉彈', 1.4);
       return;
     }
-    if (!this.game.hasBuff('infinite') && !(this.up.recycle > 0 && Math.random() < this.up.recycle)) this.ammo--;
-    this.fireCd = CFG.gun.fireInterval * this.up.fireMul * (1 - (this.badge ? this.badge.rate : 0)); this.recoil = 1; this.shots++;
+    const gun = this.heldGun(); // a borrowed gun replaces the blaster's own rhythm while it lasts
+    if (!(gun && gun.free) && !(this.up.recycle > 0 && Math.random() < this.up.recycle)) this.ammo--;
+    this.fireCd = gun ? gun.interval : CFG.gun.fireInterval * this.up.fireMul * (1 - (this.badge ? this.badge.rate : 0)); this.recoil = gun && gun.pellets ? 1.8 : 1; this.shots++;
     const view = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
     // The dart leaves from just in front of the eye, not from the drawn muzzle 28 cm right and 22 cm down: a dart that
     // starts that far off the line of sight clips the desk you are crouching behind although the crosshair sees past it.
@@ -132,16 +141,19 @@ export class Player {
     const dist = Math.max(1.0, this.world.rayDistance(this.camera.position, view, 30, (p) => this.game.aimHit(p)));
     const target = this.camera.position.clone().addScaledVector(view, dist);
     const dir = target.sub(muzzle).normalize();
-    const speed = CFG.gun.speed * this.up.speedMul;
+    const speed = CFG.gun.speed * this.up.speedMul * (gun && gun.speedMul ? gun.speedMul : 1);
     const volley = ++Player.volleySeq;
-    const dirs = [dir]; if (this.up.twin) { const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion); dirs.push(dir.clone().addScaledVector(side, 0.035).normalize()); dirs[0] = dir.clone().addScaledVector(side, -0.035).normalize(); }
+    const jit = (s) => dir.clone().add(new THREE.Vector3(rand(-s, s), rand(-s * 0.6, s * 0.6), rand(-s, s))).normalize();
+    let dirs = [dir];
+    if (gun) dirs = gun.pellets ? Array.from({ length: gun.pellets }, (_, i) => i === 0 ? dir : jit(gun.spread)) : [gun.spread ? jit(gun.spread) : dir];
+    else if (this.up.twin) { const side = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion); dirs.push(dir.clone().addScaledVector(side, 0.035).normalize()); dirs[0] = dir.clone().addScaledVector(side, -0.035).normalize(); }
     const sp = this.badge && this.badge.spreadMul ? this.badge.spreadMul : 1; // 躲避球校隊套裝：散得比較集中
-    for (let i = 0, extra = this.badge ? this.badge.multi : 0; i < extra && dirs.length < 3; i++) dirs.push(dir.clone().add(new THREE.Vector3(rand(-0.07, 0.07) * sp, rand(-0.04, 0.04) * sp, rand(-0.07, 0.07) * sp)).normalize()); // 連發徽章：多的子彈不耗彈，散得開
+    for (let i = 0, extra = this.badge && !gun ? this.badge.multi : 0; i < extra && dirs.length < 3; i++) dirs.push(dir.clone().add(new THREE.Vector3(rand(-0.07, 0.07) * sp, rand(-0.04, 0.04) * sp, rand(-0.07, 0.07) * sp)).normalize()); // 連發徽章：多的子彈不耗彈，散得開
     for (const dd of dirs) {
-      if (this.game.isHost) { const d = this.game.darts.fire(muzzle, dd, speed, 'player'); d.who = 'host'; d.volley = 'h' + volley; }
-      else if (this.game.transport) { const pv = ++this.game.pvSeq; this.game.darts.firePreview(muzzle, dd, speed, this.game.mySlot, pv); this.game.transport.send(JSON.stringify({ t: 'fire', p: [+muzzle.x.toFixed(3), +muzzle.y.toFixed(3), +muzzle.z.toFixed(3)], d: [+dd.x.toFixed(4), +dd.y.toFixed(4), +dd.z.toFixed(4)], s: +speed.toFixed(1), pv, vy: volley })); }
+      if (this.game.isHost) { const d = this.game.darts.fire(muzzle, dd, speed, 'player'); d.who = 'host'; d.volley = 'h' + volley; this.game.armDart(d, gun); }
+      else if (this.game.transport) { const pv = ++this.game.pvSeq; this.game.armDart(this.game.darts.firePreview(muzzle, dd, speed, this.game.mySlot, pv), gun); this.game.transport.send(JSON.stringify({ t: 'fire', p: [+muzzle.x.toFixed(3), +muzzle.y.toFixed(3), +muzzle.z.toFixed(3)], d: [+dd.x.toFixed(4), +dd.y.toFixed(4), +dd.z.toFixed(4)], s: +speed.toFixed(1), pv, vy: volley, g: gun ? gun.id : undefined })); }
     }
-    Audio.pew();
+    if (gun && Audio[gun.sfx]) Audio[gun.sfx](); else Audio.pew();
     if (this.game.monitor && this.game.isHost) this.game.monitor.noticeShot();
     this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve);
   }

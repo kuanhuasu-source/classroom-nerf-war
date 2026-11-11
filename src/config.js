@@ -21,7 +21,7 @@ export const CFG = {
   bully: { windup: 1.0, blastRadius: 1.7, grumble: 1.6, hitRadius: 0.55, deepSleep: 20 },
   ball: { radius: 0.22, launch: 9.5, hurtSpeed: 3.5, start: { x: -0.5, z: 0.55 } },
   monitor: { sight: 8, strokeCooldown: 2.5, reinforcements: 2, rageSeconds: 8, speed: 1.6, rest: 25 },
-  items: { interval: [20, 35], life: 15, hitRadius: 0.34, slowScale: 0.35, speedMul: 1.6 },
+  items: { interval: [14, 24], life: 15, hitRadius: 0.34, slowScale: 0.35, speedMul: 1.6 },
   // which classroom elements show up is rolled once per game
   features: { bully: 0.6, ball: 0.6, monitor: 0 }, // the roaming monitor is off: 班長 now leads each wave instead
 };
@@ -79,10 +79,17 @@ export const LUNCH = {
 export const MP = { count: 0.6, shooters: 1.5, gap: 0.25, spread: 0.1, bossWp: 1, bossRate: 0.12, hpEvery: 2, crew: 1 };
 export const COOP = { offerSeconds: 10, waveMul: 1.4, supplyAmount: 30, lowInterval: 8, maxGuests: 3, starters: { host: 'mag', g1: 'magnet', g2: 'rapid', g3: 'bag' }, waves: [4, 6, 6, 8, 8, 9], teacherWpHp: 4, reinforcements: 3, sitSeconds: 12, reviveRadius: 1.2, reviveHp: 2, invuln: 1.5 };
 export const EMOTES = ['', '掩護我！', '我沒彈了！', '惡霸醒了！', '班長來了！'];
+// 借來的槍：掛在牆上，射中就借你用一下。每把手感不一樣：散彈近距離一次五發、狙擊一發穿三個、連發不耗彈。
+//   pellets 一次幾發、spread 散射、interval 射擊間隔、speedMul 彈速、life 飛多久就掉（射程）、dmg 傷害、pierce 還能再穿幾個人、g 重力、free 不耗彈
+export const GUNS = {
+  shotgun: { id: 'shotgun', name: '散彈水槍', effect: '一次噴五發，貼近打超痛', dur: 15, pellets: 5, spread: 0.15, interval: 0.55, speedMul: 0.8, life: 0.25, sfx: 'shotgun', color: 0x2f9fd1 },
+  sniper: { id: 'sniper', name: '橡皮筋狙擊', effect: '一發打倒，還會穿過去', dur: 15, interval: 0.7, speedMul: 1.8, dmg: 3, pierce: 2, g: 1.2, sfx: 'twang', color: 0x8e44ad },
+  rapid: { id: 'rapid', name: '連發機槍', effect: '射超快，不耗彈', dur: 12, interval: 0.07, spread: 0.035, free: true, sfx: 'pew', color: 0xd8432b },
+};
+// 牆上的東西：三把借來的槍，加兩個全場效果。（「彈匣不會減少」併進連發機槍，「跑得超快」留給徽章套裝，不再掛在牆上。）
 export const BUFFS = [
+  GUNS.shotgun, GUNS.sniper, GUNS.rapid,
   { id: 'double', name: '滿分考卷', effect: '分數雙倍', dur: 12 },
-  { id: 'infinite', name: '老師的糖果罐', effect: '彈匣不會減少', dur: 8 },
-  { id: 'speed', name: '貼紙獎勵', effect: '跑得超快', dur: 10 },
   { id: 'slow', name: '教室時鐘', effect: '全教室慢動作', dur: 5 },
 ];
 // where a special item can hang: position + facing (rotation about Y)

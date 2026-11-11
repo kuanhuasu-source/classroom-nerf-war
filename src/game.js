@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CFG, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, rand, pick, clamp } from './config.js';
+import { CFG, GUNS, DESK, DESK_COLS, DESK_ROWS, DOORS, PLAYER_START, BUFFS, MOUNTS, rand, pick, clamp } from './config.js';
 import { Audio } from './audio.js';
 import { Draw } from './draw.js';
 import { World } from './world.js';
@@ -295,7 +295,7 @@ export class Game {
       if (m.t === 'ping') { this.transport.send(JSON.stringify({ t: 'pong', ts: m.ts }), from); return; }
       const slot = this.conns.get(from), r = slot ? this.remotes.get(slot) : null; if (!r) return;
       if (m.t === 'input') { PaperFigure.stamp = performance.now(); r.applyInput(m); PaperFigure.stamp = undefined; if (m.cf !== undefined) r.cartIn = { f: m.cf, t: m.ct || 0 }; if (m.hn && m.hn !== r.hornSeq) { r.hornSeq = m.hn; if (this.lunchMode) this.lunchMode.horn(slot); } if (m.rtt !== undefined) this.net.peers[slot] = m.rtt; }
-      else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (m.vy) d.volley = slot + m.vy; if (this.monitor) this.monitor.noticeShot(r); }
+      else if (m.t === 'fire') { if (r.sitting) return; const d = this.darts.fire(new THREE.Vector3(...m.p), new THREE.Vector3(...m.d), m.s || CFG.gun.speed, 'player'); d.who = slot; d.pv = m.pv || 0; if (m.vy) d.volley = slot + m.vy; const held = GUNS[(this.buffs[slot] || {}).id]; if (held && m.g === held.id) this.armDart(d, held); if (this.monitor) this.monitor.noticeShot(r); }
       else if (m.t === 'pick') { { const u = takeUpgrade(r.up, m.id); if (u && r.up.healFull) { r.maxHp = this.baseHp(r) + r.up.maxHpBonus + this.badgeHp(r.badge); r.hp = r.maxHp; r.up.healFull = false; } if (r.up.refill) { r.reserve += r.up.refill; r.up.refill = 0; } } if (this.offer) { this.offer.picked[slot] = true; this.maybeCloseOffer(); } }
       else if (m.t === 'revive') {
         if (r.sitting) return; const t = this.reviveNear(r.pos, r);
@@ -870,6 +870,8 @@ export class Game {
     const rx = Math.max(d.x - d.w / 2 - pos.x, 0, pos.x - (d.x + d.w / 2)), rz = Math.max(d.z - d.d / 2 - pos.z, 0, pos.z - (d.z + d.d / 2));
     return Math.hypot(rx, rz) < CFG.milk.reach;
   }
+  // a dart from a borrowed gun: harder hit, flies through people, short range or flat flight
+  armDart(d, gun) { if (!d || !gun) return d; if (gun.pellets) d.cap = 3; if (gun.dmg) d.dmg = gun.dmg; if (gun.pierce) d.pierce = gun.pierce; if (gun.life) d.life = gun.life; if (gun.g !== undefined) d.g = gun.g; return d; }
   addScore(n, who = this.lastShooter || 'host') { const b = this.buffs[who]; if (b && b.id === 'double') n *= 2; this.score += n; this.ui.score(this.score); }
   // buffs belong to the kid who shot the item (keyed by slot); slow motion is the exception, the whole room slows for everyone
   get myBuff() { return this.buffs[this.mySlot] || null; }
@@ -879,15 +881,16 @@ export class Game {
   applyBuff(b, who = this.mySlot) {
     const buff = { id: b.id, name: b.name, effect: b.effect, t: b.dur };
     this.buffs[who] = buff;
-    if (who !== this.mySlot) { const r = this.remotes.get(who); this.netEvent({ t: 'buff', b: buff }, who); this.message(`${r ? r.skin.name : '隊友'}射中${b.name}！`, `${b.effect} ${b.dur} 秒`, 2); return; }
+    const isGun = !!GUNS[b.id];
+    if (who !== this.mySlot) { const r = this.remotes.get(who); this.netEvent({ t: 'buff', b: buff }, who); this.message(`${r ? r.skin.name : '隊友'}${isGun ? '借到' : '射中'}${b.name}！`, `${b.effect} ${b.dur} 秒`, 2); return; }
     this.ui.buff(buff); Audio.item();
-    this.message(`射中${b.name}！`, `${b.effect} ${b.dur} 秒`, 2);
+    this.message(`${isGun ? '借到' : '射中'}${b.name}！`, `${b.effect}，${b.dur} 秒`, 2);
   }
   spawnItem() {
     const used = new Set(this.items.map(i => i.mount));
     const mount = pick(this.world.layout.mounts.filter(m => !used.has(m)));
-    const item = new SpecialItem(this, pick(BUFFS), mount); item.mount = mount; this.items.push(item);
-    Audio.itemSpawn(); this.message('牆上出現了特殊物品', '射中它拿獎勵', 1.6);
+    const buff = pick(BUFFS), item = new SpecialItem(this, buff, mount); item.mount = mount; this.items.push(item);
+    Audio.itemSpawn(); if (GUNS[buff.id]) this.message(`牆上掛了一把${buff.name}！`, '射中它就借你用', 1.8); else this.message('牆上出現了特殊物品', '射中它拿獎勵', 1.6);
   }
   updateItems(dt, realDt) {
     if (this.state === 'playing' && !this.lunch) { this.itemTimer -= dt; if (this.itemTimer <= 0 && this.items.length < 1) { this.itemTimer = rand(CFG.items.interval[0], CFG.items.interval[1]); this.spawnItem(); } }
@@ -1051,7 +1054,7 @@ export class Game {
       if (d.kind === 'dart' && this.ball && this.ball.testDart(d)) return true;
       if (d.kind === 'dart' && this.bully && this.bully.testHit(p)) { this.bully.poke(d.owner, d.shooter, d.who); return true; }
       if (d.owner === 'player' && this.monitor && this.monitor.testHit(p)) { this.monitor.hitByDart(); return true; }
-      if (this.lunch && d.owner === 'player' && this.lunchMode.hitKid(p, d.who || 'host', d.volley)) return true;
+      if (this.lunch && d.owner === 'player' && this.lunchMode.hitKid(p, d.who || 'host', d.volley, d.dmg || 1)) return true;
       if (this.lunch && d.owner !== 'player' && this.lunchMode.hitPot(p)) return true;
       if (this.toilet && d.owner === 'player') { // 搶廁所：打破罐子；全部破了就贏
         for (let i = 0; i < this.world.cans.length; i++) { const c = this.world.cans[i]; if (!c.alive) continue; const dx = p.x - c.x, dz = p.z - c.z; if (dx * dx + dz * dz < TOILET.canRadius * TOILET.canRadius && Math.abs(p.y - c.y) < 0.26) { this.breakCan(i, d.who || 'host'); return true; } }
@@ -1062,11 +1065,17 @@ export class Game {
           const dx = p.x - s.group.position.x, dz = p.z - s.group.position.z;
           const h = 1.35 * s.group.scale.y;
           const hrr = 0.36 * this.hitMul(d.who);
-          if (dx * dx + dz * dz < hrr * hrr && p.y > s.group.position.y && p.y < s.group.position.y + h) { if (d.volley && s.lastVolley === d.volley) return true; s.lastVolley = d.volley; this.lastShooter = d.who; if (s.hit()) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null; return true; }
+          if (dx * dx + dz * dz < hrr * hrr && p.y > s.group.position.y && p.y < s.group.position.y + h) {
+            // one volley counts once per kid (the 連發 badge); shotgun pellets may land up to three on the same kid; a piercing dart flies on through the one it already hit
+            if (d.volley && s.lastVolley === d.volley) { if (d.pierce !== undefined) continue; if (!(d.cap && s.volleyN < d.cap)) return true; s.volleyN++; } else { s.lastVolley = d.volley; s.volleyN = 1; }
+            this.lastShooter = d.who; if (s.hit(d.dmg || 1)) { this.kills++; this.stat(d.who, 'kills'); this.ui.left(this.students.filter(x => x.alive).length + this.spawnQueue.length); } this.lastShooter = null;
+            if (d.pierce > 0) { d.pierce--; return false; }
+            return true;
+          }
         }
         for (const t of this.teachers) {
-          if (d.volley && t.lastVolley === d.volley && t.testHit(p, prev, this.hitMul(d.who), true)) return true;
-          this.lastShooter = d.who; const r = t.testHit(p, prev, this.hitMul(d.who)); this.lastShooter = null; if (r) t.lastVolley = d.volley;
+          if (d.volley && t.lastVolley === d.volley && !(d.cap && t.volleyN < d.cap) && t.testHit(p, prev, this.hitMul(d.who), true)) return true;
+          this.lastShooter = d.who; const r = t.testHit(p, prev, this.hitMul(d.who)); this.lastShooter = null; if (r) { if (t.lastVolley === d.volley) t.volleyN++; else { t.lastVolley = d.volley; t.volleyN = 1; } }
           if (r === 'weak') return true;
           if (r === 'body') { if (!this.bodyHintShown) { this.bodyHintShown = true; this.message('打身體沒用！', '瞄準紅圈：眼鏡、粉筆、教案', 2.5); } Audio.thud(); return true; }
         }
