@@ -44,6 +44,10 @@ const { chromium } = require('playwright');
   const relay = async () => { const h = await host.evaluate(() => window.__transport.drain()); const gq = await guest.evaluate(() => window.__transport.drain()); await guest.evaluate((l) => l.forEach(s => { const t = window.__transport; if (!s.to || s.to === t.id) t.receive(s.str, s.from); }), h); await host.evaluate((l) => l.forEach(s => { const t = window.__transport; if (!s.to || s.to === t.id) t.receive(s.str, s.from); }), gq); };
   const tick = async (n = 1) => { for (let i = 0; i < n; i++) { await host.evaluate(() => { for (let k = 0; k < 6; k++) window.__game.step(1 / 60); }); await relay(); await guest.evaluate(() => { for (let k = 0; k < 6; k++) window.__game.step(1 / 60); }); await relay(); } };
   await relay(); await host.click('#btn-start'); await tick(5);
+  // a crouching guest is seen crouching by the host (lower figure, lower eye: the hit box follows)
+  await guest.evaluate(() => { window.__game.player.keys = { KeyC: true }; }); await tick(6);
+  console.log('guest crouch on host', JSON.stringify(await host.evaluate(() => { const r = window.__game.remotes.get('g1'); return { crouch: r.crouch, eye: +r.eye.toFixed(2), sy: +r.group.scale.y.toFixed(2) }; })));
+  await guest.evaluate(() => { window.__game.player.keys = {}; }); await tick(3);
   const gs = await guest.evaluate(() => { const g = window.__game; g.player.throwEraser(); return g.player.erasers; }); await relay();
   const hs = await host.evaluate(() => window.__game.darts.list.filter(d => d.kind === 'eraser' && d.who === 'g1').length); await tick(25);
   const dust = await Promise.all([host, guest].map(p => p.evaluate(() => window.__game.zones.filter(z => z.kind === 'dust').length)));

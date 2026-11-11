@@ -512,7 +512,8 @@ export class Game {
     this.setLayout(this.lunch ? 'corridor' : this.toilet ? 'toilet' : this.siege ? 'yard' : this.pickLayout(), this.siege);
     this.reset(); this.markTouchPlayer();
     this.coop = this.isHost && this.remoteList().length > 0;
-    for (const pl of this.players()) if (pl.badge && pl.badge.grad) this.applyBuff({ id: 'speed', name: '畢業生代表', effect: '開場衝刺', dur: 10 }, pl === this.player ? this.mySlot : pl.slot); // 套裝：開場 10 秒加速 this.fullSnapNext = true; this.sentRestVersion = -1;
+    for (const pl of this.players()) if (pl.badge && pl.badge.grad) this.applyBuff({ id: 'speed', name: '畢業生代表', effect: '開場衝刺', dur: 10 }, pl === this.player ? this.mySlot : pl.slot); // 套裝：開場 10 秒加速
+    this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
     if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, endless: this.endless ? 1 : 0, level: this.level }));
