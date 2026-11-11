@@ -93,7 +93,7 @@ export class Player {
     this.gun.position.set(this.gunBase.x + bobX, this.gunBase.y + bobY - reloadDip + this.recoil * 0.02, this.gunBase.z + this.recoil * 0.07);
     this.gun.rotation.x = this.recoil * 0.25 - reloadDip * 1.2; this.gun.rotation.z = reloadDip * 0.6;
     this.loadedDart.visible = this.ammo > 0 && this.reloading <= 0;
-    if (this.game.siege && this.reserve < this.reserveCap()) { this.reserve = this.reserveCap(); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); } // 守校門：彈藥無限，備用彈永遠是滿的
+    if ((this.game.siege || this.game.duel) && this.reserve < this.reserveCap()) { this.reserve = this.reserveCap(); this.game.ui.ammo(this.ammo, this.ammo === 0, this.reserve); } // 守校門：彈藥無限，備用彈永遠是滿的
     if (this.reloading > 0) {
       this.reloading -= dt;
       this.game.ui.reloadProgress(1 - this.reloading / this.reloadTotal);
@@ -124,12 +124,12 @@ export class Player {
   sitUpdate(dt) {
     this.sitT -= dt;
     const tick = Math.ceil(this.sitT);
-    if (tick !== this.sitTick) { this.sitTick = tick; this.game.ui.message('被打到了，罰坐中', `${Math.max(0, tick)} 秒後自己站起來，或等隊友走過來按 E`, 1.2); }
-    if (this.sitT <= 0 && this.game.isHost) this.standUp(this.game.lunch ? 3 : 1);
+    if (tick !== this.sitTick) { this.sitTick = tick; this.game.ui.message(this.game.duel ? '被打倒了' : '被打到了，罰坐中', this.game.duel ? `${Math.max(0, tick)} 秒後回到場上` : `${Math.max(0, tick)} 秒後自己站起來，或等隊友走過來按 E`, 1.2); }
+    if (this.sitT <= 0 && this.game.isHost) this.standUp(this.game.duel ? this.maxHp : this.game.lunch ? 3 : 1);
   }
   standUp(hp) {
     this.sitting = false; this.hp = hp; this.invuln = COOP.invuln; this.gun.visible = true; this.game.ui.hp(hp, this.maxHp);
-    this.game.ui.message(hp > 1 ? '被救起來了！' : '自己站起來了', hp > 1 ? '' : '只剩 1 顆心，小心', 1.5);
+    this.game.ui.message(this.game.duel ? '回到場上！' : hp > 1 ? '被救起來了！' : '自己站起來了', this.game.duel || hp > 1 ? '' : '只剩 1 顆心，小心', 1.5);
   }
   tryFire() {
     if (this.fireCd > 0 || this.sitting) return;

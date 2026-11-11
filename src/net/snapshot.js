@@ -21,7 +21,7 @@ export function serializeSnapshot(g) {
   const p = g.player;
   const snap = {
     t: 'snap', seq: ++g.snapSeq, ts: Math.round(performance.now()), st: g.state, wave: g.wave, score: g.score, kills: g.kills, boss: g.bossPhase ? 1 : 0, ov: g.overInfo || undefined,
-    left: g.teachers.length ? '老師' : g.students.filter(s => s.alive).length + g.spawnQueue.length, tl: g.toilet ? +g.timeLeft.toFixed(1) : undefined, cn: g.toilet ? g.world.cans.map(c => c.alive ? 1 : 0).join('') : undefined,
+    left: g.teachers.length ? '老師' : g.students.filter(s => s.alive).length + g.spawnQueue.length, tl: g.toilet || g.duel ? +g.timeLeft.toFixed(1) : undefined, ds: g.duel ? g.duelScore : undefined, cn: g.toilet ? g.world.cans.map(c => c.alive ? 1 : 0).join('') : undefined,
     lc: g.lunch && g.lunchMode ? g.lunchMode.serialize() : undefined, kids: g.lunch && g.lunchMode ? g.lunchMode.kids.map(k => k.serialize(g.fullSnapNext)) : undefined, bk: g.lunch ? g.world.buckets.map(b => b.knocked ? 1 : 0).join('') : undefined,
     slow: g.worldSlow() ? 1 : 0,
     host: { x: r2(p.pos.x), y: r2(p.pos.y), z: r2(p.pos.z), yaw: r2(p.yaw), eye: r2(p.eye), c: p.crouching ? 1 : 0, hp: p.hp, sit: p.sitting ? 1 : 0, sx: p.seat ? r2(p.seat.x) : 0, sz: p.seat ? r2(p.seat.z) : 0, nm: g.profile.name, lk: g.profile.look },
@@ -55,7 +55,8 @@ export function applyDelta(g, d) {
 export function applySnapshot(g, s) {
   PaperFigure.stamp = s.ts !== undefined ? g.net.toLocal(s.ts) : undefined; // every figure sample below carries this moment
   g.wave = s.wave; g.score = s.score; g.kills = s.kills; g.bossPhase = !!s.boss;
-  g.ui.wave(g.waveLabel(s.wave)); g.ui.score(s.score); g.ui.left(s.left); if (s.tl !== undefined) g.ui.timer(s.tl);
+  g.ui.wave(g.waveLabel(s.wave)); g.ui.score(s.score); g.ui.left(g.duel ? Object.keys(s.pl || {}).length : s.left); if (s.tl !== undefined) g.ui.timer(s.tl);
+  if (s.ds) { g.duelScore = s.ds; g.ui.duel(g.duelBoard()); }
   if (s.lc && g.lunchMode) { g.lunchMode.applyState(s.lc); g.ui.timer(s.lc.tl); if (s.lc.ld) g.ui.soup(s.lc.sp); g.ui.wave(g.waveLabel(0)); }
   if (s.kids && g.lunchMode) { const list = s.kids.map(LunchKid.unpack); const byId = new Map(g.lunchMode.kids.map(o => [o.id, o])), seen = new Set(); for (const st of list) { seen.add(st.id); let o = byId.get(st.id); if (!o) { o = new LunchKid(g, { remote: true, id: st.id, v: st.v || { ...Draw.kidVariant(), kind: 'door' }, at: { x: st.x, z: st.z } }); g.lunchMode.kids.push(o); } o.applyState(st); } for (let i = g.lunchMode.kids.length - 1; i >= 0; i--) if (!seen.has(g.lunchMode.kids[i].id)) { g.lunchMode.kids[i].dispose(); g.lunchMode.kids.splice(i, 1); } }
   if (s.bk !== undefined) g.world.buckets.forEach((b, i) => { if (s.bk[i] === '1' && !b.knocked) g.world.knockBucket(i); });
@@ -103,8 +104,9 @@ export function applySnapshot(g, s) {
   g.darts.applyMoving(s.dm);
   PaperFigure.stamp = undefined;
   if ((s.st === 'over' || s.st === 'won') && g.state === 'playing') {
-    g.afterRound(s.st === 'won'); g.state = s.st; const ov = s.ov || g.pendingOver; if (s.st === 'won') { Audio.bellOut(); setTimeout(() => Audio.win(), 1800); } else Audio.lose();
-    setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); g.showOver(ov ? ov.title : (s.st === 'won' ? '下課！老師投降了' : '全班被罰坐了'), ov ? ov.sub : '', s.st === 'won', ov ? ov.stats : null); }, s.st === 'won' ? 3200 : 0);
+    const ov = s.ov || g.pendingOver, won = g.duel ? !!(ov && ov.ws === g.mySlot) : s.st === 'won'; // 對打：贏的只有一個人，看 over 訊息裡的 ws
+    g.afterRound(won); g.state = s.st; if (won) { Audio.bellOut(); setTimeout(() => Audio.win(), 1800); } else Audio.lose();
+    setTimeout(() => { if (document.pointerLockElement) document.exitPointerLock(); g.showOver(ov ? ov.title : (s.st === 'won' ? '下課！老師投降了' : '全班被罰坐了'), ov ? ov.sub : '', won, ov ? ov.stats : null); }, s.st === 'won' && !g.duel ? 3200 : 0);
   }
 }
 
@@ -130,6 +132,7 @@ function applyEvent(g, e) {
     case 'zone': g.addZone(new THREE.Vector3(e.p[0], 0, e.p[1]), e.r, e.l, e.k || 'acid'); break;
     case 'prop': { const p = g.props[e.id]; if (p) p.applyState(e.st); break; }
     case 'wave': g.spawnWave(new THREE.Vector3(e.p[0], 0, e.p[1]), e.r, e.d, e.c); break;
+    case 'tp': { const p = g.player; p.pos.set(e.x, g.world.heightAt(e.x, e.z), e.z); p.yaw = Math.atan2(e.x, e.z); break; }
     case 'milestone': g.endlessCleared = e.w; g.grantEndless(e.w); break;
     case 'combo': g.ui.combo(e.n, e.b); break;
     case 'eraserPlus': { const p = g.player; if (p.erasers < CFG.eraser.max) { p.erasers++; g.ui.eraser(p.erasers); } break; }

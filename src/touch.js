@@ -92,7 +92,7 @@ export class TouchControls {
   update() {
     if (!this.on) return;
     const g = this.game, mates = g.isHost ? [...g.remotes.values()] : [g.hostFigure, ...g.others.values()];
-    $('tc-revive').style.display = g.coop && mates.some(m => m && m.sitting) && !g.player.sitting ? 'flex' : 'none';
+    $('tc-revive').style.display = g.coop && !g.duel && mates.some(m => m && m.sitting) && !g.player.sitting ? 'flex' : 'none';
     document.body.classList.toggle('coop', !!g.coop);
   }
   reset() { this.move.x = this.move.z = 0; this.stick = null; this.look = null; this.firing = false; if (this.on) this.stickEl.style.display = 'none'; }

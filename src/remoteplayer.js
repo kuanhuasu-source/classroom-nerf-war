@@ -65,7 +65,8 @@ export class RemotePlayer extends PaperFigure {
   update(dt) {
     if (!this.group.visible) return;
     this.hurtCd -= dt; this.invuln = Math.max(0, this.invuln - dt);
-    if (this.sitting && this.game.isHost) { this.sitT -= dt; if (this.sitT <= 0) { this.standUp(this.game.lunch ? 3 : 1); this.game.message((this.skin.name) + '自己站起來了', '只剩 1 顆心', 1.5); } }
+    if (this.sitting && this.game.isHost) { this.sitT -= dt; if (this.sitT <= 0) { if (this.game.duel) this.standUp(this.maxHp); else { this.standUp(this.game.lunch ? 3 : 1); this.game.message((this.skin.name) + '自己站起來了', '只剩 1 顆心', 1.5); } } }
+    { const c = this.game.duel ? 0xd8432b : 0x2f6fd1; if (this.ringColor !== c) { this.ringColor = c; if (this.ringMesh) this.ringMesh.material.color.setHex(c); } } // a rival in a duel: red ring
     if (this.bubble) { this.sayT -= dt; if (this.sayT <= 0) { this.group.remove(this.bubble); this.bubble = null; } }
     this.remoteUpdate(dt, this.game.camera.position, !this.sitting);
     this.group.scale.y += (this.targetSy - this.group.scale.y) * Math.min(1, dt * 10);

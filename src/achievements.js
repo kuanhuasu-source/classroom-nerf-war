@@ -2,7 +2,7 @@ import { $ } from './ui.js';
 import { Audio } from './audio.js';
 import { Profile } from './profile.js';
 
-// 成就貼紙簿：29 張貼紙。解鎖與累計計數都存在瀏覽器；解鎖時右下角跳一張貼紙。
+// 成就貼紙簿：30 張貼紙。解鎖與累計計數都存在瀏覽器；解鎖時右下角跳一張貼紙。
 export const ACH = [
   // 通用
   { id: 'first_win', icon: '🔔', name: '第一次下課', hint: '任何玩法贏一局' },
@@ -42,6 +42,8 @@ export const ACH = [
   { id: 'endless10', icon: '⏰', name: '不想下課', hint: '無限下課撐過 10 波' },
   { id: 'endless20', icon: '📚', name: '加課狂', hint: '無限下課撐過 20 波' },
   { id: 'endless30', icon: '♾️', name: '永遠的六年二班', hint: '無限下課撐過 30 波' },
+  // 對打
+  { id: 'duel_win', icon: '🥇', name: '下課霸主', hint: '對打模式贏一場' },
 ];
 export const achById = (id) => ACH.find(a => a.id === id);
 

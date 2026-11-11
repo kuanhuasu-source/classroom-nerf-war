@@ -16,7 +16,7 @@ import { RemotePlayer } from './remoteplayer.js';
 import { serializeSnapshot, applySnapshot, applyDelta } from './net/snapshot.js';
 import { NetStats } from './net/stats.js';
 import { PaperFigure } from './paperfigure.js';
-import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE, TOILET, LUNCH, MP, ENDLESS } from './config.js';
+import { NET, PLAYER_SKINS, PLAYERS, GUEST_SLOTS, skinOf, skinFor, COOP, EMOTES, DIFFICULTY, SIEGE, TOILET, LUNCH, MP, ENDLESS, DUEL } from './config.js';
 import { LunchMode } from './lunch.js';
 import { STORY, Progress, starsFor, starText } from './story.js';
 import { Ach } from './achievements.js';
@@ -69,6 +69,7 @@ export class Game {
     this.mode = 'class'; this.siege = false; this.bossDue = 0; this.bossDef = null; // 守校門模式
     this.toilet = false; this.timeLeft = 0; this.refillT = 0; // 搶廁所模式
     this.lunch = false; this.lunchMode = null; // 午餐大作戰
+    this.duel = false; this.duelScore = {}; this.lastHitBy = null; // 對打
     this.endless = false; this.endlessCleared = 0; this.endlessBossDone = {}; this.endlessLoot = []; // 無限下課
     this.story = null; this.damageTaken = 0; this.wetCount = 0; this.dustHit = false; this.hornHits = 0; this.bumps = 0; this.roundDone = false; this.clockT = 0; this.hintsShown = {}; // 故事與成就用的計數
     this.forceTeacher = new URLSearchParams(location.search).get('teacher'); // debug: ?teacher=pe
@@ -115,7 +116,7 @@ export class Game {
   mySkin() { return skinFor(this.mySlot, this.profile.name, this.profile.look); }
   touchOf(who) { if (!who || who === 'host') return !!this.touch; const r = this.remotes.get(who); return !!(r && r.touch); }
   hitMul(who) { return this.touchOf(who) ? CFG.assist.hitMul : 1; }
-  baseHp(pl) { return (this.toilet ? TOILET.hp : CFG.player.hp) + (pl && pl.touch ? CFG.assist.extraHp : 0); }
+  baseHp(pl) { return (this.duel ? DUEL.hp : this.toilet ? TOILET.hp : CFG.player.hp) + (pl && pl.touch ? CFG.assist.extraHp : 0); }
   // a guest said hello on a connection: give it its slot (the same one if it came back) and catch it up
   onHello(from, pid, touch = false, name = '', look = '', badge = null) {
     let slot = this.pids.get(pid);
@@ -135,7 +136,7 @@ export class Game {
     this.transport.send(JSON.stringify({ t: 'welcome', slot, name: r.skin.name }), from);
     this.fullSnapNext = true;
     if (this.state === 'playing' || this.state === 'paused') {
-      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, endless: this.endless ? 1 : 0 }), from);
+      this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: 1, resume: 1, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, endless: this.endless ? 1 : 0, duel: this.duel ? 1 : 0 }), from);
       this.transport.send(JSON.stringify({ t: 'restore', taken: r.up.taken, ammo: r.ammo, res: r.reserve, hp: r.hp, buff: this.buffs[slot] || null }), from);
       if (!this.stats[slot]) this.stats[slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 };
       this.message(back ? `${r.skin.name}回來了！` : `${r.skin.name}中途加入了！`, '', 1.5);
@@ -160,7 +161,7 @@ export class Game {
     this.world.dispose(); this.world = new World(this.scene, id, { siege }); this.darts.world = this.world;
   }
   endlessTier(w = this.wave) { for (const [from, name] of ENDLESS.tiers) if (w >= from) return name; return '小考'; }
-  waveLabel(n) { return this.endless ? `${n}・${this.endlessTier(n)}` : this.lunch ? (this.lunchMode ? (this.lunchMode.roleOf(this.mySlot) === 'driver' ? '推車手' : '射手') : '—') : this.toilet ? `剩 ${this.cansLeft()}` : this.siege ? `${n}/${SIEGE.waves.length}` : n; }
+  waveLabel(n) { return this.duel ? `${DUEL.goal} 分` : this.endless ? `${n}・${this.endlessTier(n)}` : this.lunch ? (this.lunchMode ? (this.lunchMode.roleOf(this.mySlot) === 'driver' ? '推車手' : '射手') : '—') : this.toilet ? `剩 ${this.cansLeft()}` : this.siege ? `${n}/${SIEGE.waves.length}` : n; }
   cansLeft() { return (this.world.cans || []).filter(c => c.alive).length; }
   // ---------- 午餐大作戰 ----------
   // ---------- 故事模式與成就 ----------
@@ -181,8 +182,9 @@ export class Game {
     // 無限下課沒有輸贏：稀有度看撐過幾波（10 波以下當小考、20 以下段考、30 以下模擬考、之後會考），撐過 3 波就一定抽
     const rollLevel = this.endless ? (this.endlessCleared >= 30 ? 'exam' : this.endlessCleared >= 20 ? 'hard' : this.endlessCleared >= 10 ? 'normal' : 'easy') : this.level, rollWin = this.endless ? this.endlessCleared >= 3 : win;
     this.drawnBadge = Badges.roll(rollLevel, rollWin, this.coop || !this.isHost); this.drawnDropped = this.drawnBadge ? Badges.add(this.drawnBadge) : null; if (this.drawnBadge) Records.bump('badges');
-    if (!this.isHost) { if (win) { Ach.unlock('first_win'); if (this.damageTaken === 0) Ach.unlock('untouched'); } return; }
-    const p = this.player, acc = p.shots ? p.hits / p.shots : 0, plain = !this.siege && !this.toilet && !this.lunch;
+    if (!this.isHost) { if (win) { Ach.unlock('first_win'); if (this.damageTaken === 0) Ach.unlock('untouched'); if (this.duel) Ach.unlock('duel_win'); } return; }
+    const p = this.player, acc = p.shots ? p.hits / p.shots : 0, plain = !this.siege && !this.toilet && !this.lunch && !this.duel && !this.endless;
+    if (this.duel && win) Ach.unlock('duel_win');
     if (this.kills) Ach.add('kills', this.kills);
     if (win) {
       Ach.unlock('first_win');
@@ -205,10 +207,10 @@ export class Game {
   }
   // 個人紀錄：這一局的摘要（連線時用主機算的那份個人數字），存進去並記下打破了哪些最佳成績
   roundSummary(win) {
-    const p = this.player, mode = this.endless ? 'endless' : this.lunch ? 'lunch' : this.toilet ? 'toilet' : this.siege ? 'siege' : 'class';
+    const p = this.player, mode = this.duel ? 'duel' : this.endless ? 'endless' : this.lunch ? 'lunch' : this.toilet ? 'toilet' : this.siege ? 'siege' : 'class';
     let kills = this.kills, hits = p.hits, shots = p.shots;
     const st = this.isHost ? this.coopStats() : (this.pendingOver && this.pendingOver.stats), mine = st && st.find(s => s.slot === this.mySlot); if (mine) { kills = mine.kills; hits = mine.hits; shots = mine.shots; }
-    return { ts: Date.now(), mode, level: this.endless ? 'any' : this.level, map: this.world.layout.id, win, score: this.score, wave: this.endless ? this.endlessCleared : this.wave, shots, hits, acc: shots ? hits / shots : 0, kills, teachers: this.teachers.filter(t => t.defeated).length, time: Math.round(this.playT || 0),
+    return { ts: Date.now(), mode, level: this.endless || this.duel ? 'any' : this.level, map: this.world.layout.id, points: this.duel ? (this.duelScore[this.mySlot] || 0) : undefined, win, score: this.score, wave: this.endless ? this.endlessCleared : this.wave, shots, hits, acc: shots ? hits / shots : 0, kills, teachers: this.teachers.filter(t => t.defeated).length, time: Math.round(this.playT || 0),
       timeLeft: this.toilet ? Math.round(this.timeLeft) : undefined, soup: this.lunch && this.lunchMode ? Math.round(this.lunchMode.cart.soup) : undefined, stars: this.story ? this.storyStars : (this.lunch && this.lunchMode ? this.lunchMode.stars() : 0), story: this.story ? this.story.title : '' };
   }
   recordRound(win) { if (this.recorded) return; this.recorded = true; this.recordBroken = Records.record(this.roundSummary(win)); if (this.recordBroken.length) Ach.unlock('record'); }
@@ -277,8 +279,39 @@ export class Game {
   players() { return this.isHost ? [this.player, ...this.remoteList()] : [this.player]; }
   activeTargets() { const l = this.players().filter(p => !p.sitting); return l.length ? l : [this.player]; }
   stat(who, key, n = 1) { if (!this.stats) return; if (!this.stats[who]) this.stats[who] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; this.stats[who][key] = (this.stats[who][key] || 0) + n; }
+  // ---------- 對打 ----------
+  slotOf(pl) { return pl === this.player ? this.mySlot : pl.slot; }
+  slotName(slot) { if (slot === this.mySlot) return this.mySkin().name; if (this.isHost) { const r = this.remotes.get(slot); return r ? r.skin.name : slot; } if (slot === 'host') return this.hostFigure ? this.hostFigure.skin.name : '房主'; const o = this.others.get(slot); return o ? o.skin.name : slot; }
+  duelBoard() { return Object.entries(this.duelScore || {}).map(([slot, n]) => ({ slot, name: this.slotName(slot), n, me: slot === this.mySlot })).sort((a, b) => b.n - a.n); }
+  // the free spot farthest from everyone already standing (and from `taken`, the spots handed out this instant)
+  duelSpawn(taken = []) {
+    const L = this.world.layout, w = this.world.room.w, d = this.world.room.d, cand = [{ x: L.start.x, z: L.start.z }];
+    for (const dr of L.doors || []) cand.push({ x: dr.x - 0.9, z: dr.z });
+    for (const [fx, fz] of [[-0.32, -0.32], [0.32, -0.32], [-0.32, 0.32], [0.32, 0.32], [0, 0]]) cand.push({ x: fx * w, z: fz * d });
+    const spots = cand.map(c => { const cell = this.world.nearestFree(c.x, c.z); return cell ? this.world.cellCenter(cell.gx, cell.gz) : c; });
+    const others = [...this.players().filter(p => !p.sitting).map(p => p.pos), ...taken];
+    let best = spots[0], bd = -1; for (const s of spots) { const m = others.length ? Math.min(...others.map(o => Math.hypot(o.x - s.x, o.z - s.z))) : 1; if (m > bd) { bd = m; best = s; } }
+    return best;
+  }
+  duelEnd() {
+    const board = this.duelBoard(), top = board[0], ws = top ? top.slot : 'host', won = ws === this.mySlot;
+    const title = `${top ? top.name : ''}贏了對打！`, sub = board.map(b => `${b.name} ${b.n} 分`).join('、');
+    this.duelWinner = ws; this.afterRound(won); this.state = won ? 'won' : 'over'; if (won) { Audio.bellOut(); setTimeout(() => Audio.win(), 1800); } else Audio.lose();
+    this.overInfo = { win: won ? 1 : 0, title, sub, stats: this.coopStats(), ws }; this.netEvent({ t: 'over', ...this.overInfo });
+    if (document.pointerLockElement) document.exitPointerLock();
+    this.showOver(title, sub, won);
+  }
   // one player ran out of hearts
   onPlayerDown(p) {
+    if (this.duel) { // 對打：打倒的人得一分，被打倒的到最遠的角落罰坐三秒再回來
+      const victim = this.slotOf(p), killer = this.lastHitBy && this.lastHitBy !== victim ? this.lastHitBy : null; this.lastHitBy = null;
+      if (killer) { this.duelScore[killer] = (this.duelScore[killer] || 0) + 1; this.stat(killer, 'kills'); this.onKnock(killer); }
+      p.sitDown(this.duelSpawn(), DUEL.respawn);
+      this.message(killer ? `${this.slotName(killer)}打倒了${this.slotName(victim)}` : `${this.slotName(victim)}倒了`, killer ? `${this.slotName(killer)} ${this.duelScore[killer]} 分` : '', 1.8);
+      this.ui.duel(this.duelBoard());
+      if (killer && this.duelScore[killer] >= DUEL.goal) this.duelEnd();
+      return;
+    }
     if (this.lunch) { p.sitDown({ x: p.pos.x, z: p.pos.z }, LUNCH.downSeconds); const name = p === this.player ? '你' : p.skin.name; this.message(`${name}被打倒了`, `${LUNCH.downSeconds} 秒後自己爬起來`, 2); return; }
     if (!this.coop) { if (p === this.player) this.onLose(); return; }
     const near = this.world.desks.filter(d => !d.occupant).sort((a, b) => Math.hypot(a.seat.x - p.pos.x, a.seat.z - p.pos.z) - Math.hypot(b.seat.x - p.pos.x, b.seat.z - p.pos.z));
@@ -290,6 +323,7 @@ export class Game {
   }
   // someone standing at `at` pulls up the nearest sitting player within reach; returns that player
   reviveNear(at, except) {
+    if (this.duel) return null; // nobody pulls an opponent up
     const sitting = this.players().filter(x => x !== except && x.sitting && Math.hypot(x.pos.x - at.x, x.pos.z - at.z) < COOP.reviveRadius);
     if (!sitting.length) return null;
     sitting.sort((a, b) => Math.hypot(a.pos.x - at.x, a.pos.z - at.z) - Math.hypot(b.pos.x - at.x, b.pos.z - at.z));
@@ -330,7 +364,7 @@ export class Game {
     } else {
       if (m.t === 'welcome') { this.mySlot = m.slot; this.darts.localWho = m.slot; if (this.onWelcome) this.onWelcome(m); }
       else if (m.t === 'full') { if (this.onFull) this.onFull(); }
-      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; this.lunch = !!m.lunch; this.endless = !!m.endless; if (m.level) this.setDifficulty(m.level); if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
+      else if (m.t === 'start') { this.siege = !!m.siege; this.toilet = !!m.toilet; this.lunch = !!m.lunch; this.endless = !!m.endless; this.duel = !!m.duel; if (m.level) this.setDifficulty(m.level); if (m.map) this.setLayout(m.map, this.siege); this.startGuest(); if (m.coop && !m.resume) this.giveStarter(this.mySlot); }
       else if (m.t === 'restore') { // back after a disconnect: the host remembers what we had
         const p = this.player;
         for (const [id, n] of Object.entries(m.taken || {})) for (let i = 0; i < n; i++) { const u = takeUpgrade(p.up, id); if (u) { p.up.refill = 0; p.up.healFull = false; p.applyUpgrade(u); } }
@@ -350,15 +384,15 @@ export class Game {
     this.guestReset(); this.markTouchPlayer();
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
-    this.ui.infinite = this.siege; this.ui.timer(this.toilet ? this.toiletTime() : this.lunch ? LUNCH.time : null); this.ui.leftLabel(this.toilet ? '清潔隊' : this.lunch ? '搶菜' : this.siege ? '惡霸' : '同學'); this.ui.waveLabelText(this.toilet ? '罐子' : this.lunch ? '角色' : '波次'); this.ui.wet(false); this.ui.soup(null);
+    this.ui.infinite = this.siege || this.duel; this.ui.timer(this.duel ? DUEL.time : this.toilet ? this.toiletTime() : this.lunch ? LUNCH.time : null); this.ui.leftLabel(this.duel ? '對手' : this.toilet ? '清潔隊' : this.lunch ? '搶菜' : this.siege ? '惡霸' : '同學'); this.ui.waveLabelText(this.duel ? '先到' : this.toilet ? '罐子' : this.lunch ? '角色' : '波次'); this.ui.duel(null); this.ui.wet(false); this.ui.soup(null);
     if (this.lunch) { this.lunchMode = new LunchMode(this); this.message('抬午餐囉！', '推車手：W/S 推煞、A/D 轉彎、F 喇叭。射手：擋住探頭的同學', 4); }
     this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.buff(null); this.ui.eraser(this.lunch ? null : this.player.erasers);
     if (this.lockSupported && !this.touch) this.requestLock(); else if (this.touch) this.enterFullscreen();
     Audio.bellOut();
     this.clock.getDelta();
   }
-  badgeHp(fx) { return fx ? (this.toilet ? Math.min(1, fx.hp) : fx.hp) : 0; }
-  markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.badge = Badges.effects(); p.maxHp = this.baseHp(p) + p.up.maxHpBonus + this.badgeHp(p.badge); p.hp = p.maxHp; this.badgeHud(); }
+  badgeHp(fx) { return fx && !this.duel ? (this.toilet ? Math.min(1, fx.hp) : fx.hp) : 0; }
+  markTouchPlayer() { const p = this.player; p.touch = !!this.touch; p.badge = this.duel ? Badges.effects([]) : Badges.effects(); /* 對打：徽章不生效，大家一樣 */ p.maxHp = this.baseHp(p) + p.up.maxHpBonus + this.badgeHp(p.badge); p.hp = p.maxHp; this.badgeHud(); }
   guestReset() {
     this.playT = 0; this.recordBroken = []; this.recorded = false; this.pendingOver = null; this.endlessCleared = 0; this.endlessLoot = [];
     if (this.lunchMode) { this.lunchMode.dispose(); this.lunchMode = null; }
@@ -391,7 +425,7 @@ export class Game {
     for (const m of this.milks) { m.t += dt; m.mesh.position.y = m.baseY + Math.sin(m.t * 3) * 0.02; m.mesh.rotation.y = m.t * 1.2; }
     this.updateDebris(dt); this.updateZones(dt); for (const p of this.props) p.update(dt); this.world.tick(dt);
     // our own preview darts stop at the kids they visibly reach; the host decides whether it counted
-    this.darts.remoteUpdate(dt, (p) => this.students.some(s => s.alive && Math.abs(p.x - s.group.position.x) < 0.36 && Math.abs(p.z - s.group.position.z) < 0.36 && p.y > s.group.position.y && p.y < s.group.position.y + 1.45 * s.group.scale.y));
+    this.darts.remoteUpdate(dt, (p) => (this.duel && this.aimHit(p)) || this.students.some(s => s.alive && Math.abs(p.x - s.group.position.x) < 0.36 && Math.abs(p.z - s.group.position.z) < 0.36 && p.y > s.group.position.y && p.y < s.group.position.y + 1.45 * s.group.scale.y));
     this.inputTimer -= dt;
     if (this.transport && this.inputTimer <= 0) {
       this.inputTimer = 1 / NET.inputHz; const p = this.player;
@@ -506,7 +540,8 @@ export class Game {
     Audio.init(); Audio.resume();
     if (this.story && this.remoteList().length) { this.ui.message('故事模式是單人的', '先離開房間再開始', 3); const el = $('lobby-status'); if (el) el.textContent = '故事模式是單人的，先離開房間。'; return; }
     if (this.mode === 'lunch' && this.remoteList().length !== 1 && !this.story) { const n = this.remoteList().length; const txt = n ? '午餐大作戰只能兩個人：房間裡只留一位隊友' : '午餐大作戰要兩個人：開房間找一位隊友再按開始'; this.ui.message(txt, '', 3); const el = $('lobby-status'); if (el) el.textContent = txt; const mn = $('menu-note'); if (mn && !n) mn.textContent = txt; return; }
-    this.siege = this.mode === 'siege'; this.toilet = this.mode === 'toilet'; this.lunch = this.mode === 'lunch'; this.endless = this.mode === 'endless' && !this.story; this.ui.infinite = this.siege;
+    if (this.mode === 'duel' && !this.story && !this.remoteList().length) { const txt = '對打要兩個人以上：開房間找同學進來再按開始'; this.ui.message(txt, '', 3); const el = $('lobby-status'); if (el) el.textContent = txt; const mn = $('menu-note'); if (mn) mn.textContent = txt; return; }
+    this.siege = this.mode === 'siege'; this.toilet = this.mode === 'toilet'; this.lunch = this.mode === 'lunch'; this.endless = this.mode === 'endless' && !this.story; this.duel = this.mode === 'duel' && !this.story; this.ui.infinite = this.siege || this.duel;
     this.diff = this.endless ? ENDLESS.diff(1) : this.siege ? { ...DIFFICULTY[this.level], waves: SIEGE.waves } : DIFFICULTY[this.level]; // 守校門：十波；無限下課：每波重算；其餘照難度
     if (this.story && this.story.waves) this.diff = { ...this.diff, waves: this.story.waves }; // 故事：章節自己的波次表
     this.setLayout(this.lunch ? 'corridor' : this.toilet ? 'toilet' : this.siege ? 'yard' : this.pickLayout(), this.siege);
@@ -516,8 +551,8 @@ export class Game {
     this.fullSnapNext = true; this.sentRestVersion = -1;
     this.stats = { host: { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 } };
     for (const r of this.remotes.values()) { this.stats[r.slot] = { kills: 0, hits: 0, revives: 0, strokes: 0, milk: 0 }; r.hp = r.maxHp; r.sitting = false; r.setTex('normal'); r.targetSy = 1; }
-    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, endless: this.endless ? 1 : 0, level: this.level }));
-    if (this.coop) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
+    if (this.transport) this.transport.send(JSON.stringify({ t: 'start', map: this.world.layout.id, coop: this.coop ? 1 : 0, siege: this.siege ? 1 : 0, toilet: this.toilet ? 1 : 0, lunch: this.lunch ? 1 : 0, endless: this.endless ? 1 : 0, duel: this.duel ? 1 : 0, level: this.level }));
+    if (this.coop && !this.duel) { this.giveStarter('host'); for (const r of this.remotes.values()) { const u = takeUpgrade(r.up, COOP.starters[r.slot]); if (u) { r.up.refill = 0; r.up.healFull = false; } } }
     this.state = 'playing';
     $('menu').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('hud').hidden = false;
     this.ui.hp(this.player.hp, this.player.maxHp); this.ui.ammo(this.player.ammo, false, this.player.reserve); this.ui.score(0); this.ui.wave(this.waveLabel(1)); this.ui.left(0); this.ui.boss(false); this.ui.eraser(this.lunch ? null : this.player.erasers);
@@ -528,6 +563,12 @@ export class Game {
       this.lunchMode = new LunchMode(this); this.ui.timer(LUNCH.time); this.ui.soup(null); this.ui.leftLabel('搶菜'); this.ui.waveLabelText('角色'); this.ui.wave(this.waveLabel(0));
       this.message('抬午餐囉！', '推車手：W/S 推煞、A/D 轉彎、F 喇叭。射手：擋住探頭的同學', 4);
       this.nextWavePending = false; this.ui.left(0);
+    } else if (this.duel) { // 對打：每個人散到最遠的角落，倒數開始
+      this.duelScore = { host: 0 }; for (const r of this.remoteList()) this.duelScore[r.slot] = 0;
+      this.timeLeft = DUEL.time; this.ui.timer(this.timeLeft); this.ui.leftLabel('對手'); this.ui.left(this.remoteList().length); this.ui.waveLabelText('先到'); this.ui.wave(this.waveLabel(0)); this.nextWavePending = false;
+      const placed = []; for (const pl of this.players()) { const at = this.duelSpawn(placed); placed.push(at); if (pl === this.player) { pl.pos.set(at.x, this.world.heightAt(at.x, at.z), at.z); pl.yaw = Math.atan2(at.x, at.z); } else this.netEvent({ t: 'tp', x: at.x, z: at.z }, pl.slot); }
+      this.ui.duel(this.duelBoard());
+      this.message('對打開始！', `先拿 ${DUEL.goal} 分的人贏。每人 ${DUEL.hp} 顆心，被打倒 ${DUEL.respawn} 秒後重生`, 4);
     } else if (this.toilet) { // 搶廁所：清潔隊已經在裡面打掃；倒數開始
       this.message('下課了，快去廁所！', `清潔隊在打掃……${this.toiletTime()} 秒內射破全部 ${this.world.cans.length} 個罐子`, 3.5);
       this.timeLeft = this.toiletTime(); this.refillT = TOILET.refill;
@@ -551,8 +592,8 @@ export class Game {
     if (this.bully) this.bully.dispose(); if (this.monitor) this.monitor.dispose(); if (this.ball) this.ball.dispose();
     this.bully = null; this.monitor = null; this.ball = null;
     if (this.lunchMode) { this.lunchMode.dispose(); this.lunchMode = null; }
-    const f = this.toilet || this.lunch ? { bully: false, ball: false, monitor: false } : this.siege ? { bully: false, ball: Math.random() < CFG.features.ball, monitor: false } : { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
-    const enabled = this.siege || this.toilet || this.lunch ? [] : Object.keys(f).filter(k => CFG.features[k] > 0);
+    const f = this.toilet || this.lunch || this.duel ? { bully: false, ball: false, monitor: false } : this.siege ? { bully: false, ball: Math.random() < CFG.features.ball, monitor: false } : { bully: Math.random() < CFG.features.bully, ball: Math.random() < CFG.features.ball, monitor: Math.random() < CFG.features.monitor };
+    const enabled = this.siege || this.toilet || this.lunch || this.duel ? [] : Object.keys(f).filter(k => CFG.features[k] > 0);
     if (enabled.length && !enabled.some(k => f[k])) f[pick(enabled)] = true; // at least one surprise per game, but never a switched-off one
     this.features = f;
     if (f.bully) this.bully = new Bully(this);
@@ -564,7 +605,7 @@ export class Game {
     this.camera.remove(this.player.gun);
     this.player = new Player(this);
     this.wave = 0; this.score = 0; this.kills = 0; this.spawnQueue = []; this.difficultySpread = 1; this.bossPhase = false; this.events = []; this.panicT = 0; this.overInfo = null; this.bossDue = 0; this.bossDef = null; this.timeLeft = 0; this.refillT = 0; this.hintT = 0; this.ui.wet(false); this.ui.soup(null);
-    this.kindSeen = {}; this.shieldHint = false; this.combos = {};
+    this.kindSeen = {}; this.shieldHint = false; this.combos = {}; this.duelScore = {}; this.lastHitBy = null; this.ui.duel(null);
     this.damageTaken = 0; this.wetCount = 0; this.dustHit = false; this.hornHits = 0; this.bumps = 0; this.roundDone = false; this.clockT = 0; this.hintsShown = {}; this.storyStars = 0; this.bossTimer = 0;
     for (const c of this.world.cans || []) { c.alive = true; c.mesh.visible = true; }
     this.offer = null; this.offerTimer = 0; this.supplyTimer = 0; this.ui.closeOffer(); this.ui.upgrades([]); if (this.touchCtl) this.touchCtl.reset();
@@ -704,8 +745,11 @@ export class Game {
   aimHit(p) {
     for (const s of this.students) { if (!s.alive) continue; const sp = s.group.position; if (Math.abs(p.x - sp.x) < 0.36 && Math.abs(p.z - sp.z) < 0.36 && p.y > sp.y && p.y < sp.y + 1.45 * s.group.scale.y) return true; }
     for (const t of this.teachers) { if (t.defeated) continue; const tp = t.group.position, sc = t.group.scale.y; if (Math.abs(p.x - tp.x) < 0.6 * sc && Math.abs(p.z - tp.z) < 0.6 * sc && p.y > tp.y && p.y < tp.y + 2.3 * sc) return true; }
+    if (this.duel) for (const o of this.rivals()) { const op = o.group.position; if (Math.abs(p.x - op.x) < 0.32 && Math.abs(p.z - op.z) < 0.32 && p.y > op.y && p.y < op.y + 1.4 * o.group.scale.y) return true; }
     return false;
   }
+  // the other players' figures as seen from here (the targets in a duel)
+  rivals() { return (this.isHost ? this.remoteList() : [this.hostFigure, ...this.others.values()]).filter(o => o && o.group.visible && !o.sitting); }
   // ---------- upgrades ----------
   // co-op: each kid brings one thing from home — 小明 a big magazine, 小美 magnet gloves
   giveStarter(who) {
@@ -780,6 +824,7 @@ export class Game {
     const consider = (pt) => { const d = pt.clone().sub(eye); const dist = d.length(); if (dist < 0.8 || dist > 18) return; d.divideScalar(dist); const ang = Math.acos(Math.max(-1, Math.min(1, d.dot(view)))); if (ang < bestAng && !this.world.segmentBlocked(eye, pt)) { bestAng = ang; best = pt; } };
     for (const s of this.students) if (s.alive && s.state !== 'flyOut' && s.state !== 'sitting') consider(new THREE.Vector3(s.group.position.x, s.group.position.y + 0.95 * s.group.scale.y, s.group.position.z));
     for (const t of this.teachers) if (!t.defeated) { t.group.updateMatrixWorld(true); for (const k in t.wp) if (t.wp[k].hp > 0) consider(t.wpWorld(k)); }
+    if (this.duel) for (const o of this.rivals()) consider(new THREE.Vector3(o.group.position.x, o.group.position.y + 0.95 * o.group.scale.y, o.group.position.z));
     if (!best) return;
     this.aimFriction = CFG.assist.friction;
     const d = best.clone().sub(eye), wantYaw = Math.atan2(-d.x, -d.z), wantPitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
@@ -956,7 +1001,7 @@ export class Game {
     Audio.itemSpawn(); if (GUNS[buff.id]) this.message(`牆上掛了一把${buff.name}！`, '射中它就借你用', 1.8); else this.message('牆上出現了特殊物品', '射中它拿獎勵', 1.6);
   }
   updateItems(dt, realDt) {
-    if (this.state === 'playing' && !this.lunch) { this.itemTimer -= dt; if (this.itemTimer <= 0 && this.items.length < 1) { this.itemTimer = rand(CFG.items.interval[0], CFG.items.interval[1]); this.spawnItem(); } }
+    if (this.state === 'playing' && !this.lunch) { this.itemTimer -= dt; if (this.itemTimer <= 0 && this.items.length < 1) { this.itemTimer = rand(CFG.items.interval[0], CFG.items.interval[1]) * (this.duel ? 0.6 : 1); this.spawnItem(); } }
     for (let i = this.items.length - 1; i >= 0; i--) if (!this.items[i].update(dt)) { this.items[i].dispose(); this.items.splice(i, 1); }
     for (const k of Object.keys(this.buffs)) { const b = this.buffs[k]; b.t -= realDt; if (b.t <= 0) { delete this.buffs[k]; if (k === this.mySlot) this.ui.buff(null); } else if (k === this.mySlot) this.ui.buff(b); }
     if (this.slowT > 0) this.slowT -= realDt;
@@ -1039,7 +1084,7 @@ export class Game {
       $('st-kills').textContent = st.map(p => `${p.name} ${p.kills}`).join('・');
       $('st-acc').textContent = st.map(p => acc(p.hits, p.shots)).join('・');
       $('st-kills').style.fontSize = $('st-acc').style.fontSize = st.length > 2 ? '18px' : '';
-      $('over-sub').textContent = sub + ` 互相救了 ${st.reduce((a, p) => a + p.revives, 0)} 次，被班長記了 ${st.reduce((a, p) => a + p.strokes, 0)} 筆。`;
+      if (!this.duel) $('over-sub').textContent = sub + ` 互相救了 ${st.reduce((a, p) => a + p.revives, 0)} 次，被班長記了 ${st.reduce((a, p) => a + p.strokes, 0)} 筆。`;
     } else {
       $('st-kills').textContent = this.kills;
       $('st-acc').textContent = this.player.shots ? Math.min(100, Math.round(this.player.hits / this.player.shots * 100)) + '%' : '0%';
@@ -1072,7 +1117,7 @@ export class Game {
     if (this.state === 'playing') this.playT = (this.playT || 0) + realDt; // how long this round has run, for the records
     if (!this.isHost) return this.guestStep(realDt);
     this.player.update(realDt); this.aimAssist(realDt);
-    for (const r of this.remotes.values()) { r.update(realDt); if (r.badge && r.badge.regenHp && this.state === 'playing' && !r.sitting && r.group.visible) { r.regenT = (r.regenT || 0) + realDt; if (r.regenT >= r.badge.regenHp) { r.regenT = 0; if (r.hp < r.maxHp) r.hp++; } } }
+    for (const r of this.remotes.values()) { r.update(realDt); if (r.badge && r.badge.regenHp && !this.duel && this.state === 'playing' && !r.sitting && r.group.visible) { r.regenT = (r.regenT || 0) + realDt; if (r.regenT >= r.badge.regenHp) { r.regenT = 0; if (r.hp < r.maxHp) r.hp++; } } }
     const dt = realDt * (this.worldSlow() ? CFG.items.slowScale : 1); // the world slows down, the players do not
     this.updateItems(dt, realDt);
     // spawning & waves
@@ -1083,12 +1128,13 @@ export class Game {
         if (this.timeLeft <= 0) { this.timeLeft = 0; this.onLose(); return; }
         if (this.students.filter(s => s.alive).length + this.spawnQueue.length < TOILET.minCrew + MP.crew * this.extraPlayers()) { this.refillT -= dt; if (this.refillT <= 0) { this.refillT = TOILET.refill; const doors = this.world.layout.doors; this.spawnQueue.push({ door: doors[Math.random() < 0.5 ? 0 : 1] }); this.spawnTimer = Math.min(this.spawnTimer, 0.2); this.message('又來一個清潔隊員', '', 1.2); } }
       }
+      if (this.duel) { this.timeLeft -= dt; this.ui.timer(this.timeLeft); if (this.timeLeft <= 0) { this.timeLeft = 0; this.duelEnd(); return; } }
       if (this.bossDue > 0) { this.bossDue -= dt; if (this.bossDue <= 0 && this.bossDef) { this.spawnTeacher(this.bossDef); this.bossDef = null; } }
       for (let i = this.teachers.length - 1; i >= 0; i--) { const t = this.teachers[i]; if (t.goneT === undefined) continue; t.goneT -= dt; if (t.goneT <= 0) { t.dispose(); this.teachers.splice(i, 1); this.updateBossHud(); if (!this.teachers.length) this.ui.boss(false); } }
       if (this.spawnQueue.length) {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) { const e = this.spawnQueue.shift(), door = e.door || e, at = e.at || { x: door.x - 0.3, z: door.z }; this.students.push(new Student(this, at, { leader: !!e.leader, entry: e.entry || null })); if (e.leader) { if (this.siege) this.message('惡霸老大帶頭衝進來了！', '先打倒他，其他人會慌', 2); else this.message('班長帶隊進來了！', '先打倒她，其他人會慌', 2); Audio.tattle(); this.netEvent({ t: 'sfx', n: 'tattle' }); } this.spawnTimer = this.diff.spawnGap / (1 + MP.gap * this.extraPlayers()); this.ui.left(this.students.filter(s => s.alive).length + this.spawnQueue.length); }
-      } else if (!this.bossPhase && !this.toilet && !this.lunch) {
+      } else if (!this.bossPhase && !this.toilet && !this.lunch && !this.duel) {
         const alive = this.students.filter(s => s.alive).length, bossUp = this.bossDue > 0 || this.teachers.some(t => !t.defeated);
         if (alive === 0 && !bossUp) {
           if (this.nextWavePending) {
@@ -1132,6 +1178,18 @@ export class Game {
       if (this.lunch && d.owner !== 'player' && this.lunchMode.hitPot(p)) return true;
       if (this.toilet && d.owner === 'player') { // 搶廁所：打破罐子；全部破了就贏
         for (let i = 0; i < this.world.cans.length; i++) { const c = this.world.cans[i]; if (!c.alive) continue; const dx = p.x - c.x, dz = p.z - c.z; if (dx * dx + dz * dz < TOILET.canRadius * TOILET.canRadius && Math.abs(p.y - c.y) < 0.26) { this.breakCan(i, d.who || 'host'); return true; } }
+      }
+      if (this.duel && d.owner === 'player' && d.kind === 'dart' && this.state === 'playing') { // 對打：泡棉彈打得到別的玩家
+        for (const pl of this.players()) {
+          if (this.slotOf(pl) === (d.who || 'host') || pl.sitting || pl.invuln > 0) continue;
+          const dx = p.x - pl.pos.x, dz = p.z - pl.pos.z, hr = 0.3 * this.hitMul(d.who);
+          if (dx * dx + dz * dz < hr * hr && p.y > pl.pos.y && p.y < pl.pos.y + pl.eye + 0.2) {
+            if (pl.hurtCd > 0) return true; // still flinching from the last one: the dart is spent, no damage
+            this.lastHitBy = d.who || 'host'; this.lastShooter = this.lastHitBy; this.hitmark(); this.lastShooter = null;
+            if ((d.dmg || 1) > 1) pl.hp = Math.max(1, pl.hp - ((d.dmg || 1) - 1)); pl.hurt(); if (pl === this.player) this.ui.hp(pl.hp, pl.maxHp);
+            return true;
+          }
+        }
       }
       if (d.owner === 'player' && d.kind === 'eraser') { // a thrown eraser: dust on the first kid it reaches, otherwise where it lands (the Break above)
         for (const s of this.students) { if (!s.alive) continue; const dx = p.x - s.group.position.x, dz = p.z - s.group.position.z; if (dx * dx + dz * dz < 0.2 && p.y > s.group.position.y && p.y < s.group.position.y + 1.4 * s.group.scale.y) { this.dustBurst(p.clone()); return true; } }

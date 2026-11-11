@@ -92,6 +92,7 @@ body {
 #msg small { display: block; font-size: .5em; color: var(--pencil); }
 #vignette { position: absolute; inset: 0; box-shadow: inset 0 0 120px 40px rgba(216, 67, 43, .75); opacity: 0; transition: opacity .5s; }
 #vignette.hit { opacity: 1; transition: none; }
+#hud-duel { top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); display: flex; gap: 14px; font-size: 20px; white-space: nowrap; } #hud-duel[hidden] { display: none; } #hud-duel span.me { color: var(--nerf-blue); font-weight: bold; }
 #combo { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%) rotate(-4deg) scale(.6); font-size: clamp(30px, 6vw, 64px); color: var(--nerf-orange); -webkit-text-stroke: 2px var(--ink); text-shadow: 3px 3px 0 var(--ink); opacity: 0; pointer-events: none; white-space: nowrap; }
 #combo.on { animation: combo-pop .9s ease-out; }
 @keyframes combo-pop { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-4deg) scale(.5); } 15% { opacity: 1; transform: translate(-50%, -50%) rotate(-4deg) scale(1.15); } 30% { transform: translate(-50%, -50%) rotate(-4deg) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -62%) rotate(-4deg) scale(1); } }
@@ -377,6 +378,7 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
   <div id="hitmark">✕</div>
   <div id="msg"></div>
   <div id="combo"></div>
+  <div class="sticker" id="hud-duel" hidden></div>
   <div id="vignette"></div>
   <div id="dust"></div>
   <div id="rotate-hint">把手機橫放，畫面會好很多</div>
@@ -421,6 +423,7 @@ body.touch #hud-badge { bottom: auto; top: calc(78px + env(safe-area-inset-top, 
         <button type="button" class="seg-btn" data-mode="toilet">搶廁所</button>
         <button type="button" class="seg-btn" data-mode="lunch">午餐大作戰</button>
         <button type="button" class="seg-btn" data-mode="endless">無限下課</button>
+        <button type="button" class="seg-btn" data-mode="duel">對打</button>
       </div>
       <span class="note" id="mode-note">下課大戰：六波同學加一位老師。</span>
     </div>

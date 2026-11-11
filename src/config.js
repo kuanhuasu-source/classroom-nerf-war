@@ -77,6 +77,8 @@ export const ENDLESS = {
     teacherMul: Math.max(0.8, 1.4 - w * 0.02), peekDelay: Math.max(0.4, 0.9 - w * 0.015), dartSpeed: Math.min(21, 12 + w * 0.3), firstShotMul: Math.max(1.2, 2.5 - w * 0.05), bossChance: 0, hideMul: Math.max(0.8, 1.5 - w * 0.02) }),
   spreadAt: (w) => Math.max(0.55, 1.7 * Math.pow(0.98, w)),
 };
+// 對打（2 到 4 人）：沒有同學也沒有老師，互相射。每人三顆心，被打倒 3 秒後在遠處重生；先拿 8 分或 3 分鐘到時分數最高的人贏。徽章與升級不生效，彈藥無限。
+export const DUEL = { goal: 8, time: 180, hp: 3, respawn: 3 };
 // 搶廁所：下課要去廁所，清潔隊正在打掃。三滴血、倒數 90 秒；潑水中了慢 5 秒、通馬桶連發 3 到 5 支；射中小便斗裡的紅心就贏
 export const TOILET = { time: 90, hp: 3, crew: 5, minCrew: 4, refill: 6, wetSeconds: 5, wetSpeed: 0.5, plungerBurst: [3, 5], plungerGap: 0.25, waterChance: 0.4, waterSpeed: 13, canRadius: 0.2, timeBonus: 20 };
 // 午餐大作戰（兩人限定）：推車手推餐車去蒸飯室裝菜再推回來，車頂射手擋搶菜的同學。回程撞到、被打中、被搶都會灑湯。

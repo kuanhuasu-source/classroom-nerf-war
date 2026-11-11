@@ -45,6 +45,8 @@ export class UI {
   }
   tick(dt) { if (this.msgTimer > 0) { this.msgTimer -= dt; if (this.msgTimer <= 0) this.msgEl.classList.remove('show'); } if (this.buddyT > 0) { this.buddyT -= dt; if (this.buddyT <= 0) $('hud-buddy').classList.remove('on'); } }
   // 小美's speech bubble (story mode)
+  // 對打的計分板：分數由高到低，自己那一格標出來（null：收起來）
+  duel(board) { const el = $('hud-duel'); if (!el) return; el.hidden = !board; if (!board) return; el.innerHTML = ''; for (const b of board) { const s = document.createElement('span'); s.className = b.me ? 'me' : ''; s.textContent = `${b.name} ${b.n}`; el.appendChild(s); } }
   // 二連殺！三連殺！… pops in the middle of the screen for a moment
   combo(n, bonus) { const el = $('combo'); if (!el) return; const names = ['', '', '二連殺！', '三連殺！', '大殺四方！', '全班的惡夢！']; el.textContent = `${names[Math.min(n, 5)]} +${bonus}`; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); Audio.combo(n); }
   // how many erasers are left to throw (null hides it: the lunch run has none)
